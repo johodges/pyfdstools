@@ -8,30 +8,6 @@ Created on Mon Apr 15 09:35:22 2019
 import numpy as np
 import matplotlib.pyplot as plt
 import glob
-import datetime
-
-def tic():
-    ''' tic: This function stores the current time to the microsecond level
-    
-        OUTPUTS:
-          old_time: float containing the current time to the microsecond level
-    '''
-    old_time = datetime.datetime.now().timestamp()
-    #old_time = datetime.datetime.now().time().hour*3600+datetime.datetime.now().time().minute*60+datetime.datetime.now().time().second+datetime.datetime.now().time().microsecond/1000000
-    return old_time
-
-def toc(old_time):
-    ''' toc: This function returns the amount of time since the supplied time
-    
-        INPUTS:
-          old_time: float containing previous time
-        
-        OUTPUTS:
-          dur: float containing time since previous time
-    '''
-    new_time = tic()
-    dur = new_time-old_time
-    return dur, new_time
 
 def time2str(time):
     timeStr = "%08.0f_%02.0f"%(np.floor(time), (time-np.floor(time))*100)
@@ -60,7 +36,6 @@ def readP3Dfile(file):
     return data, header[1:-1]
 
 def rearrangeGrid(grid, header):
-    (nx, ny, nz) = (header[0], header[1], header[2])
     (xs, ys, zs) = (np.unique(grid[:,0]), np.unique(grid[:,1]), np.unique(grid[:,2]))
     xGrid, yGrid, zGrid = np.meshgrid(xs, ys, zs)
     xGrid = np.swapaxes(xGrid, 0, 1)
@@ -86,7 +61,6 @@ def buildSMVcolormap():
             j = j + 1
         else:
             m = (colors[j,:]-colors[j-1,:])/(colorInds[j]-colorInds[j-1])
-            b = colors[j,:]-m*(colorInds[j]-colorInds[j-1])
             newcmp[i] = colors[j-1,:]+m*(i-colorInds[j-1])
     cmap = ListedColormap(newcmp)
     
@@ -126,9 +100,13 @@ def getAbsoluteGrid(grids):
     absMaxs = np.max(maxs,axis=0)
     absDeltas = np.min(deltas, axis=0)
     
-    xs = np.linspace(absMins[0],absMaxs[0], int((absMaxs[0]-absMins[0])/absDeltas[0]+1))
-    ys = np.linspace(absMins[1],absMaxs[1], int((absMaxs[1]-absMins[1])/absDeltas[1]+1))
-    zs = np.linspace(absMins[2],absMaxs[2], int((absMaxs[2]-absMins[2])/absDeltas[2]+1))
+    Nx = int(np.round((absMaxs[0]-absMins[0])/absDeltas[0]) + 1)
+    Ny = int(np.round((absMaxs[1]-absMins[1])/absDeltas[1]) + 1)
+    Nz = int(np.round((absMaxs[2]-absMins[2])/absDeltas[2]) + 1)
+    
+    xs = np.linspace(absMins[0],absMaxs[0], Nx)
+    ys = np.linspace(absMins[1],absMaxs[1], Ny)
+    zs = np.linspace(absMins[2],absMaxs[2], Nz)
     
     xGrid_abs, yGrid_abs, zGrid_abs = np.meshgrid(xs, ys, zs)
     xGrid_abs = np.swapaxes(xGrid_abs, 0, 1)
@@ -250,8 +228,10 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
 
     xyzFiles = glob.glob("%s%s*.xyz"%(resultDir, chid))
     grids = []
-    datas = []
+    datas3D = []
+    datas2D = []
     lims = []
+    coords2D = []
     
     for xyzFile in xyzFiles:
         grid, gridHeader = readXYZfile(xyzFile)
@@ -302,9 +282,16 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
                             datas2[:,:,:,0] = datas2[:,:,:,0] / (j-i)
                             times = [times[i]]
                         lims.append([iX, eX, iY, eY, iZ, eZ])
-                        datas.append(datas2)
+                        datas3D.append(datas2)
                     else:
+                        '''
                         print("2-D slice:", slcfFile)
+                        if (eX-iX) == 0:
+                            print("X-axis slice")
+                        if (eY-iY) == 0:
+                            print("Y-axis slice")
+                        if (eZ-iY) == 0:
+                            print("Z-axis slice")
                         '''
                         if time == None:
                             datas2 = np.zeros((NX+1, NY+1, NZ+1, len(times)))
@@ -332,7 +319,12 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
                             datas2[:,:,:,0] = datas2[:,:,:,0] / (j-i)
                             times = [times[i]]
                         lims.append([iX, eX, iY, eY, iZ, eZ])
-                        datas.append(datas2)
+                        datas2D.append(datas2)
+                        coords2D.append([xGrid[iX, iY, iZ], yGrid[iX, iY, iZ], zGrid[iX, iY, iZ]])
+                        '''
+                        if (eY-iY) == 0:
+                            plt.figure()
+                            plt.imshow(np.squeeze(datas2[:, :, :, 100]).T)
                         '''
 
     grid_abs = getAbsoluteGrid(grids)
@@ -342,19 +334,27 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
     #print(datas[0].shape)
     #print(np.where(np.isnan(datas[0])))
     #print(lims)
-    data_abs = np.zeros((xGrid_abs.shape[0], xGrid_abs.shape[1], xGrid_abs.shape[2], datas[0].shape[3]))
+    data_abs = np.zeros((xGrid_abs.shape[0], xGrid_abs.shape[1], xGrid_abs.shape[2], len(times)))
     data_abs[:,:,:,:] = np.nan
     i = 0
-    for grid, data, lim in zip(grids, datas, lims):
+    for grid, data, lim in zip(grids, datas3D, lims):
         i = i+1
         (xGrid, yGrid, zGrid) = (grid[0], grid[1], grid[2])
-        
         xloc = np.where(np.isclose(abs(xGrid_abs-xGrid[lim[0],0,0]),0, atol=1e-04))[0][0]
         yloc = np.where(np.isclose(abs(yGrid_abs-yGrid[0,lim[2],0]),0, atol=1e-04))[1][0]
         zloc = np.where(np.isclose(abs(zGrid_abs-zGrid[0,0,lim[4]]),0, atol=1e-04))[2][0]
-        
         (NX, NY, NZ, NT) = np.shape(data)
         data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:] = data
+    i = 0
+    for data, coord in zip(datas2D, coords2D):
+        i = i+1
+        (xGrid, yGrid, zGrid) = (grid[0], grid[1], grid[2])
+        
+        xloc = np.where(np.isclose(abs(xGrid_abs-coord[0]),0, atol=1e-04))[0][0]
+        yloc = np.where(np.isclose(abs(yGrid_abs-coord[1]),0, atol=1e-04))[1][0]
+        zloc = np.where(np.isclose(abs(zGrid_abs-coord[2]),0, atol=1e-04))[2][0]
+        (NX, NY, NZ, NT) = np.shape(data)
+        data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:NT] = data
     return grid_abs, data_abs, times
 
 def extractPoint(point, grid, data):
@@ -401,11 +401,13 @@ def readSLCFtimes(file):
 def readSLCFquantities(chid, resultDir):
     slcfFiles = glob.glob("%s%s_*.sf"%(resultDir, chid))
     quantities = []
+    dimensions = []
     for file in slcfFiles:
         with open(file, 'rb') as f:
             quantity, shortName, units, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
             quantities.append(quantity)
-    return quantities, slcfFiles
+            dimensions.append([iX, eX, iY, eY, iZ, eZ])
+    return quantities, slcfFiles, dimensions
 
 def buildQTYstring(chid, resultDir, quantity):
     quantities, slcfFiles = readSLCFquantities(chid, resultDir)
@@ -429,6 +431,22 @@ def getLimsFromGrid(grid):
     (zmn, zmx) = (zGrid[0,0,:].min(), zGrid[0,0,:].max())
     
     return [xmn, xmx, ymn, ymx, zmn, zmx]
+
+def visualizePlot3D(x, z, T, U, V, W, HRR):
+    cmap = buildSMVcolormap()
+    
+    xrange = x.max()-x.min()
+    zrange = z.max()-z.min()
+    
+    if zrange > xrange:
+        plt.figure(figsize=(12*xrange/zrange,12))
+    else:
+        plt.figure(figsize=(12,12*zrange/xrange))
+    (qnty_mn, qnty_mx) = (np.nanmin(data_slc), np.nanmax(data_slc))
+    qnty_mn = 20
+    qnty_mx = 370
+    plt.contourf(x, z, T, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, levels=np.linspace(qnty_mn,qnty_mx,100), extend='both')
+    plt.colorbar()
 
 if __name__ == "__main__":
     smvFile = "E:\\projects\\mineFireLearning\\mineValidation\\scenario06_v2\\Mine_fire_s6.smv"
@@ -457,17 +475,16 @@ if __name__ == "__main__":
     
     quantities = ['TEMPERATURE']
     
-    #grids_abs, data_abs = readPlot3Ddata(chid, resultDir, time)
-    #x, z, T, U, V, W, HRR = findSliceLocation(grids_abs, data_abs, axis, value)
+    grids_abs, data_abs = readPlot3Ddata(chid, resultDir, time)
+    
+    x, z, T, U, V, W, HRR = findSliceLocation(grids_abs, data_abs, axis, value)
+    assert False, "Stopped"
     
     #grid, T, times = readSLCF3Ddata(chid, resultDir, 'FAKENEWS')
     for time in np.linspace(0,100,11):
-        t1 = tic()
         for i in range(0,len(quantities)):
             quantity = quantities[i]
             grid, data, times = readSLCF3Ddata(chid, resultDir, quantity, time=time, dt=dt)
-            dur, t1 = toc(t1)
-            print('%s: %0.2f'%(quantity, dur))
             if i == 0:
                 datas = np.expand_dims(data, axis=4)
             else:
@@ -503,6 +520,6 @@ if __name__ == "__main__":
         (qnty_mn, qnty_mx) = (np.nanmin(data_slc), np.nanmax(data_slc))
         qnty_mn = 20
         qnty_mx = 370
-        plt.contourf(x, z, data_slc[:,:], cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, levels=np.linspace(qnty_mn,qnty_mx,100), extend='both')
+        plt.contourf(x, z, data_slc[:,:, 500], cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, levels=np.linspace(qnty_mn,qnty_mx,100), extend='both')
         plt.colorbar()
     

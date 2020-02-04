@@ -14,6 +14,7 @@ import os
 def readErrorTable(fdsVersion='6.7.1'):
     dataDir = os.sep.join(__file__.split(os.sep)[:-1])
     data = pd.read_csv("%s//fdsErrorTables//%s.csv"%(dataDir, fdsVersion), index_col=0)
+    #data = pd.read_csv("fdsErrorTables//%s.csv"%(fdsVersion), index_col=0)
     keys = list(data.index.values)
     return data, keys
 

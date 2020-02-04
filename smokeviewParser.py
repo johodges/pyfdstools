@@ -29,6 +29,9 @@ def parseOBST(lines, i, gridTRNX, gridTRNY, gridTRNZ):
     tmp2 = [x.replace('\n','') for x in tmp2]
     tmp1 = [[float(y) for y in x.split()] for x in tmp1]
     tmp2 = [[float(y) for y in x.split()] for x in tmp2]
+    for i in range(0, len(tmp2)):
+        if len(tmp2[i]) > 8:
+            tmp2[i] = tmp2[i][:8]
     smvObj = np.array([x1+x2 for x1, x2 in zip(tmp1,tmp2)])
     for j in range(0,smvObj.shape[0]):
         pts = smvObj[j,13:19]

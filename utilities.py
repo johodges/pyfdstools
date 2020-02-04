@@ -33,14 +33,13 @@
 #   https://stackoverflow.com/users/2912349/paul-brodersen
 
 import networkx as nx
-import sympy as syp
 import scipy.spatial as scsp
 import numpy as np
 import mpl_toolkits.mplot3d as a3
 import matplotlib.pyplot as plt
 import matplotlib.colors as pltc
 
-def kalmanFilter(z):
+def kalmanFilter(z, Q=1e-5):
 
     # intial parameters
     #n_iter = 50
@@ -48,7 +47,7 @@ def kalmanFilter(z):
     #x = -0.37727 # truth value (typo in example at top of p. 13 calls this z)
     #z = np.random.normal(x,0.1,size=sz) # observations (normal about x, sigma=0.1)
 
-    Q = 1e-5 # process variance
+    #Q = 1e-5 # process variance
 
     # allocate space for arrays
     xhat=np.zeros(sz)      # a posteri estimate of x
@@ -92,6 +91,10 @@ def pts2polygons(groups):
         polygons.append(linkedPolygons)
         
     return polygons, len(polygons)
+
+def ConvexHull(pts):
+    p = scsp.ConvexHull(pts)
+    return p
 
 def pnt_in_cvex_hull(hull, pnt):
     '''
@@ -144,8 +147,8 @@ def simplifyFaces(faces,verts):
 def is_adjacent(a, b):
     return len(set(a) & set(b)) == 2 # i.e. triangles share 2 points and hence a side
 
-
 def is_coplanar(a, b, tolerance_in_radians=0):
+    import sympy as syp
     a1, a2, a3 = a
     b1, b2, b3 = b
     plane_a = syp.Plane(syp.Point3D(a1), syp.Point3D(a2), syp.Point3D(a3))
@@ -263,7 +266,7 @@ def polygonVisual(polygons,namespace,pcs=None,fs=16,fig=None,ax=None,
         group = polygons[i]
         for p in group:
             pc = pcs[i]
-            faces = simplifyFaces(p.simplices,p.points)
+            faces = simplifyFaces(p.simplices, p.points)
             for sq in faces:
                 f = a3.art3d.Poly3DCollection([sq])
                 f.set_color(pc)
@@ -290,8 +293,10 @@ def smvVisual(obstructions,surfaces,namespace,fs=16,fig=None,ax=None,
     
     for obst in obstructions:
         pts, colors = getPtsFromObst(obst,surfaces)
+        print(pts)
+        print(colors)
         for pt, color in zip(pts,colors):
-            f = a3.art3d.Poly3DCollection([pt])
+            f = a3.art3d.Poly3DCollection(pt)
             f.set_color(color)
             f.set_edgecolor('k')
             #f.set_alpha(1)

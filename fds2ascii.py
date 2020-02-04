@@ -566,6 +566,10 @@ def checkVIDs(vIDs,logfile,vName):
         vID = vIDs[0]
     return vID
 
+def findBndfFiles(resultDir, chid):
+    files = glob.glob(resultDir+chid+"*.bf")
+    return files
+
 if __name__ == "__main__":
     case = 19
     GHF_version = 2

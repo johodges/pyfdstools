@@ -12,7 +12,7 @@ import scipy.spatial as scsp
 #from fdsTools import smokeviewParser
 
 def in_hull(p,hull):
-    if not isinstance(hull,Delaunay):
+    if not isinstance(hull,scsp.Delaunay):
         hull = scsp.Delaunay(hull)
     return hull.find_simplex(p)>=0
 

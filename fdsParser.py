@@ -761,7 +761,7 @@ class fdsFileOperations(object):
         text = "%s%s"%(text, makeLinesFromDict(self.zones, getZONEtypes(), '&ZONE', newline=True))
         text = "%s%s"%(text, makeLinesFromDict(self.pres, getPREStypes(), '&PRES', newline=True))
         
-        if not self.meshOrder:
+        if self.meshOrder is False:
             self.addMPIprocesses(1)
         text = "%s%s"%(text, makeMESH(self.meshes, meshOrder=self.meshOrder))
         text = "%s%s"%(text, makeLinesFromDict(self.reacs, getREACtypes(), '&REAC', newline=True))
@@ -1033,6 +1033,7 @@ def getDUMPtypes():
     dumpTypes['DT_BNDF'] = 'float'
     dumpTypes['DT_SLCF'] = 'float'
     dumpTypes['DT_SL3D'] = 'float'
+    dumpTypes['DT_PL3D'] = 'float'
     dumpTypes['DT_RESTART'] = 'float'
     dumpTypes['WRITE_XYZ'] = 'bool'
     dumpTypes['ID'] = 'ignore'

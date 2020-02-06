@@ -11,6 +11,8 @@ from collections import defaultdict
 import datetime
 import re
 import scipy.spatial as scsp
+import os
+import zipfile
 
 def load_devc(file):
     with open(file, 'r') as f:
@@ -70,14 +72,28 @@ class fdsFileOperations(object):
         self.obstUnknownCounter = 0
         self.ventUnknownCounter = 0
         self.meshUnknownCounter = 0
+        self.holeUnknownCounter= 0
         
         self.slcfCounter = 0
         self.bndfCounter = 0
         
+        self.meshOrder = False
+    
+    def zopen(self, file):
+        if '.zip' in file:
+            zname = '%s.zip'%(file.split('.zip')[0])
+            fname = file.split('.zip%s'%(os.sep))[1]
+            zip = zipfile.ZipFile(zname, 'r')
+            f = zip.open(fname)
+        else:
+            f = open(file, 'rb')
+        return f
+    
     def importFile(self, file=None, text=None, textList=None):
         if file != None:
-            with open(file,'r') as f:
-                textFDS = f.read()
+            f = self.zopen(file)
+            textFDS = f.read()
+            textFDS = textFDS.decode("utf-8")
         elif text != None:
             textFDS = text
         elif textList != None:
@@ -538,7 +554,10 @@ class fdsFileOperations(object):
     
     def parseHEAD(self, line):
         head = parseHEAD(line)
-        self.head = dictMerge(self.head, head)
+        if self.head['ID']:
+            self.head['ID'] = dictMerge(self.head['ID'], head)
+        else:
+            self.head['ID'] = head
     
     def parseDEVC(self, line):
         devc = parseDEVC(line)
@@ -566,6 +585,21 @@ class fdsFileOperations(object):
                 obstNum = self.obsts[obst['ID']]['number']+1
                 self.obsts["%s-%04.0f"%(obst['ID'],obstNum)] = obst
                 self.obsts[obst['ID']]['number'] = obstNum
+                
+    def parseHOLE(self, line):
+        hole = parseHOLE(line)
+        if not hole['ID']:
+            hole['ID'] = 'NULL%04.0f'%(self.holeUnknownCounter)
+            self.holes['NULL%04.0f'%(self.holeUnknownCounter)] = hole
+            self.holeUnknownCounter += 1
+        else:
+            if not self.holes[hole['ID']]:
+                hole['number'] = 0
+                self.holes[hole['ID']] = hole
+            else:
+                holeNum = self.holes[hole['ID']]['number']+1
+                self.holes["%s-%04.0f"%(hole['ID'],holeNum)] = hole
+                self.holes[hole['ID']]['number'] = holeNum
                 
     def parseVENT(self, line):
         vent = parseVENT(line)
@@ -614,8 +648,10 @@ class fdsFileOperations(object):
     
     def parsePRES(self, line):
         pres = parsePRES(line)
-        for key in list(pres.keys()):
-            self.pres[key] = pres[key]
+        if self.pres['ID']:
+            self.pres['ID'] = dictMerge(self.pres['ID'], pres)
+        else:
+            self.pres['ID'] = pres
     
     def parseSLCF(self, line):
         slcf = parseSLCF(line)
@@ -631,15 +667,24 @@ class fdsFileOperations(object):
     
     def parseTIME(self, line):
         time = parseTIME(line)
-        self.time = dictMerge(self.time, time)
+        if self.time['ID']:
+            self.time['ID'] = dictMerge(self.time['ID'], time)
+        else:
+            self.time['ID'] = time
         
     def parseDUMP(self, line):
         dump = parseDUMP(line)
-        self.dump = dictMerge(self.dump, dump)
+        if self.dump['ID']:
+            self.dump['ID'] = dictMerge(self.dump["ID"], dump)
+        else:
+            self.dump["ID"] = dump
         
     def parseMISC(self, line):
         misc = parseMISC(line)
-        self.misc = dictMerge(self.misc, misc)
+        if self.misc["ID"]:
+            self.misc["ID"] = dictMerge(self.misc["ID"], misc)
+        else:
+            self.misc["ID"] = misc
     
     def parseZONE(self, line):
         zone = parseZONE(line)
@@ -679,6 +724,7 @@ class fdsFileOperations(object):
             if lineType == 'MATL': self.parseMATL(line)
             if lineType == 'RADI': self.parseRADI(line)
             if lineType == 'PRES': self.parsePRES(line)
+            if lineType == 'HOLE': self.parseHOLE(line)
         for key in list(self.devcs.keys()):
             if self.devcs[key]['INIT_ID']:
                 self.devcs[key]['XYZ'] = self.inits[self.devcs[key]['INIT_ID']]['XYZ']
@@ -714,7 +760,9 @@ class fdsFileOperations(object):
         text = "%s%s"%(text, makeLinesFromDict(self.dump, getDUMPtypes(), '&DUMP', newline=False))
         text = "%s%s"%(text, makeLinesFromDict(self.zones, getZONEtypes(), '&ZONE', newline=True))
         text = "%s%s"%(text, makeLinesFromDict(self.pres, getPREStypes(), '&PRES', newline=True))
-
+        
+        if not self.meshOrder:
+            self.addMPIprocesses(1)
         text = "%s%s"%(text, makeMESH(self.meshes, meshOrder=self.meshOrder))
         text = "%s%s"%(text, makeLinesFromDict(self.reacs, getREACtypes(), '&REAC', newline=True))
         text = "%s%s"%(text, makeLinesFromDict(self.radis, getRADItypes(), '&RADI', newline=True))
@@ -883,6 +931,7 @@ def getVENTtypes():
     surfTypes['CTRL_ID'] = 'string'
     surfTypes['SURF_ID'] = 'string'
     surfTypes['IOR'] = 'int'
+    surfTypes['number'] = 'ignore'
     return surfTypes
 
 def getPREStypes():
@@ -906,12 +955,15 @@ def getOBSTtypes():
     obstTypes['THICKEN'] = 'bool'
     obstTypes['TRANSPARENCY'] = 'float'
     obstTypes['COLOR'] = 'string'
+    obstTypes['number'] = 'ignore'
     return obstTypes
 
 def getHOLEtypes():
     holeTypes = defaultdict(bool)
     holeTypes['ID'] = 'string'
     holeTypes['XB'] = 'listfloat'
+    holeTypes['CTRL_ID'] = 'string'
+    holeTypes['number'] = 'ignore'
     return holeTypes
 
 def getINITtypes():
@@ -1026,8 +1078,8 @@ def getHEADtypes():
 
 def parseHEAD(line):
     head = defaultdict(bool)
-    if "CHID" in line: head['chid'] = line.split("CHID")[1].split("'")[1]
-    if "TITLE" in line: head['title'] = line.split("TITLE")[1].split("'")[1]
+    if "CHID" in line: head['CHID'] = line.split("CHID")[1].split("'")[1]
+    if "TITLE" in line: head['TITLE'] = line.split("TITLE")[1].split("'")[1]
     return head
 
 def parseDEVC(line):
@@ -1092,7 +1144,7 @@ def parseOBST(line):
         obst['SURF_IDS'] = tmp
     elif "SURF_ID" in line:
         obst['SURF_ID'] = line.split("SURF_ID")[1].split("'")[1]
-    if "ID" in line.replace("SURF_ID",""):
+    if "ID" in line.replace("SURF_IDS","").replace("SURF_ID6","").replace("SURF_ID","").replace("CTRL_ID",""):
         obst['ID'] = line.replace("SURF_ID","").split("ID")[1].split("'")[1]
     if "XB" in line:
         tmp = np.array([float(x) for x in line.split("XB")[1].replace("=","").split(',')[:6]])
@@ -1106,7 +1158,25 @@ def parseOBST(line):
     if "CTRL_ID" in line:
         txt = line.split('CTRL_ID')[1].split("'")[1]
         obst['CTRL_ID'] = txt
+    if "PERMIT_HOLE" in line:
+        txt = line.split('PERMIT_HOLE=')[1].split('.')[1]
+        if "TRUE" in txt:
+            obst['PERMIT_HOLE'] = True
+        if "FALSE" in txt:
+            obst['PERMIT_HOLE'] = False
     return obst
+
+def parseHOLE(line):
+    hole = defaultdict(bool)
+    if "ID" in line.replace('CTRL_ID',''):
+        hole['ID'] = line.split("ID")[1].split("'")[1]
+    if "XB" in line:
+        tmp = np.array([float(x) for x in line.split("XB")[1].replace("=","").split(',')[:6]])
+        hole['XB'] =  tmp
+    if "CTRL_ID" in line:
+        txt = line.split('CTRL_ID')[1].split("'")[1]
+        hole['CTRL_ID'] = txt
+    return hole
 
 def parseVENT(line):
     vent = defaultdict(bool)
@@ -1202,6 +1272,8 @@ def parseSURF(line2):
             surf['RGB'] = [float(x) for x in key.split('=')[1].split(',')[:3]]
         if ("ADIABATIC" in key) and ("ID" not in key):
             surf['ADIABATIC'] = key.split('.')[1]
+        if "VOLUME_FLOW" in key:
+            surf['VOLUME_FLOW'] = float(key.split('=')[1].split(',')[0])
             
     return surf
 
@@ -1289,6 +1361,8 @@ def parseSLCF(line):
         if 'VECTOR' in key: slcf['VECTOR'] = key.split('=')[1].split('.')[1]
         if "XB" in key:
             slcf['XB'] = [float(x) for x in key.split('XB')[1].replace('=','').split(',')[:6]]
+        if 'SPEC_ID' in key:
+            slcf['SPEC_ID'] = key.split("'")[1]
     return slcf
 
 def parseBNDF(line):
@@ -1318,6 +1392,7 @@ def parseDUMP(line):
         if 'DT_SLCF' in key: dump['DT_SLCF'] = float(key.split('=')[1].split(',')[0])
         if 'DT_SL3D' in key: dump['DT_SL3D'] = float(key.split('=')[1].split(',')[0])
         if 'DT_RESTART' in key: dump['DT_RESTART'] = float(key.split('=')[1].split(',')[0])
+        if 'WRITE_XYZ' in key: dump['WRITE_XYZ'] = key.split('.')[1]
     return dump
 
 def parseMISC(line):

@@ -416,12 +416,12 @@ class fdsFileOperations(object):
         XB3[int(2*ind)] = XB2[int(2*ind+1)]
         
         mesh2 = defaultdict(bool)
-        mesh2['ID'] = "%s-A"%(mesh["ID"])
+        mesh2['ID'] = "%s-00"%(mesh["ID"])
         mesh2['XB'] = XB2
         mesh2['IJK'] = IJK2
         
         mesh3 = defaultdict(bool)
-        mesh3['ID'] = "%s-B"%(mesh["ID"])
+        mesh3['ID'] = "%s-01"%(mesh["ID"])
         mesh3['XB'] = XB3
         mesh3['IJK'] = IJK3
         

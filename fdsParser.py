@@ -191,7 +191,7 @@ class fdsFileOperations(object):
         self.pres['ID'] = pres
     
     def addDEVC(self, ID, QUANTITY, XYZ=None, XB=None, IOR=None, SPEC_ID=None,
-                TIME_AVERAGED=None, SPATIAL_STATISTIC=None,
+                TIME_AVERAGED=None, SPATIAL_STATISTIC=None, STATISTICS=None,
                 INITIAL_STATE=None, INIT_ID=None, SETPOINT=None,
                 DUCT_ID=None):
         devc = defaultdict(bool)
@@ -205,6 +205,7 @@ class fdsFileOperations(object):
         if IOR != None: devc['IOR'] = IOR
         if TIME_AVERAGED != None: devc['TIME_AVERAGED'] = TIME_AVERAGED
         if SPATIAL_STATISTIC != None: devc['SPATIAL_STATISTIC'] = SPATIAL_STATISTIC
+        if STATISTICS != None: devc["STATISTICS"] = STATISTICS
         if DUCT_ID != None: devc['DUCT_ID'] = DUCT_ID
         if SPEC_ID != None: devc['SPEC_ID'] = SPEC_ID
         self.devcs[ID] = devc
@@ -987,6 +988,7 @@ def getDEVCtypes():
     devcTypes['IOR'] = 'int'
     devcTypes['TIME_AVERAGED'] = 'bool'
     devcTypes['SPATIAL_STATISTIC'] = 'string'
+    devcTypes['STATISTICS'] = 'string'
     devcTypes['DUCT_ID'] = 'string'
     devcTypes['SPEC_ID'] = 'string'
     return devcTypes

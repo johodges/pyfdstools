@@ -129,13 +129,16 @@ def getAbsoluteGrid(grids):
 
 def findSliceLocation(grid, data, axis, value, plot3d=False):
     (xGrid, yGrid, zGrid) = (grid[:,:,:,0], grid[:,:,:,1], grid[:,:,:,2])
-    if axis == 0: nGrid = xGrid
-    if axis == 1: nGrid = yGrid
-    if axis == 2: nGrid = zGrid
-    inds = np.where(np.isclose(nGrid, value, atol=1e-04))
-    indDiff = [np.max(x)-np.min(x) for x in inds]
-    indCheck = [True if x == 0 else False for x in indDiff]
-    ind = inds[np.where(indCheck)[0][0]][0]
+    if axis == 0: 
+        nGrid = xGrid
+        nValues = nGrid[:, 0, 0]
+    if axis == 1: 
+        nGrid = yGrid
+        nValues = nGrid[0, :, 0]
+    if axis == 2: 
+        nGrid = zGrid
+        nValues = nGrid[0, 0, :]
+    ind = np.argmin(abs(nValues-value))
     if axis == 0:
         x = np.squeeze(yGrid[ind,:,:])
         z = np.squeeze(zGrid[ind,:,:])
@@ -271,6 +274,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
         grids[meshStr]['yGrid'] = yGrid
         grids[meshStr]['zGrid'] = zGrid
         
+        times3D = []
         datas3D = []
         datas2D = []
         lims2D = []
@@ -295,6 +299,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
                             t, data = readNextTime(f, NX, NY, NZ)
                             data = np.reshape(data, (NX+1, NY+1, NZ+1),order='F')
                             datas2[:,:,:,i] = data
+                        times = timesSLCF
                     elif (time != None) and (dt == None):
                         datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
                         i = np.argmin(abs(timesSLCF-time))
@@ -318,6 +323,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
                         times = [timesSLCF[i]]
                     lims3D.append([iX, eX, iY, eY, iZ, eZ])
                     datas3D.append(datas2)
+                    times3D.append(times)
                 else:
                     '''
                     print("2-D slice:", slcfFile)
@@ -372,7 +378,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
         (xGrid, yGrid, zGrid) = (grids[key]['xGrid'], grids[key]['yGrid'], grids[key]['zGrid'])
         (datas3D, lims3D) = (grids[key]['datas3D'], grids[key]['lims3D'])
         (datas2D, lims2D, coords2D) = (grids[key]['datas2D'], grids[key]['lims2D'], grids[key]['coords2D'])
-        for data, lim in zip(datas3D, lims3D):
+        for data, lim, times in zip(datas3D, lims3D, times3D):
             xloc_mn = np.where(np.isclose(abs(xGrid_abs-xGrid[lim[0],0,0]),0, atol=1e-04))[0][0]
             xloc_mx = np.where(np.isclose(abs(xGrid_abs-xGrid[lim[1],0,0]),0, atol=1e-04))[0][0]
             yloc_mn = np.where(np.isclose(abs(yGrid_abs-yGrid[0,lim[2],0]),0, atol=1e-04))[1][0]
@@ -415,7 +421,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
             (NX, NY, NZ, NT) = np.shape(data)
             data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:NT] = data
         
-    return grid_abs, data_abs, times
+    return grid_abs, data_abs, times3D[0]
 
 def extractPoint(point, grid, data):
     ind = np.argmin(np.sum(abs(grid-point),axis=3).flatten())

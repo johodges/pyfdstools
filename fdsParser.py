@@ -67,6 +67,7 @@ class fdsFileOperations(object):
         self.matls = defaultdict(bool)
         self.radis = defaultdict(bool)
         self.pres = defaultdict(bool)
+        self.customLines = []
         
         self.devcUnknownCounter = 0
         self.obstUnknownCounter = 0
@@ -361,7 +362,7 @@ class fdsFileOperations(object):
             meshes.append(key)
         return meshes, numCells
     
-    def addMPIprocesses(self, numberOfProcesses):
+    def addMPIprocesses(self, numberOfProcesses, allowMeshSplitting=True):
         meshes, numCells = self.calculateMeshCells()
         cellsPerProcess = np.sum(numCells)/numberOfProcesses
         mpiConverged = False
@@ -369,7 +370,7 @@ class fdsFileOperations(object):
         splitMultiplier = 1.20
         while not mpiConverged:
             mpiConverged = True
-            while not splitConverged:
+            while not splitConverged and allowMeshSplitting:
                 splitConverged = True
                 meshes, numCells = self.calculateMeshCells()
                 for mesh, numCell in zip(meshes, numCells):
@@ -386,7 +387,7 @@ class fdsFileOperations(object):
                 mpiProcessInds[ind] = ind2
                 mpiProcess[ind2] += numCells[ind]
                 numCells[ind] = 0
-            if np.max(mpiProcess) > cellsPerProcess*1.20:
+            if np.max(mpiProcess) > cellsPerProcess*1.20 and allowMeshSplitting:
                 mpiConverged = False
                 splitConverged = False
                 splitMultiplier = splitMultiplier*0.9
@@ -778,6 +779,9 @@ class fdsFileOperations(object):
         text = "%s%s"%(text, makeLinesFromDict(self.ctrls, getCTRLtypes(), '&CTRL', newline=False))
         text = "%s%s"%(text, makeLinesFromDict(self.bndfs, getBNDFtypes(), '&BNDF', newline=False))
         text = "%s%s"%(text, makeLinesFromDict(self.slcfs, getSLCFtypes(), '&SLCF', newline=False))
+        
+        for line in self.customLines:
+            text = "%s%s\n"%(text, line)
         
         return text
 
@@ -1208,14 +1212,19 @@ def parseSURF(line2):
     except:
         pass
     
-    keys = line.split(',')
+    keys = line.replace('\r','').split(',')
     keys[0] = keys[0].replace('SURF','')
+    while ' ' in keys:
+        keys.remove(' ')
+    while '' in keys:
+        keys.remove('')
     updatedKeys = []
     txt = ''
-    
     for i in range(0,len(keys)):
         if '=' in keys[i]:
-            updatedKeys.append(txt)
+            #print(txt)
+            #print(txt.replace('\r',''))
+            updatedKeys.append(txt.replace('\r',''))
             txt = keys[i]
         else:
             txt = ','.join([txt,keys[i]])
@@ -1225,7 +1234,6 @@ def parseSURF(line2):
         if ("ID" in key) and ('MATL_ID' not in key) and ('VOID' not in key) and ('WIDTH' not in key):
             surf['ID'] = key.split('ID')[1].split("'")[1]
         if "MATL_ID" in key:
-            #print(key)
             tmp = key.split("=")[1].split(",")
             if '' in tmp: tmp.remove('')
             if ' ' in tmp: tmp.remove(' ')
@@ -1235,8 +1243,8 @@ def parseSURF(line2):
             surf['COLOR'] = key.split('COLOR')[1].split("'")[1]
         if "THICKNESS" in key:
             tmp = key.split('=')[1].replace(' ','').split(',')
-            for i in range(0, 5):
-                if '' in tmp: tmp.remove('')
+            while '' in tmp:
+                tmp.remove('')
             surf['THICKNESS'] = [float(x) for x in tmp]                
         if "BACKING" in key:
             surf['BACKING'] = key.split('BACKING')[1].split("'")[1]

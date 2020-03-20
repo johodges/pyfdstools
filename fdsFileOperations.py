@@ -38,14 +38,6 @@ class fdsFileOperations(object):
         self.pres = defaultdict(bool)
         self.customLines = []
         
-        '''
-        self.head['ID'] = defaultdict(bool)
-        self.time['ID'] = defaultdict(bool)
-        self.dump['ID'] = defaultdict(bool)
-        self.misc['ID'] = defaultdict(bool)
-        self.pres['ID'] = defaultdict(bool)
-        '''
-        
         self.devcs['unknownCounter'] = 0
         self.obsts['unknownCounter'] = 0
         self.holes['unknownCounter'] = 0

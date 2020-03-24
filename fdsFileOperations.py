@@ -1,9 +1,23 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Jan 25 08:17:40 2019
-
-@author: JHodges
-"""
+#----------------------------------------------------------------------
+# Copyright (C) 2020, All rights reserved
+#
+# Jonathan L. Hodges
+#
+#----------------------------------------------------------------------
+#======================================================================
+# 
+# DESCRIPTION:
+# This software is part of a python library to assist in developing and
+# analyzing simulation results from Fire Dynamics Simulator (FDS).
+# FDS is an open source software package developed by NIST. The source
+# code is available at: https://github.com/firemodels/fds
+#
+# EXAMPLES:
+# See the examples subroutine for example operation.
+#
+#=========================================================================
+# # IMPORTS
+#=========================================================================
 
 import numpy as np
 from collections import defaultdict
@@ -36,6 +50,7 @@ class fdsFileOperations(object):
         self.matls = defaultdict(bool)
         self.radis = defaultdict(bool)
         self.pres = defaultdict(bool)
+        self.parts = defaultdict(bool)
         self.customLines = []
         
         self.devcs['unknownCounter'] = 0
@@ -48,6 +63,13 @@ class fdsFileOperations(object):
         
         self.meshOrder = False
         self.version = "6.7.4"
+    
+    def saveModel(self, mpiProcesses, location, allowMeshSplitting=True):
+        self.addMPIprocesses(mpiProcesses, allowMeshSplitting=allowMeshSplitting)
+        text = self.generateFDStext()
+        with open(location, 'w') as f:
+            f.write(text)
+        print("Input file written to: %s"%(location))
     
     def dictMerge(self, a, b, path=None):
         "merges b into a"
@@ -93,6 +115,10 @@ class fdsFileOperations(object):
             line2 = linesFDS[i]
             line2 = "%s,"%(line2) if line2[-1] != ',' else line2
             linesFDS[i] = line2
+        lineTypes = [x[:4] for x in linesFDS]
+        if 'TAIL' in lineTypes:
+            ind = np.argwhere([True if x == 'TAIL' else False for x in lineTypes])[0][0]
+            linesFDS = linesFDS[:ind]
         return linesFDS
     
     def addOBST(self, ID, XB, SURF_IDS=None, SURF_ID=None, SURF_ID6=None,
@@ -547,7 +573,7 @@ class fdsFileOperations(object):
     def keyFromLineType(self, lineType):
         if lineType == 'HEAD': key = 'head'
         if lineType == 'DEVC': key = 'devcs'
-        if lineType == 'INIT': key = 'init'
+        if lineType == 'INIT': key = 'inits'
         if lineType == 'OBST': key = 'obsts'
         if lineType == 'VENT': key = 'vents'
         if lineType == 'SURF': key = 'surfs'
@@ -565,6 +591,7 @@ class fdsFileOperations(object):
         if lineType == 'RADI': key = 'radis'
         if lineType == 'PRES': key = 'pres'
         if lineType == 'HOLE': key = 'holes'
+        if lineType == 'PART': key = 'parts'
         return key
     
     def mergeTypeFromLineType(self, lineType):
@@ -589,6 +616,7 @@ class fdsFileOperations(object):
         if lineType == 'RADI': key = 'merge'
         if lineType == 'PRES': key = 'merge'
         if lineType == 'HOLE': key = 'enumerate'
+        if lineType == 'PART': key = 'enumerate'
         return key
     
     def parseLine(self, line, lineType, types, key):
@@ -645,6 +673,10 @@ class fdsFileOperations(object):
         
         for key in keys:
             keyID, keyID2, keyType, keyValue = self.interpretKey(key, lineType, types)
+            '''
+            if lineType != 'OBST':
+                print(line, lineType, keyType, key)
+            '''
             if keyType == 'string':
                 keyValue = keyValue.split("'")[1]
             elif keyType == 'float':
@@ -653,7 +685,7 @@ class fdsFileOperations(object):
                 keyValue = int(keyValue.replace(' ', '').replace(',','').replace('/',''))
             elif keyType == 'bool':
                 keyValue = keyValue.split(".")[1]
-            elif (keyType == 'liststring') or (keyType == 'listfloat') or (keyType == 'listint'):
+            elif ('list' in keyType) and ('ind' not in keyType) and ('row' not in keyType):
                 vals = []
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
                     keyValue = keyValue[:-1]
@@ -664,19 +696,26 @@ class fdsFileOperations(object):
                     if 'int' in keyType: preprocess = int(t.replace(' ', '').replace(',','').replace('/',''))
                     vals.append(preprocess)
                 keyValue = vals
-            elif (keyType == 'listindfloat'):
-                vals = []
-                ind = int(keyID.replace(keyID2, '').replace('(','').replace(')',''))
+            elif ('list' in keyType) and ('ind' in keyType) and ('row' not in keyType):
+                regex1 = r"(\(.{0,3}):(.{0,3}\))"
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
                     keyValue = keyValue[:-1]
                 keyValues = keyValue.split(",")
-                for t in keyValues:
-                    if 'string' in keyType: preprocess = t
-                    if 'float' in keyType: preprocess = float(t.replace(' ', '').replace(',','').replace('/',''))
-                    if 'int' in keyType: preprocess = int(t.replace(' ', '').replace(',','').replace('/',''))
-                    vals.append([ind, preprocess])
-                keyValue = vals
-            elif (keyType == 'listrowfloat'):
+                if 'string' in keyType: keyValues = [x.split("'")[1] for x in keyValues]
+                if 'float' in keyType: keyValues = [float(x) for x in keyValues]
+                if 'int' in keyType: keyValues = [int(x) for x in keyValues]
+                tmp = re.search(regex1, keyID)
+                if tmp is not None:
+                    ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')]
+                    ar2 = [int(x) for x in tmp.groups()[1].replace(')','').split(':')]
+                else:
+                    (ar1, ar2) = ([1], [1])
+                tmp = np.zeros((np.max([ar1, ar2]), 1), dtype='object')
+                for i in range(0, tmp.shape[0]):
+                    tmp[i-1, 0] = keyValues[i-1]
+                keyValue = tmp
+
+            elif ('list' in keyType) and ('ind' not in keyType) and ('row' in keyType):
                 vals = []
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
                     keyValue = keyValue[:-1]
@@ -687,9 +726,37 @@ class fdsFileOperations(object):
                     if 'int' in keyType: preprocess = int(t.replace(' ', '').replace(',','').replace('/',''))
                     vals.append(preprocess)
                 keyValue = vals
+            elif ('matrix' in keyType):
+                regex1 = r"(\(.{0,3});(.{0,3}\))"
+                while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
+                    keyValue = keyValue[:-1]
+                keyValues = keyValue.split(",")
+                if 'string' in keyType: keyValues = [x.split("'")[1] for x in keyValues]
+                if 'float' in keyType: keyValues = [float(x) for x in keyValues]
+                '''
+                print(lineType.lower(), keyID, keyID2, keyType)
+                print(keyID)
+                print(re.sub(regex1, '', keyID))
+                print(keyValue)
+                '''
+                tmp = re.search(regex1, keyID)
+                if tmp is not None:
+                    ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')]
+                    ar2 = [int(x) for x in tmp.groups()[1].replace(')','').split(':')]
+                else:
+                    (ar1, ar2) = ([1], [1])
+                tmp = np.zeros((np.max(ar1), np.max(ar2)), dtype='object')
+                
+                for i in ar1:
+                    for j in ar2:
+                        tmp[i-1, j-1] = keyValues[(i*j)-1]
+                keyValue = tmp
+                
             else:
                 print(lineType.lower(), keyID, keyID2, keyType)
                 print(len(keyID))
+                print(line)
+                print(keys)
                 assert False, "Stopped"
             lineDict[keyID2] = keyValue
         return lineDict
@@ -730,7 +797,7 @@ class fdsFileOperations(object):
         types = fdsLineTypes(version=self.version)
         text = "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
         text = "%s!!!!! Input file generated with fdsTools v1 on %04.0f-%02.0f-%02.0f          !!!!!\n"%(text, date.year, date.month, date.day)
-        text = "%s!!!!! Copyright JENSEN HUGHES %04.0f All right reserved.             !!!!!\n"%(text, date.year)
+        text = "%s!!!!! Copyright Jonathan Hodges %04.0f All right reserved.           !!!!!\n"%(text, date.year)
         text = "%s!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"%(text)
         
         text = "%s%s"%(text, self.makeLinesFromDict(self.head, types.head, '&HEAD', newline=False))
@@ -753,6 +820,7 @@ class fdsFileOperations(object):
         text = "%s%s"%(text, self.makeLinesFromDict(self.obsts, types.obst, '&OBST', newline=False))
         text = "%s%s"%(text, self.makeLinesFromDict(self.holes, types.hole, '&HOLE', newline=False))
         text = "%s%s"%(text, self.makeLinesFromDict(self.vents, types.vent, '&VENT', newline=False))
+        text = "%s%s"%(text, self.makeLinesFromDict(self.parts, types.part, '&PART', newline=False))
         text = "%s%s"%(text, self.makeLinesFromDict(self.devcs, types.devc, '&DEVC', newline=False))
         text = "%s%s"%(text, self.makeLinesFromDict(self.ctrls, types.ctrl, '&CTRL', newline=False))
         text = "%s%s"%(text, self.makeLinesFromDict(self.bndfs, types.bndf, '&BNDF', newline=False))
@@ -766,7 +834,9 @@ class fdsFileOperations(object):
     def keyAssist(self, text, types, dic, internalKeys=['counter'], newline=False):
         keys = list(dic.keys())
         keys.sort()
-        if 'ID' in keys: keys.insert(0, keys.pop(keys.index('ID')))
+        if 'ID' in keys:
+            keys.insert(0, keys.pop(keys.index('ID')))
+            if dic['ID'] is False: dic['ID'] = 'UNKNOWN'
         for key in internalKeys:
             if key in keys:
                 keys.remove(key)
@@ -786,12 +856,12 @@ class fdsFileOperations(object):
                     text = "%s%s=.FALSE., "%(text, key2)
             elif ('listind' in types[key2]):
                 temp = dic[key2]
+                tempTxt = "%s(%0.0f:%0.0f)="%(key2, 1, temp.shape[0])
                 for t in temp:
-                    tempTxt = "%s(%0.0f)="%(key2, t[0])
-                    if ('string' in types[key2]): tempTxt = "%s '%s',"%(tempTxt, t[1])
-                    if ('float' in types[key2]): tempTxt = "%s %0.4f,"%(tempTxt, t[1])
-                    if ('int' in types[key2]): tempTxt = "%s %0.0f,"%(tempTxt, t[1])
-                    text = "%s%s "%(text, tempTxt)
+                    if ('string' in types[key2]): tempTxt = "%s '%s',"%(tempTxt, t[0])
+                    if ('float' in types[key2]): tempTxt = "%s %0.4f,"%(tempTxt, t[0])
+                    if ('int' in types[key2]): tempTxt = "%s %0.0f,"%(tempTxt, t[0])
+                text = "%s%s "%(text, tempTxt)
             elif ('list' in types[key2]):
                 temp = dic[key2]
                 tempTxt = "%s="%(key2)
@@ -800,6 +870,23 @@ class fdsFileOperations(object):
                     if ('float' in types[key2]): tempTxt = "%s %0.4f,"%(tempTxt, t)
                     if ('int' in types[key2]): tempTxt = "%s %0.0f,"%(tempTxt, t)
                 text = "%s%s "%(text, tempTxt)
+            elif ('matrix' in types[key2]):
+                temp = dic[key2]
+                sz = dic[key2].shape
+                ar1 = "(%0.0f:%0.0f,%0.0f:%0.0f)"%(1, sz[0], 1, sz[1])
+                tempTxt = "%s%s="%(key2, ar1)
+                for t in dic[key2].flatten():
+                    if ('string' in types[key2]): tempTxt = "%s '%s',"%(tempTxt, t)
+                    if ('float' in types[key2]): tempTxt = "%s %0.4f,"%(tempTxt, t)
+                    if ('int' in types[key2]): tempTxt = "%s %0.0f,"%(tempTxt, t)
+                text = "%s%s "%(text, tempTxt)
+                '''
+                print(key2, dic[key2], dic[key2].shape)
+                print(tempTxt)
+                print(re.sub(regex1, '', key2))
+                assert False, "Stopped"
+                '''
+                
             else:
                 print(key2, types[key2])
             if newline and (types[key2] != 'ignore'):
@@ -841,8 +928,8 @@ class fdsFileOperations(object):
         while (',,' in line) or ('  ' in line):
             line = line.replace(',,', ',').replace('  ', ' ')    
             
-        regex1 = r"\(\s*\d+\s*,\s*\d+\s*\)"
-        regex2 = r"\(\s*\d+\s*:\s*\d+\s*\)"
+        regex1 = r"(\(.{0,3}),(.{0,3}\))"
+        regex2 = r"\1;\2"
         try:
             line = re.sub(regex1, regex2, line)
         except:
@@ -869,4 +956,7 @@ class fdsFileOperations(object):
                 txt = txt[:-1]
             updatedKeys[i] = txt
         return updatedKeys
+
+if __name__ == "__main__":
+    pass
     

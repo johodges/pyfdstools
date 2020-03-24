@@ -1,11 +1,24 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jul 25 14:45:47 2019
+#----------------------------------------------------------------------
+# Copyright (C) 2020, All rights reserved
+#
+# Jonathan L. Hodges
+#
+#----------------------------------------------------------------------
+#======================================================================
+# 
+# DESCRIPTION:
+# This software is part of a python library to assist in developing and
+# analyzing simulation results from Fire Dynamics Simulator (FDS).
+# FDS is an open source software package developed by NIST. The source
+# code is available at: https://github.com/firemodels/fds
+#
+# EXAMPLES:
+# See the examples subroutine for example operation.
+#
+#=========================================================================
+# # IMPORTS
+#=========================================================================
 
-@author: jhodges
-"""
-
-#from .fds2ascii import *
 from .smokeviewParser import *
 from .extractBoundaryData import *
 from .extractPlot3Ddata import *
@@ -15,3 +28,5 @@ from .fdsTypes import *
 from .fdsFileOperations import *
 from .extractCSVdata import *
 from .utilities import *
+from .colorSchemes import *
+from .examples import *

@@ -11,10 +11,11 @@ import numpy as np
 import pandas as pd
 import os
 
+from .colorSchemes import getVTcolors
+
 def readErrorTable(fdsVersion='6.7.1'):
-    dataDir = os.sep.join(__file__.split(os.sep)[:-1])
-    data = pd.read_csv("%s//fdsErrorTables//%s.csv"%(dataDir, fdsVersion), index_col=0)
-    #data = pd.read_csv("fdsErrorTables//%s.csv"%(fdsVersion), index_col=0)
+    file = os.path.abspath("fdsErrorTables%s%s.csv"%(os.sep, fdsVersion))
+    data = pd.read_csv(file, index_col=0)
     keys = list(data.index.values)
     return data, keys
 
@@ -41,8 +42,10 @@ def calculatePercentile(values, quantity, percentile, fdsVersion='6.7.1'):
         for qty in quantities:
             print("\t%s"%(qty))
     
-def plotPercentile(value, quantity, fdsVersion='6.7.1'):
+def plotPercentile(value, quantity, fdsVersion='6.7.1', colors=None):
     data, quantities = readErrorTable(fdsVersion=fdsVersion)
+    if colors is None:
+        colors = getVTcolors()
     if (quantity in quantities):
         fdsBias = data.loc[quantity]['Bias']
         fdsSigma = data.loc[quantity]['sigmaM']
@@ -58,16 +61,16 @@ def plotPercentile(value, quantity, fdsVersion='6.7.1'):
         ax1 = fig.add_subplot(111)
         
         ax1.plot([value, value], [y_pdf.min(), y_pdf.max()],'--k', linewidth=lw, label='Predicted')
-        ax1.plot(x, y_pdf, label='PDF', color=[134/255,31/255,65/255,1.0], linewidth=lw,)
+        ax1.plot(x, y_pdf, label='PDF', color=colors[0], linewidth=lw,)
         ax1.set_xlabel('%s'%(quantity),fontsize=fs)
-        ax1.set_ylabel('PDF Probabilty Density',fontsize=fs, color=[134/255,31/255,65/255,1.0])
-        ax1.tick_params('y', colors=[134/255,31/255,65/255,1.0], labelsize=fs)
+        ax1.set_ylabel('PDF Probabilty Density',fontsize=fs, color=colors[0])
+        ax1.tick_params('y', colors=colors[0], labelsize=fs)
         ax1.tick_params('x', labelsize=fs)
         
         ax2 = ax1.twinx()
-        ax2.plot(x, y_cdf, label='CDF', color=[232/255,119/255,34/255,1.0], linewidth=lw,)
-        ax2.tick_params('y', colors=[232/255,119/255,34/255,1.0], labelsize=fs)
-        ax2.set_ylabel('CDF Probabilty',fontsize=fs, color=[232/255,119/255,34/255,1.0],rotation=270, labelpad=20)
+        ax2.plot(x, y_cdf, label='CDF', color=colors[1], linewidth=lw,)
+        ax2.tick_params('y', colors=colors[1], labelsize=fs)
+        ax2.set_ylabel('CDF Probabilty',fontsize=fs, color=colors[1], rotation=270, labelpad=20)
         
         lines, labels = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
@@ -82,15 +85,8 @@ def plotPercentile(value, quantity, fdsVersion='6.7.1'):
         for qty in quantities:
             print("\t%s"%(qty))
     
-    
 def getQuantities(fdsVersion='6.7.1'):
     data = pd.read_csv("fdsErrorTables//%s.csv"%(fdsVersion))
     keys = list(data.keys())
     return keys
     
-if __name__ == "__main__":
-    
-    data, keys = readErrorTable()
-    
-    errorvalues = calculatePercentile([100, 200, 300, 400, 500, 600], 'Plume Temperature', 0.95, fdsVersion='6.7.1')
-    fig, ax1 = plotPercentile(500, 'Plume Temperature', fdsVersion='6.7.1')

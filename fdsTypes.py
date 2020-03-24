@@ -1,9 +1,23 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Jan 25 08:17:40 2019
-
-@author: JHodges
-"""
+#----------------------------------------------------------------------
+# Copyright (C) 2020, All rights reserved
+#
+# Jonathan L. Hodges
+#
+#----------------------------------------------------------------------
+#======================================================================
+# 
+# DESCRIPTION:
+# This software is part of a python library to assist in developing and
+# analyzing simulation results from Fire Dynamics Simulator (FDS).
+# FDS is an open source software package developed by NIST. The source
+# code is available at: https://github.com/firemodels/fds
+# 
+# This script defines the data types available for each type of line in
+# FDS.
+#
+#=========================================================================
+# # IMPORTS
+#=========================================================================
 
 from collections import defaultdict
 
@@ -29,6 +43,7 @@ class fdsLineTypes(object):
         self.misc = self.getMISCtypes(version)
         self.head = self.getHEADtypes(version)
         self.ramp = self.getRAMPtypes(version)
+        self.part = self.getPARTtypes(version)
         
     def getRAMPtypes(self, version="6.7.4"):
         rampTypes = defaultdict(bool)
@@ -47,6 +62,12 @@ class fdsLineTypes(object):
         matlTypes['EMISSIVITY'] = 'float'
         matlTypes['SPECIFIC_HEAT_RAMP'] = 'string'
         matlTypes['CONDUCTIVITY_RAMP'] = 'string'
+        matlTypes['N_REACTIONS'] = 'int'
+        matlTypes['NU_SPEC'] = 'float'
+        matlTypes['SPEC_ID'] = 'string'
+        matlTypes['REFERENCE_TEMPERATURE'] = 'float'
+        matlTypes['HEAT_OF_REACTION'] = 'float'
+        matlTypes['HEAT_OF_COMBUSTION'] = 'float'
         return matlTypes
     
     def getREACtypes(self, version="6.7.4"):
@@ -84,14 +105,16 @@ class fdsLineTypes(object):
     def getSURFtypes(self, version="6.7.4"):
         surfTypes = defaultdict(bool)
         surfTypes['ID'] = 'string'
-        surfTypes['MATL_ID'] = 'liststring'
-        surfTypes['THICKNESS'] = 'listfloat'
+        surfTypes['MATL_ID'] = 'matrixstring'
+        surfTypes['MATL_MASS_FRACTION'] = 'matrixfloat'
+        surfTypes['THICKNESS'] = 'listindfloat'
         surfTypes['RGB'] = 'listfloat'
         surfTypes['COLOR'] = 'string'
         surfTypes['BACKING'] = 'string'
         surfTypes['GEOMETRY'] = 'string'
         surfTypes['FYI'] = 'string'
         surfTypes['LENGTH'] = 'float'
+        surfTypes['WIDTH'] = 'float'
         surfTypes['C_FORCED_RE'] = 'float'
         surfTypes['C_FORCED_CONSTANT'] = 'float'
         surfTypes['C_FORCED_RE_EXP'] = 'float'
@@ -107,6 +130,10 @@ class fdsLineTypes(object):
         surfTypes['DEFAULT'] = 'bool'
         surfTypes['VOLUME_FLOW'] = 'float'
         surfTypes['VEL_T'] = 'listfloat'
+        surfTypes['BURN_AWAY'] = 'bool'
+        surfTypes['TMP_FRONT'] = 'float'
+        surfTypes['RADIUS'] = 'float'
+        surfTypes['TRANSPARENCY'] = 'float'
         return surfTypes
 
     def getVENTtypes(self, version="6.7.4"):
@@ -142,10 +169,18 @@ class fdsLineTypes(object):
         obstTypes['THICKEN'] = 'bool'
         obstTypes['TRANSPARENCY'] = 'float'
         obstTypes['COLOR'] = 'string'
+        obstTypes['BULK_DENSITY'] = 'float'
         obstTypes['number'] = 'ignore'
         obstTypes['unknownCounter'] = 'ignore'
         return obstTypes
-
+    
+    def getPARTtypes(self, version="6.7.4"):
+        partTypes = defaultdict(bool)
+        partTypes['ID'] = 'string'
+        partTypes['SURF_ID'] = 'string'
+        partTypes['STATIC'] = 'bool'
+        return partTypes
+    
     def getHOLEtypes(self, version="6.7.4"):
         holeTypes = defaultdict(bool)
         holeTypes['ID'] = 'string'
@@ -162,6 +197,8 @@ class fdsLineTypes(object):
         initTypes['XYZ'] = 'listfloat'
         initTypes['PART_ID'] = 'string'
         initTypes['N_PARTICLES'] = 'int'
+        initTypes['DX'] = 'float'
+        initTypes['PART_ID'] = 'string'
         return initTypes
 
     def getDEVCtypes(self, version="6.7.4"):
@@ -199,6 +236,8 @@ class fdsLineTypes(object):
         slcfTypes['XB'] = 'listfloat'
         slcfTypes['VECTOR'] = 'bool'
         slcfTypes['SPEC_ID'] = 'string'
+        slcfTypes['CELL_CENTERED'] = 'bool'
+        slcfTypes['FYI'] = 'string'
         slcfTypes['ID'] = 'ignore'
         slcfTypes['unknownCounter'] = 'ignore'
         return slcfTypes
@@ -228,6 +267,8 @@ class fdsLineTypes(object):
         dumpTypes['DT_SL3D'] = 'float'
         dumpTypes['DT_PL3D'] = 'float'
         dumpTypes['DT_RESTART'] = 'float'
+        dumpTypes['RENDER_FILE'] = 'string'
+        dumpTypes['COLUMN_DUMP_LIMIT'] = 'bool'
         dumpTypes['WRITE_XYZ'] = 'bool'
         dumpTypes['ID'] = 'ignore'
         return dumpTypes

@@ -1,0 +1,14 @@
+*/*.pyc
+__pycache__/
+*.binfo
+*.end
+*.fds
+*.out
+*.prt5
+*.sinfo
+*.smv
+*.bf
+*.s3d*
+*sf
+*.csv
+*.txt

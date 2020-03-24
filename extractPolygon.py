@@ -1,34 +1,19 @@
 #----------------------------------------------------------------------
-# Copyright (C) 2018, All rights reserved
+# Copyright (C) 2020, All rights reserved
 #
-# JENSEN HUGHES
-#
-# 3610 Commerce Blvd, Suite 817
-#
-# Baltimore, MD 21227
-#
-# http://www.jensenhughes.com
-#
-# JENSEN HUGHES. Copyright Information
+# Jonathan L. Hodges
 #
 #----------------------------------------------------------------------
 #======================================================================
 # 
 # DESCRIPTION:
+# This software is part of a python library to assist in developing and
+# analyzing simulation results from Fire Dynamics Simulator (FDS).
+# FDS is an open source software package developed by NIST. The source
+# code is available at: https://github.com/firemodels/fds
+# 
+# This script extracts boundary data from defined polygons.
 #
-# INPUTS:
-#
-# OUTPUTS:
-#
-# SUBROUTINES:
-#
-#======================================================================
-#
-# Record of Revision
-# Date      Name                    Description
-#
-#=========================================================================
-
 #=========================================================================
 # # IMPORTS
 #=========================================================================
@@ -39,7 +24,6 @@ import os
 from collections import defaultdict
 import sys
 from . import utilities as ut
-from . import fds2ascii as fa
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.opengl as gl
@@ -600,28 +584,14 @@ def getCoordinateMasks(coords,polygons):
     for i in range(0,len(polygons)):
         linkedpolygons = polygons[i]
         for p in linkedpolygons:
-            masks[np.where(in_hull2(coords,p.points)),i] = 1
-            #assert False, "Stopped"
-            #for j in range(0,coords.shape[0]):
-            #    #if ut.pnt_in_cvex_hull(p, coords[j,:]):
-            #    if in_hull(p.points,coords[j,:]):
-            #        masks[j,i] = 1
+            masks[np.where(in_hull(coords,p.points)),i] = 1
     return masks
 
-def in_hull2(p,hull):
+def in_hull(p,hull):
     from scipy.spatial import Delaunay
     if not isinstance(hull,Delaunay):
         hull = Delaunay(hull)
     return hull.find_simplex(p)>=0
-
-def in_hull(points, x):
-    n_points = len(points)
-    n_dim = len(x)
-    c = np.zeros(n_points)
-    A = np.r_[points.T,np.ones((1,n_points))]
-    b = np.r_[x, np.ones(1)]
-    lp = scop.linprog(c,A_eq=A,b_eq=b)
-    return lp.success
 
 def getCoordinateMasks2(coords,polygons):
     masks = np.zeros((coords.shape[0],len(polygons)))

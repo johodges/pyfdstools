@@ -1,20 +1,19 @@
 #----------------------------------------------------------------------
-# Copyright (C) 2017, All rights reserved
+# Copyright (C) 2020, All rights reserved
 #
-# JENSEN HUGHES
-#
-# 3610 Commerce Blvd, Suite 817
-#
-# Baltimore, MD 21227
-#
-# http://www.jensenhughes.com
-#
-# JENSEN HUGHES. Copyright Information
+# Jonathan L. Hodges
 #
 #----------------------------------------------------------------------
 #======================================================================
+# 
 # DESCRIPTION:
-# This script has utilities used to visualize polygons from a series of points.
+# This software is part of a python library to assist in developing and
+# analyzing simulation results from Fire Dynamics Simulator (FDS).
+# FDS is an open source software package developed by NIST. The source
+# code is available at: https://github.com/firemodels/fds
+# 
+# This script has utilities used to throughout the package for tasks
+# associated with visualization and filtering.
 #
 # ATTRIBUTION:
 # The following subroutines were based on work posted to stackoverflow:
@@ -31,6 +30,10 @@
 #   https://stackoverflow.com/users/7122932/nikferrari
 # The answerer was Paul Brodersen:
 #   https://stackoverflow.com/users/2912349/paul-brodersen
+#
+#=========================================================================
+# # IMPORTS
+#=========================================================================
 
 import networkx as nx
 import scipy.spatial as scsp
@@ -38,25 +41,29 @@ import numpy as np
 import mpl_toolkits.mplot3d as a3
 import matplotlib.pyplot as plt
 import matplotlib.colors as pltc
+import os
 
-def kalmanFilter(z, Q=1e-5):
+from .smokeviewParser import parseSMVFile
 
+def kalmanFilter(z, Q=1e-5, R=0.5**2):
+    ''' This subroutine applies a kalman filter to an input set of data.
+    
+    Inputs:
+        z: series of data to be filtered
+        Q: process variance
+        R: measurement variance
+    Outputs:
+        xhat: filtered series of data
+    '''
     # intial parameters
-    #n_iter = 50
     sz = z.shape[0] # size of array
-    #x = -0.37727 # truth value (typo in example at top of p. 13 calls this z)
-    #z = np.random.normal(x,0.1,size=sz) # observations (normal about x, sigma=0.1)
-
-    #Q = 1e-5 # process variance
-
+    
     # allocate space for arrays
     xhat=np.zeros(sz)      # a posteri estimate of x
     P=np.zeros(sz)         # a posteri error estimate
     xhatminus=np.zeros(sz) # a priori estimate of x
     Pminus=np.zeros(sz)    # a priori error estimate
     K=np.zeros(sz)         # gain or blending factor
-    
-    R = 0.5**2 # estimate of measurement variance, change to see effect
     
     # intial guesses
     xhat[0] = z[0]
@@ -379,4 +386,65 @@ def getPtsFromObst(obst,surfaces):
     colors.append((float(surf[6]),float(surf[7]),float(surf[8]),float(surf[9])))
     
     return pts, colors
+
+def in_hull(p, hull):
+    if not isinstance(hull,scsp.Delaunay):
+        hull = scsp.Delaunay(hull)
+    return hull.find_simplex(p)>=0
+
+def pointsFromXB(XB,extend=[0,0,0]):
+    ''' This routine builds a list of XYZ points from an obstruction XB
     
+    Inputs:
+        XB: Septuplet containing [xmin, xmax, ymin, ymax, zmin, zmax]
+        extend: Float array containing amount to extend polygon along each axis
+    Outputs:
+        pts: List of corner points
+    '''
+    pts = [[XB[0]-extend[0],XB[2]-extend[1],XB[4]-extend[2]],
+           [XB[0]-extend[0],XB[2]-extend[1],XB[5]+extend[2]],
+           [XB[0]-extend[0],XB[3]+extend[1],XB[4]-extend[2]],
+           [XB[0]-extend[0],XB[3]+extend[1],XB[5]+extend[2]],
+           [XB[1]+extend[0],XB[2]-extend[1],XB[4]-extend[2]],
+           [XB[1]+extend[0],XB[2]-extend[1],XB[5]+extend[2]],
+           [XB[1]+extend[0],XB[3]+extend[1],XB[4]-extend[2]],
+           [XB[1]+extend[0],XB[3]+extend[1],XB[5]+extend[2]]]
+    return pts
+
+def checkDevices(fdsFile, smvFile=None):
+    ''' This routine checks if any devices in an fds file are overlapping
+    with an obstruction
+    
+    Inputs:
+        fdsFile: fdsFileOperations with the different lines defined
+        smvFile: filename of the smv file. If not included, determined by chid
+    Outputs:
+        devcNames: device names that are overlapping with an obstruction
+    '''
+    chid = fdsFile.head['ID']['CHID']
+    devcs = fdsFile.devcs
+    obsts = fdsFile.obsts
+    surfs = fdsFile.surfs
+    if smvFile is None:
+        smvFile = fdsFile.split(os.sep)
+        smvFile[-1] = "%s.smv"%(chid)
+        smvFile = os.sep.join(smvFile)
+    grids, obsts, bndfs, surfs  = parseSMVFile(smvFile)
+    
+    obstHulls = []
+    for i in range(0,obsts.shape[0]):
+        obst = obsts[i,:]
+        pts = pointsFromXB(obst[13:19])
+        obstHull = scsp.Delaunay(pts)
+        obstHulls.append(obstHull)
+    
+    devcNames = []
+    for key in list(devcs.keys()):
+        pt = devcs[key]['XYZ']
+        if pt:
+            for hull in obstHulls:
+                if in_hull(pt,hull):
+                    print("Device %s is within obstruction."%(key))
+                    devcNames.append(key)
+    devcNames = list(set(devcNames))
+    return devcNames

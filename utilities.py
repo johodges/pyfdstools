@@ -1,10 +1,10 @@
-#----------------------------------------------------------------------
+#-----------------------------------------------------------------------
 # Copyright (C) 2020, All rights reserved
 #
 # Jonathan L. Hodges
 #
-#----------------------------------------------------------------------
-#======================================================================
+#-----------------------------------------------------------------------
+#=======================================================================
 # 
 # DESCRIPTION:
 # This software is part of a python library to assist in developing and
@@ -25,15 +25,16 @@
 #   reorder
 #   get_distance
 # The original question was posted here:
-#   https://stackoverflow.com/questions/49098466/plot-3d-convex-closed-regions-in-matplot-lib
+#   https://stackoverflow.com/questions/49098466/
+#     plot-3d-convex-closed-regions-in-matplot-lib
 # The original author was Nikferrari:
 #   https://stackoverflow.com/users/7122932/nikferrari
 # The answerer was Paul Brodersen:
 #   https://stackoverflow.com/users/2912349/paul-brodersen
 #
-#=========================================================================
+#=======================================================================
 # # IMPORTS
-#=========================================================================
+#=======================================================================
 
 import networkx as nx
 import scipy.spatial as scsp

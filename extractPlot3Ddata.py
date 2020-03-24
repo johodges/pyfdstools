@@ -1,10 +1,20 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Apr 15 09:35:22 2019
-
-@author: JHodges
-"""
-
+#-----------------------------------------------------------------------
+# Copyright (C) 2020, All rights reserved
+#
+# Jonathan L. Hodges
+#
+#-----------------------------------------------------------------------
+#=======================================================================
+# 
+# DESCRIPTION:
+# This software is part of a python library to assist in developing and
+# analyzing simulation results from Fire Dynamics Simulator (FDS).
+# FDS is an open source software package developed by NIST. The source
+# code is available at: https://github.com/firemodels/fds
+#
+#=======================================================================
+# # IMPORTS
+#=======================================================================
 import numpy as np
 import matplotlib.pyplot as plt
 import glob

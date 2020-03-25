@@ -111,45 +111,6 @@ def exampleImportBndf(resultDir=None, chid=None, fdsFile=None,
                             cbarticks=[20, 40, 60, 80, 100, 120, 140])
     return datas, fig
 
-def linkBndfFileToMesh(fdsFilePath, bndfs, fdsQuantities):
-    if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
-    numberOfMeshes = len(meshes)
-    
-    bndf_dic = defaultdict(bool)
-    for qty in fdsQuantities:
-        bndf_qty = []
-        for bndf in bndfs:
-            quantity, shortName, units, npatch = fds.readBoundaryHeader(bndf)
-            if quantity == qty:
-                meshNumber = 0 if numberOfMeshes == 1 else int(bndf.split('_')[-2])-1
-                bndf_qty.append([bndf, meshNumber])
-        bndf_dic[qty] = bndf_qty
-    return bndf_dic
-
-def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, fdsQuantities,
-                         tStart=0, tEnd=120, tInt=1, tBand=3, orientations=[0]):
-    fdsFile = fds.fdsFileOperations()
-    fdsFile.importFile(fdsFilePath)
-    meshes = list(fdsFile.meshes.keys())
-    names = fds.getPolygonNamesFromFdsFile(fdsFile)
-    linesSMV = fds.zreadlines(smvFilePath)
-    points = fds.parseFDSforPts(fdsFile, linesSMV, names, extend=[0,0,0])
-    polygons, numberOfGroups = fds.pts2polygons(points)
-    
-    bndfs = fds.getFileList(resultDir, chid, 'bf')
-    bndf_dic = linkBndfFileToMesh(meshes, bndfs, fdsQuantities)
-    
-    smvGrids, smvObsts, smvBndfs, smvSurfs = fds.parseSMVFile(smvFilePath)
-    
-    datas = defaultdict(bool)
-    for qty in fdsQuantities:
-        datas[qty] = defaultdict(bool)
-        times, mPts, orients = fds.loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndf_dic[qty], smvGrids, smvObsts, orientations, polygons)
-        datas[qty]['TIMES'] = times
-        datas[qty]['NAMES'] = names
-        datas[qty]['DATA'] = mPts
-    return datas
-
 def exampleExtractBndfMax(resultDir=None, chid=None, fdsFile=None, smvFile=None,
                           outputName=None,
                           fdsQuantities = ['WALL TEMPERATURE'], fdsUnits = ['C'],
@@ -162,8 +123,8 @@ def exampleExtractBndfMax(resultDir=None, chid=None, fdsFile=None, smvFile=None,
     if smvFile is None: smvFilePath = fds.getFileList(resultDir, chid, 'smv')[0]
     if outputName is None: outputName = os.path.abspath("generated%s%s_max_"%(os.sep, chid))
     
-    datas = extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, fdsQuantities,
-                                 tStart=tStart, tEnd=tEnd, tInt=tInt, tBand=tBand, orientations=orientations)
+    datas = fds.extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, chid, fdsQuantities,
+                    tStart=tStart, tEnd=tEnd, tInt=tInt, tBand=tBand, orientations=orientations)
     
     figs = []
     for qty in fdsQuantities:

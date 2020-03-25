@@ -18,18 +18,43 @@
 # # IMPORTS
 #=======================================================================
 import numpy as np
-import yaml
 import matplotlib.colors as pltc
 import os
 from collections import defaultdict
 import sys
-from . import utilities as ut
+#from . import utilities as ut
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.opengl as gl
 
-import scipy.optimize as scop
+from .fdsFileOperations import fdsFileOperations
+from .utilities import in_hull, zreadlines, getFileList, pts2polygons
+from .extractBoundaryData import linkBndfFileToMesh, loadBNDFdata_lessParams
+from .smokeviewParser import parseSMVFile
 
+def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, chid, fdsQuantities,
+                         tStart=0, tEnd=120, tInt=1, tBand=3, orientations=[0]):
+    fdsFile = fdsFileOperations()
+    fdsFile.importFile(fdsFilePath)
+    meshes = list(fdsFile.meshes.keys())
+    names = getPolygonNamesFromFdsFile(fdsFile)
+    linesSMV = zreadlines(smvFilePath)
+    points = parseFDSforPts(fdsFile, linesSMV, names, extend=[0,0,0])
+    polygons, numberOfGroups = pts2polygons(points)
+    
+    bndfs = getFileList(resultDir, chid, 'bf')
+    bndf_dic = linkBndfFileToMesh(meshes, bndfs, fdsQuantities)
+    
+    smvGrids, smvObsts, smvBndfs, smvSurfs = parseSMVFile(smvFilePath)
+    
+    datas = defaultdict(bool)
+    for qty in fdsQuantities:
+        datas[qty] = defaultdict(bool)
+        times, mPts, orients = loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndf_dic[qty], smvGrids, smvObsts, orientations, polygons)
+        datas[qty]['TIMES'] = times
+        datas[qty]['NAMES'] = names
+        datas[qty]['DATA'] = mPts
+    return datas
 
 def getPolygonNamesFromFdsFile(file):
     names = []
@@ -40,86 +65,6 @@ def getPolygonNamesFromFdsFile(file):
             names.append(file.obsts[key]["ID"])
     names = list(set(names))
     return names
-
-def setupQT():
-    app = QtGui.QApplication([])
-    w = gl.GLViewWidget()
-    w.show()
-    w.setWindowTitle('pyqtgraph example: GLMeshItem')
-    w.setCameraPosition(distance=40)
-    
-    g = gl.GLGridItem()
-    g.scale(2,2,1)
-    w.addItem(g)
-    return app, w
-
-def getRunInfo(params):
-    ''' Return run information from parameter dictionary '''
-    chid = params['chid']
-    orientations = params['orientations']
-    outputs = defaultdict(bool,params['outputs'])
-    
-    if params['space']:
-        dLimited = params['space']['limitDomain']
-        if dLimited:
-            dLimits = params['space']['domainLimits']
-        else:
-            dLimits=[0,1,0,1,0,1]
-    else:
-        dLimited = False
-        dLimits = [0,1,0,1,0,1]
-    return chid, orientations, outputs, dLimited, dLimits
-
-def getPolysFromInput(params):
-    ''' Get points from entries in parameter dictionary '''
-    allPoints = []
-    for name in params['polygons']:
-        linkedPolygons = params[name]['points']
-        linkedPts = []
-        for polygon in linkedPolygons:
-            pts = polygon
-            linkedPts.append(pts)
-        allPoints.append(linkedPts)
-    return allPoints
-
-def getNamesFromInput(params,file):
-    ''' Get names from entries in parameter dictionary '''
-    if params['polygons']:
-        names = []
-        for p in params['polygons']:
-            if params[p]:
-                pDict = defaultdict(bool,params[p])
-                if pDict['name']:
-                    names.append(pDict['name'])
-                else:
-                    names.append(p)
-            else:
-                names.append(p)
-                params[p] = defaultdict(bool,{'name':p,'threshold':params['defaultThreshold']})
-                print(params[p])
-    else:
-        with open(file,'r') as f:
-            lines = f.readlines()
-        comments = []
-        for x in lines:
-            sLine = x.replace('\n','').split('/')
-            if len(sLine) <= 1:
-                comments.append('')
-            elif len(sLine) == 2:
-                comments.append(sLine[1])
-            else:
-                comments.append('/'.join(sLine[1:]))
-        #comments = [x.replace('\n','').split('/')[1] for x in lines]
-        names = []
-        for line, cmt in zip(lines,comments):
-            if 'BNDF_OBST=.TRUE.' in line:
-                names.append(cmt)
-        names = list(set(names))
-        params['polygons'] = names
-        for name in names:
-            params[name] = defaultdict(bool,{'threshold':params['defaultThreshold']})
-    return names, params
-
 
 def parseFDSforPts(fileFDS, linesSMV, names, extend=[0,0,0]):
     ''' This routine parses an FDS file looking for a list of names and
@@ -282,196 +227,6 @@ def getMaxValueVersusTime(timeParameters,otherParameters,polygons):
     times = np.array(times)[:-1]
     return mPts, times
 
-def getMeshes(params,fdsInputFile):
-    meshes = params['meshes']
-    print("INPUT FILE MESHES:",meshes)
-    if meshes[0] == -1:
-        with open(fdsInputFile,'r') as f:
-            lines = f.readlines()
-        meshes = []
-        meshCounter = 0
-        for line in lines:
-            if '&MESH' in line:
-                meshCounter = meshCounter+1
-                meshes.append(int(meshCounter))
-    print("OUTPUT MESHES:",meshes)
-    return meshes
-
-def processInputFileCustom(argsFile):
-    params = readInputFile(argsFile)
-    
-    # Load run information
-    outDir = getOutputDirectory(argsFile,params)
-    dataDir = getDataDirectory(argsFile,params)
-    chid, orientations, outputs, dLimited, dLimits = getRunInfo(params)
-    fdsPath = getFdsPath(params)
-    vName = getVariableName(params)
-    outName = getOutName(params)
-    
-    # Load polygon information
-    names, params = getNamesFromInput(params)
-    thresholds = getThresholdsFromInput(params)
-    if params['fdsInputFile']:
-        fdsInputFile = os.path.abspath(os.sep.join(os.path.abspath(argsFile).split(os.sep)[:-1])+os.sep+params['fdsInputFile'])
-        points = parseFDSforPts(fdsInputFile,names,extend=[0.0,0.0,0.0])
-    else:
-        print("FDS file not included in input file. Using points defined in input file.")
-        points = getPolysFromInput(params)
-    
-    # Load meshes
-    meshes = getMeshes(params,fdsInputFile)
-    print(meshes)
-    
-    # Generate polygons
-    polygons, numberOfGroups = ut.pts2polygons(points)
-    
-    # Load time information
-    timeParameters = extractTimeParams(params)    
-    tStart,tEnd,tBand,tInt = timeParameters
-    # Run fds2ascii the first time to generate logfile
-    #setupEnvironment(path=fdsPath)
-    #inName = buildFDS2asciiInput(dataDir,chid,1,outName,
-    #                             timeParameters[0],timeParameters[1],orientations[0],
-    #                             domainLimited=dLimited,domainLimits=dLimits)
-    #logfile = runFDS2ascii(dataDir,inName,outName)
-    
-    # Find variable ID
-    vID = parseFDSforVID(fdsInputFile,vName)
-    
-    # Load boundary files
-    coords, pts, times = fa.getPointsFromMeshes(dataDir,chid,meshes,vID,tStart,tEnd,tBand,tInt)
-    
-    # Generate point mask for polygons
-    masks = getCoordinateMasks(coords,polygons)
-    
-    mPts = np.zeros((pts.shape[1],masks.shape[1]))
-    for i in range(0,masks.shape[1]):
-        mPts[:,i] = np.nanmax(pts[masks[:,i] == 1],axis=0)
-    
-    # Remove last time if it is zero
-    if times[-1] == 0:
-        mPts = np.delete(mPts,mPts.shape[0]-1,axis=0)
-        times = np.delete(times,times.shape[0]-1,axis=0)
-    
-    # Make consistent plot colors
-    pcs = []
-    for i in range(0,numberOfGroups): pcs.append(pltc.rgb2hex(np.random.rand(3)))
-    
-    # Generate outputs
-    namespace = "%s%s"%(outDir+os.sep,chid)
-    
-    return times, mPts, names, thresholds, polygons, namespace, params
-
-
-
-
-def loadBNDFdata(argsFile,polygons):
-    params = readInputFile(argsFile)
-    
-    # Load run information
-    outDir = getOutputDirectory(argsFile,params)
-    dataDir = getDataDirectory(argsFile,params)
-    chid, orientations, outputs, dLimited, dLimits = getRunInfo(params)
-    print(params)
-    print(orientations)
-    vName = getVariableName(params)
-    
-    # Load fdsInputFile Name
-    fdsInputFile = os.path.abspath(os.sep.join(os.path.abspath(argsFile).split(os.sep)[:-1])+os.sep+params['fdsInputFile'])
-    
-    # Find polygon names
-    names, params = getNamesFromInput(params,fdsInputFile)
-    
-    # Load polygon information
-    thresholds = getThresholdsFromInput(params)
-    
-    # Load meshes
-    meshes = getMeshes(params,fdsInputFile)
-    print(meshes)
-    
-    # Load time information
-    tStart,tEnd,tInt,tBand = extractTimeParams(params)    
-    
-    # Find variable ID
-    vID = parseFDSforVID(fdsInputFile,vName)
-    
-    # Load boundary files
-    coords2, pts2, times, orients2 = fa.getPointsFromMeshes(dataDir,chid,meshes,vID,tStart,tEnd,tBand,tInt)
-    
-    print(coords2.shape, pts2.shape, times.shape, orients2.shape)
-    
-    orientInds = np.where([True if x in orientations else False for x in orients2])[0]
-    
-    coords = coords2[orientInds,:]
-    pts = pts2[orientInds,:]
-    orients = orients2[orientInds]
-    print(np.unique(orients))
-    print(coords.shape, pts.shape, times.shape, orients.shape)
-    
-    # Generate point mask for polygons
-    masks = getCoordinateMasks(coords,polygons)
-    
-    # Output specific polygon mask
-    #nameCheck = ['Riser A-TTCY' in x for x in names]
-    #ind = np.where(nameCheck)[0][0]
-    #print("SAVING: E:\\projects\\khnp\\run0002\\POINT_COORDINATES.csv")
-    #np.savetxt("E:\\projects\\khnp\\run0002\\POINT_COORDINATES.csv",coords[masks[:,ind] == 1],delimiter=',')
-    #print("SAVING: E:\\projects\\khnp\\run0002\\POINT_VALUES.csv")
-    #np.savetxt("E:\\projects\\khnp\\run0002\\POINT_VALUES.csv",pts[masks[:,ind] == 1],delimiter=',')
-    
-    mPts = np.zeros((pts.shape[1],masks.shape[1]))
-    for i in range(0,masks.shape[1]):
-        if np.where(masks[:,i] == 1)[0].shape[0] > 1:
-            mPts[:,i] = np.nanmax(pts[masks[:,i] == 1],axis=0)
-            np.savetxt('polygon%02.0f.csv'%(i),coords[masks[:,i] == 1,:],delimiter=',',header='x,y,z')
-        else:
-            mPts[:,i] = -1
-    
-    # Remove last time if it is zero
-    if times[-1] == 0:
-        mPts = np.delete(mPts,mPts.shape[0]-1,axis=0)
-        times = np.delete(times,times.shape[0]-1,axis=0)
-    
-    # Generate outputs
-    namespace = "%s%s"%(outDir+os.sep,chid)
-    
-    return times, mPts, names, thresholds, namespace, params
-
-
-
-
-def getArgFilePolygons(argsFile):
-    params = readInputFile(argsFile)
-    
-    # Load run information
-    chid, orientations, outputs, dLimited, dLimits = getRunInfo(params)
-    
-    # Load fdsInputFile Name
-    fdsInputFile = os.path.abspath(os.sep.join(os.path.abspath(argsFile).split(os.sep)[:-1])+os.sep+params['fdsInputFile'])
-    
-    # Find polygon names
-    names, params = getNamesFromInput(params,fdsInputFile)
-    
-    # Load polygon information
-    points = parseFDSforPts(fdsInputFile,names,extend=[0.0,0.0,0.0])
-    
-    # Generate polygons
-    polygons, numberOfGroups = ut.pts2polygons(points)
-    
-    # Generate color scheme for each polygon
-    pcs = []
-    for i in range(0,numberOfGroups): pcs.append(pltc.rgb2hex(np.random.rand(3)))
-    
-    return polygons, pcs
-
-
-def getSmvFile(argsFile):
-    params = readInputFile(argsFile)
-    dataDir = getDataDirectory(argsFile,params)
-    chid, orientations, outputs, dLimited, dLimits = getRunInfo(params)
-    smvFile = os.path.abspath(dataDir+os.sep+chid+'.smv')
-    return smvFile
-
 def getCoordinateMasks(coords,polygons):
     masks = np.zeros((coords.shape[0],len(polygons)))
     for i in range(0,len(polygons)):
@@ -496,178 +251,4 @@ def getCoordinateMasks2(coords,polygons):
                     masks[j,i] = 1
     return masks
 
-def processInputFileReturn(argsFile):
-    params = readInputFile(argsFile)
-    
-    # Load run information
-    outDir = getOutputDirectory(argsFile,params)
-    dataDir = getDataDirectory(argsFile,params)
-    chid, orientations, outputs, dLimited, dLimits = getRunInfo(params)
-    fdsPath = getFdsPath(params)
-    vName = getVariableName(params)
-    outName = getOutName(params)
-    
-    # Load polygon information
-    names, params = getNamesFromInput(params)
-    thresholds = getThresholdsFromInput(params)
-    if params['fdsInputFile']:
-        fdsInputFile = os.path.abspath(os.sep.join(os.path.abspath(argsFile).split(os.sep)[:-1])+os.sep+params['fdsInputFile'])
-        points = parseFDSforPts(fdsInputFile,names,extend=[0.5,0.5,0.5])
-    else:
-        print("FDS file not included in input file. Using points defined in input file.")
-        points = getPolysFromInput(params)
-    
-    # Generate polygons
-    polygons, numberOfGroups = ut.pts2polygons(points)
-    
-    # Load time information
-    timeParameters = extractTimeParams(params)    
-    
-    # Run fds2ascii the first time to generate logfile
-    setupEnvironment(path=fdsPath)
-    inName = buildFDS2asciiInput(dataDir,chid,1,outName,
-                                 timeParameters[0],timeParameters[1],orientations[0],
-                                 domainLimited=dLimited,domainLimits=dLimits)
-    logfile = runFDS2ascii(dataDir,inName,outName)
-    
-    # Find variable ID in logfile
-    checkForLogfile(logfile)
-    vIDs = findVariableInLog(logfile,vName)
-    vID = checkVIDs(vIDs,logfile,vName)
-    
-    # Call fds2ascii for each time and orientation configuration
-    saveOutputs = True if outputs['allPoints'] else False
-    otherParameters = [dataDir,chid,vID,outName,orientations,dLimited,dLimits,
-                       saveOutputs,names,outDir,vName,chid]
-    mPts,times = getMaxValueVersusTime(timeParameters,otherParameters,polygons)
-    
-    # Make consistent plot colors
-    pcs = []
-    for i in range(0,numberOfGroups): pcs.append(pltc.rgb2hex(np.random.rand(3)))
-    
-    # Generate outputs
-    namespace = "%s%s"%(outDir+os.sep,chid)
-    
-    smvFile = os.path.abspath(dataDir+os.sep+chid+'.smv')
-    surfaces, obstructions = ut.buildSMVgeometry(smvFile)
-    
-    return times, mPts, names, thresholds, polygons, surfaces, obstructions, namespace, params
 
-def processInputFile(argsFile):
-    params = readInputFile(argsFile)
-    
-    # Load run information
-    outDir = getOutputDirectory(argsFile,params)
-    dataDir = getDataDirectory(argsFile,params)
-    chid, orientations, outputs, dLimited, dLimits = getRunInfo(params)
-    fdsPath = getFdsPath(params)
-    vName = getVariableName(params)
-    outName = getOutName(params)
-    
-    # Load polygon information
-    names = getNamesFromInput(params)
-    thresholds = getThresholdsFromInput(params)
-    if params['fdsInputFile']:
-        fdsInputFile = os.path.abspath(os.sep.join(os.path.abspath(argsFile).split(os.sep)[:-1])+os.sep+params['fdsInputFile'])
-        points = parseFDSforPts(fdsInputFile,names,extend=[0.5,0.5,0.5])
-    else:
-        print("FDS file not included in input file. Using points defined in input file.")
-        points = getPolysFromInput(params)
-    
-    # Generate polygons
-    polygons, numberOfGroups = ut.pts2polygons(points)
-    
-    # Load time information
-    timeParameters = extractTimeParams(params)    
-    
-    # Run fds2ascii the first time to generate logfile
-    setupEnvironment(path=fdsPath)
-    inName = buildFDS2asciiInput(dataDir,chid,1,outName,
-                                 timeParameters[0],timeParameters[1],orientations[0],
-                                 domainLimited=dLimited,domainLimits=dLimits)
-    logfile = runFDS2ascii(dataDir,inName,outName)
-    
-    # Find variable ID in logfile
-    checkForLogfile(logfile)
-    vIDs = findVariableInLog(logfile,vName)
-    vID = checkVIDs(vIDs,logfile)
-    
-    # Call fds2ascii for each time and orientation configuration for each mesh
-    otherParameters = [dataDir,chid,vID,outName,orientations,dLimited,dLimits]
-    mPts,times = getMaxValueVersusTime(timeParameters,otherParameters,polygons)
-    
-    # Make consistent plot colors
-    pcs = []
-    for i in range(0,numberOfGroups): pcs.append(pltc.rgb2hex(np.random.rand(3)))
-    
-    # Generate outputs
-    namespace = "%s%s"%(outDir+os.sep,chid)
-    if outputs['maxTCSV']: ut.maxValueCSV(times,mPts,names,namespace)
-    if outputs['failureTime']: ut.failureTimesCSV(times,mPts,names,thresholds,namespace)
-    if outputs['maxTPlot']: ut.maxValuePlot(times,mPts,names,namespace,pcs=pcs,vName=vName)
-    if outputs['polygonVisual']:
-        app, w = setupQT()
-        for i in range(0,len(polygons)):
-            for j in range(0,len(polygons[i])):
-                p = polygons[i][j]
-                c = np.array([pltc.to_rgba(pcs[i]) for x in p.simplices])
-                m1 = gl.GLMeshItem(vertexes=p.points, faces=p.simplices, faceColors=c, smooth=False)
-                m1.setGLOptions('opaque')
-                w.addItem(m1)
-        
-        smvFile = os.path.abspath(dataDir+os.sep+chid+'.smv')
-        surfaces, obstructions = ut.buildSMVgeometry(smvFile)
-        
-        for i in range(0,len(obstructions)):#obst in obstructions:
-            obst = obstructions[i]
-            pts, colors = ut.getPtsFromObst(obst,surfaces)
-            for pt, color in zip(pts,colors):
-                c = np.array([[color[0],color[1],color[2],color[3]] for x in color])
-                p = np.array([[x[0],x[1],x[2]] for x in pt])
-                faces = np.array([[0,1,2],[0,2,3]])
-                m1 = gl.GLMeshItem(vertexes=p, faces=faces, faceColors=c, smooth=False)
-                if c[0][3] < 0.1:
-                    m1.setVisible(False)
-                else:
-                    m1.setGLOptions('opaque')
-                w.addItem(m1)
-        if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-            QtGui.QApplication.instance().exec_()
-    
-    
-if __name__ == '__main__':
-    
-    app = QApplication(sys.argv)
-
-    w = QWidget()
-    w.resize(250, 150)
-    w.move(300, 300)
-    w.setWindowTitle('Simple')
-    w.show()
-    
-    sys.exit(app.exec_())
-    
-    # Read input file
-    args = sys.argv
-    systemDir, defaultParamFile = determineSystemDir(args)
-    argsFile = checkCommandLineArgs(args)
-    
-    # Process input file
-    print(argsFile)
-    processInputFile(argsFile)
-
-        
-    '''
-    app = QApplication(sys.argv)
-    window = QDialog()
-    ui = Ui_MainWindow()
-    ui.setupUi(window)
-    
-    window.show()
-    sys.exit(app.exec_())
-    '''
-    
-    
-    #fig, ax = ut.polygonVisual(polygons,namespace,pcs=pcs)
-    #fig, ax = ut.smvVisual(obstructions,surfaces,namespace,fig=fig,ax=ax)
-    #plt.show()

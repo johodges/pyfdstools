@@ -24,7 +24,7 @@ import yaml
 from collections import defaultdict
 import glob
 import struct
-from .utilities import getFileListFromZip, zopen, in_hull, zreadlines, getFileList
+from .utilities import zopen, in_hull, zreadlines, getFileList
 from .fdsFileOperations import fdsFileOperations
 
 class fdspatch(object):
@@ -651,58 +651,18 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits, axis, value
         datas[qty]["MESH-%04.0f"%(meshNumber)]['DATA'] = data_abs
     return datas, times
 
-if __name__ == '__main__':
-    systemDir = os.path.abspath(os.path.abspath(sys.argv[0])).replace(os.sep+'extractBoundaryData.py','').replace('extractBoundaryData.exe','')
-    #defaultParamFile, serverParamFile, configPath, databasePath = determineLocalPaths(systemDir)
-    inputFile = "E:\\projects\\1MJP00013.000.001\\fromcluster\\Bay708B_run0001.yaml"
-    inputFile = os.path.abspath(inputFile)
-    configDir = os.sep.join(inputFile.split(os.sep)[:-1])
-    params = readInputFile(inputFile)
-    params['configDir'] = configDir
-    params['smvfile'] = os.path.abspath(configDir+os.sep+params['chid']+'.smv')
-    params['fdsInputFile'] = os.path.abspath(configDir+os.sep+params['fdsInputFile'])
-    params['dataDir'] = os.path.abspath(configDir+os.sep+params['dataDir'])
-    params['orientations'] = [-3, -2, -1, 1, 2, 3] if not params['orientations'] else params['orientations']
-    params['orientations'] = [-3, -2, -1, 1, 2, 3] if (0 in params['orientations']) else params['orientations']
+def linkBndfFileToMesh(meshes, bndfs, fdsQuantities):
+    if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
+    numberOfMeshes = len(meshes)
     
-    tStart,tEnd,tInt,tBand = extractTimeParams(params)
-    smvGrids, smvObsts, smvBndfs, smvSurfs = smv.parseSMVFile(params['smvfile'])
-    fdsChid, fdsDevcs, fdsObsts, fdsVents, fdsSurfs, fdsRamps, fdsCtrls = fds.parseFDSFile(params['fdsInputFile'])
-    
-    polygonNames, params = getPolygonNames(params, fdsObsts)
-    points = parseFDSforPts(fdsObsts, smvObsts, polygonNames)
-    
-    polygons, numberOfGroups = ut.pts2polygons(points)
-    
-    # Generate color scheme for each polygon
-    pcs = []
-    for i in range(0,numberOfGroups): pcs.append(pltc.rgb2hex(np.random.rand(3)))
-    
-    # Get boundary file names
-    bndfs = [[os.sep.join([params['dataDir'],x[1]]), x[0]] for x in smvBndfs if (params['variableName'] in x[2])]
-    
-    # Read boundary data
-    times, mPts, orients = loadBNDFdata(params, bndfs, smvGrids, smvObsts)
-    
-    # Output data
-    namespace = params['fdsInputFile'].replace('.fds','')
-    ut.maxValueCSV(times, mPts, polygonNames, "%s_%s_max"%(namespace, params['variableName']))
-    
-    # Plot data
-    if not params['plotStyle']:
-        params['plotStyle'] = defaultdict(bool)
-        params['plotStyle']['fontSize'] = 16
-        params['plotStyle']['figureSize'] = [12, 12]
-        params['plotStyle']['lineWidth'] = 3
-    plt.figure(figsize=(params['plotStyle']['figureSize'][0],
-                        params['plotStyle']['figureSize'][1]))
-    for i in range(0, mPts.shape[1]):
-        c = pltc.to_rgba(pcs[i])
-        #c = (int(255*c[0]),int(255*c[1]),int(255*c[2]))
-        plt.plot(times, mPts[:,i], c=c, label=polygonNames[i], linewidth=params['plotStyle']['lineWidth'])
-    plt.legend(fontsize=params['plotStyle']['fontSize'])
-    plt.xlabel('Time (s)', fontsize=params['plotStyle']['fontSize'])
-    plt.ylabel(params['variableName'], fontsize=params['plotStyle']['fontSize'])
-    plt.tick_params(labelsize=params['plotStyle']['fontSize'])
-    plt.tight_layout()
-        
+    bndf_dic = defaultdict(bool)
+    for qty in fdsQuantities:
+        bndf_qty = []
+        for bndf in bndfs:
+            quantity, shortName, units, npatch = readBoundaryHeader(bndf)
+            if quantity == qty:
+                meshNumber = 0 if numberOfMeshes == 1 else int(bndf.split('_')[-2])-1
+                bndf_qty.append([bndf, meshNumber])
+        bndf_dic[qty] = bndf_qty
+    return bndf_dic
+

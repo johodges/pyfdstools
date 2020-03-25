@@ -956,7 +956,3 @@ class fdsFileOperations(object):
                 txt = txt[:-1]
             updatedKeys[i] = txt
         return updatedKeys
-
-if __name__ == "__main__":
-    pass
-    

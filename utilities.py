@@ -35,7 +35,6 @@
 #=======================================================================
 # # IMPORTS
 #=======================================================================
-
 import networkx as nx
 import scipy.spatial as scsp
 import numpy as np
@@ -43,8 +42,9 @@ import mpl_toolkits.mplot3d as a3
 import matplotlib.pyplot as plt
 import matplotlib.colors as pltc
 import os
-
-from .smokeviewParser import parseSMVFile
+import zipfile
+import glob
+from .colorSchemes import getJHcolors
 
 def kalmanFilter(z, Q=1e-5, R=0.5**2):
     ''' This subroutine applies a kalman filter to an input set of data.
@@ -208,19 +208,26 @@ def getPlotColors(numberOfGroups):
         pcs.append(pltc.rgb2hex(np.random.rand(3)))
     return pcs
 
-def maxValuePlot(times,mPts,names,namespace,fs=16,lw=3,pcs=None,vName=''):
+def maxValuePlot(times, mPts, names, namespace, fs=16, lw=3, pcs=None, vName='',
+                 yticks=None, xticks=None):
     '''  mPts rows correlated to times, columns correlated to different groups. '''
     numberOfGroups = mPts.shape[1]
-    if pcs is None: pcs = getPlotColors(numberOfGroups)
-    fig = plt.figure(figsize=(12,12))
+    if pcs is None:
+        pcs = getJHcolors()
+        if len(pcs) < numberOfGroups: pcs = getPlotColors(numberOfGroups)
+    fig = plt.figure(figsize=(12,8))
     for i in range(0,numberOfGroups):
         plt.plot(times,mPts[:,i],color=pcs[i],label=names[i],linewidth=lw)
+    if yticks is not None: plt.yticks(yticks)
+    if xticks is not None: plt.xticks(xticks)
     plt.legend(fontsize=fs)
     plt.xlabel('time (s)',fontsize=fs)
     plt.ylabel('%s'%(vName),fontsize=fs)
     plt.tick_params(labelsize=fs)
     plt.tight_layout()
-    plt.savefig('%s_maxTPlot.png'%(namespace),dpi=300)
+    figName = '%s_maxTPlot.png'%(namespace)
+    print("Saving max value figure to %s"%(figName))
+    plt.savefig(figName, dpi=300)
     plt.show()
     return fig
 
@@ -233,7 +240,9 @@ def maxValueCSV(times, mPts, names, namespace):
         header = header+name+','
     header = header[:-1]+'\n'
     data = np.append(np.reshape(times,(times.shape[0],1)),mPts,axis=1)
-    np.savetxt('%s.csv'%(namespace),data,delimiter=',',header=header)
+    csvName = '%s.csv'%(namespace)
+    print("Saving max value csv to %s"%(csvName))
+    np.savetxt(csvName, data, delimiter=',', header=header)
     return '%s.csv'%(namespace)    
 
 def failureTimesCSV(times,mPts,names,thresholds,namespace):
@@ -412,40 +421,36 @@ def pointsFromXB(XB,extend=[0,0,0]):
            [XB[1]+extend[0],XB[3]+extend[1],XB[5]+extend[2]]]
     return pts
 
-def checkDevices(fdsFile, smvFile=None):
-    ''' This routine checks if any devices in an fds file are overlapping
-    with an obstruction
-    
-    Inputs:
-        fdsFile: fdsFileOperations with the different lines defined
-        smvFile: filename of the smv file. If not included, determined by chid
-    Outputs:
-        devcNames: device names that are overlapping with an obstruction
-    '''
-    chid = fdsFile.head['ID']['CHID']
-    devcs = fdsFile.devcs
-    obsts = fdsFile.obsts
-    surfs = fdsFile.surfs
-    if smvFile is None:
-        smvFile = fdsFile.split(os.sep)
-        smvFile[-1] = "%s.smv"%(chid)
-        smvFile = os.sep.join(smvFile)
-    grids, obsts, bndfs, surfs  = parseSMVFile(smvFile)
-    
-    obstHulls = []
-    for i in range(0,obsts.shape[0]):
-        obst = obsts[i,:]
-        pts = pointsFromXB(obst[13:19])
-        obstHull = scsp.Delaunay(pts)
-        obstHulls.append(obstHull)
-    
-    devcNames = []
-    for key in list(devcs.keys()):
-        pt = devcs[key]['XYZ']
-        if pt:
-            for hull in obstHulls:
-                if in_hull(pt,hull):
-                    print("Device %s is within obstruction."%(key))
-                    devcNames.append(key)
-    devcNames = list(set(devcNames))
-    return devcNames
+def getFileList(resultDir, chid, extension):
+    if '.zip' in resultDir:
+        files = getFileListFromZip(resultDir, chid, extension)
+    else:
+        files = glob.glob("%s%s*.%s"%(resultDir, chid, extension))
+    return files
+
+def getFileListFromZip(filename, chid, extension):
+    filelist = []
+    with zipfile.ZipFile(filename, 'r') as zip:
+        for info in zip.infolist():
+            if info.filename.split('.')[-1] == extension:
+                if chid in info.filename:
+                    filelist.append("%s%s%s"%(filename, os.sep, info.filename))
+    return filelist
+
+def zreadlines(file):
+    f = zopen(file, readtype='r')
+    lines = f.readlines()
+    if '.zip' in file:
+        lines = [line.decode("utf-8").replace('\r','').replace('\n','') for line in lines]
+    f.close()
+    return lines
+
+def zopen(file, readtype='rb'):
+    if '.zip' in file:
+        zname = '%s.zip'%(file.split('.zip')[0])
+        fname = file.split('.zip%s'%(os.sep))[1]
+        zip = zipfile.ZipFile(zname, 'r')
+        f = zip.open(fname)
+    else:
+        f = open(file, readtype)
+    return f

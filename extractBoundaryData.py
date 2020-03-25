@@ -23,6 +23,9 @@ import numpy as np
 import yaml
 from collections import defaultdict
 import glob
+import struct
+from .utilities import getFileListFromZip, zopen, in_hull, zreadlines, getFileList
+from .fdsFileOperations import fdsFileOperations
 
 class fdspatch(object):
     def __init__(self,NX,NY,NT,DS,OR):
@@ -68,11 +71,13 @@ class fdspatch(object):
         return coords, pts, orients
 
 def getPatches(bndfFile, smvFile, axis, value, meshNum, xmin=999, xmax=-999, ymin=999, ymax=-999, zmin=999, zmax=-999, dx=999, dz=999):
-    with open(bndfFile,'rb') as f:
-        quantity, shortName, units, npatch = parseBndfHeader(f)
-        patchInfo, data = parseBndfPatches(f, npatch)
-        (patchPts,patchDs,patchIors) = patchInfo
-        grid, obst, bndfs = buildMesh(smvFile)
+    f = zopen(bndfFile)
+    quantity, shortName, units, npatch = parseBndfHeader(f)
+    patchInfo, data = parseBndfPatches(f, npatch)
+    f.close()
+    (patchPts,patchDs,patchIors) = patchInfo
+    grid, obst, bndfs = buildMesh(smvFile)
+    
     times, patches = importBoundaryFile(bndfFile, smvFile, gridNum=meshNum)
     allPatches = []
     for i in range(0, len(patches)):
@@ -161,13 +166,16 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz, axis):
     return x_grid_abs, z_grid_abs, data_abs
 
 def parseBndfHeader(f):
-    bytes_read = f.read(110)
-    tmp = bytes_read.split(b'\x1e')
-
+    data = f.read(130)
+    header = data[:110]
+    patchInfo = data[110:]
+    tmp = header.split(b'\x1e')
+    
     quantity = tmp[1].decode('utf-8').replace('\x00','').strip(' ')
     shortName = tmp[3].decode('utf-8').replace('\x00','').strip(' ')
     units = tmp[5].decode('utf-8').replace('\x00','').strip(' ')
-    data = np.fromfile(f,dtype=np.int32,count=5)
+    
+    data = np.frombuffer(patchInfo, dtype=np.int32, count=5)
     npatch = data[2]
     return quantity, shortName, units, npatch
 
@@ -177,7 +185,8 @@ def parseBndfPatches(f, npatch):
     patchDs = []
     patchIors = []
     for k in range(0, npatch):
-        data = np.fromfile(f,dtype=np.int32,count=11)
+        data = np.frombuffer(f.read(44), dtype=np.int32, count=11)
+        #data = np.fromfile(f,dtype=np.int32,count=11)
         #print(k, data)
         (dx,dy,dz) = (data[1]-data[0],data[3]-data[2],data[5]-data[4])
         if abs(data[6]) == 1:
@@ -194,13 +203,15 @@ def parseBndfPatches(f, npatch):
         patchDs.append([dx,dy,dz,data[0],data[1],data[2],data[3],data[4],data[5]])
         patchIors.append(data[6])
         pts = pts+nPts
-    data = np.fromfile(f,dtype=np.float32,count=-1)
+    #data = np.fromfile(f,dtype=np.float32,count=-1)
+    data = np.frombuffer(f.read(), dtype=np.float32)
     patchInfo = (patchPts, patchDs, patchIors)
     return patchInfo, data
 
 def readBoundaryHeader(file):
-    with open(file, 'rb') as f:
-        quantity, shortName, units, npatch = parseBndfHeader(f)
+    f = zopen(file)
+    quantity, shortName, units, npatch = parseBndfHeader(f)
+    f.close()
     return quantity, shortName, units, npatch
 
 def readBoundaryQuantities(dataDir, chid):
@@ -214,22 +225,26 @@ def readBoundaryQuantities(dataDir, chid):
             quantities[quantity] = [file]
     return quantities
 
-def importBoundaryFile(fname, smvFile, gridNum=0):
-    if not os.path.isfile(fname):
+def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
+    try:
+        f = zopen(fname)
+    except:
+        print("Unable to open file %s."%(fname))
         return None, None
+    quantity, shortName, units, npatch = parseBndfHeader(f)
+    patchInfo, data = parseBndfPatches(f, npatch)
+    f.close()
     
-    with open(fname,'rb') as f:
-        quantity, shortName, units, npatch = parseBndfHeader(f)
-        patchInfo, data = parseBndfPatches(f, npatch)
-        
     (patchPts,patchDs,patchIors) = patchInfo
-    grid, obst, bndfs = buildMesh(smvFile)
-    #assert False, "Stopped"
-    #print(patchDs[0])
-    times, patches = buildPatches(patchPts,patchDs,patchIors,data,grid[gridNum],obst[0])
+    if (grid is None) and (smvFile is not None):
+        grid, obst, bndfs = buildMesh(smvFile)
+    elif (grid is None) and (smvFile is None):
+        print("Either smokeview file or grid must be provided.")
+        return None, None
+    times, patches = buildPatches(patchPts, patchDs, patchIors, data, grid[gridNum])
     return times, patches
 
-def buildPatches(patchPts, patchDs, patchIors, data, grid, obst):
+def buildPatches(patchPts, patchDs, patchIors, data, grid):
     pts = patchPts[-1][1]
         
     timeSteps = int((data.shape[0]+1)/(pts+3))
@@ -283,8 +298,7 @@ def getLimsFromGrid(data,grid):
     return lims
 
 def buildMesh(smvFile):
-    with open(smvFile,'r') as f:
-        linesSMV = f.readlines()
+    linesSMV = zreadlines(smvFile)
     
     grids = []
     obsts = []
@@ -460,8 +474,12 @@ def loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts
     return times, mPts, orients
 
 def readBoundaryFile(fname):
-    if not os.path.isfile(fname):
+    
+    try:
+        f = zopen(fname)
+    except:
         return None, None, None
+
     
     with open(fname,'rb') as f:
         bytes_read = f.read(110)
@@ -505,7 +523,7 @@ def readBoundaryFile(fname):
     patchInfo = (patchPts,patchDs,patchIors)
     return bndfInfo, patchInfo, data
 
-def extractTime(tStart,tEnd,tBand,tInt,patches,times):
+def extractTime(tStart, tEnd, tBand, tInt, patches, times):
     NT = int((tEnd-tStart)/tInt+1)
     newPatches = []
     for patch in patches:
@@ -531,7 +549,7 @@ def getPatchesFromMesh(grid,obst,bndfFile):
         return [None], [None]
     (quantity,shortName,units,npatch) = bndfInfo
     (patchPts,patchDs,patchIors) = patchInfo
-    times, patches = buildPatches(patchPts,patchDs,patchIors,data,grid,obst)
+    times, patches = buildPatches(patchPts, patchDs, patchIors, data, grid)
     return times, patches
 
 def buildSpace(patches):
@@ -561,7 +579,8 @@ def getPointsFromFiles(bndfs, grids, obsts, tStart, tEnd, tBand, tInt):
     newTimes = []
     for file, mesh in bndfs:
         mesh = int(mesh)
-        times, patches = getPatchesFromMesh(grids[mesh-1], obsts[mesh-1], file)
+        #times, patches = getPatchesFromMesh(grids[mesh-1], obsts[mesh-1], file)
+        times, patches = importBoundaryFile(file, gridNum=mesh, grid=grids)
         if len(times) > 1:
             newTimes, newPatches = extractTime(tStart, tEnd, tBand, tInt, patches, times)
             buildSpace(newPatches)
@@ -578,7 +597,6 @@ def getPointsFromFiles(bndfs, grids, obsts, tStart, tEnd, tBand, tInt):
                 allOrients = np.append(allOrients,orients,axis=0)
                 
     if len(newTimes) == 0:
-        print(meshes)
         print(bndfs)
         assert False, "No valid patches found."
     return allCoords, allPts, newTimes, allOrients
@@ -596,18 +614,42 @@ def getCoordinateMasks(coords,polygons):
     for i in range(0,len(polygons)):
         linkedpolygons = polygons[i]
         for p in linkedpolygons:
-            masks[np.where(in_hull2(coords,p.points)),i] = 1
+            masks[np.where(in_hull(coords,p.points)),i] = 1
     return masks
 
-def in_hull2(p,hull):
-    from scipy.spatial import Delaunay
-    if not isinstance(hull,Delaunay):
-        hull = Delaunay(hull)
-    return hull.find_simplex(p)>=0
-
-def findBndfFiles(resultDir, chid):
-    files = glob.glob(resultDir+chid+"*.bf")
-    return files
+def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits, axis, value):
+    datas = defaultdict(bool)
+    
+    bndfFiles = getFileList(resultDir, chid, 'bf')
+    smvFile = getFileList(resultDir, chid, 'smv')[0]
+    
+    fdsFile = fdsFileOperations()
+    fdsFile.importFile(fdsFilePath)
+    meshes = list(fdsFile.meshes.keys())
+    if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
+    numberOfMeshes = len(meshes)
+    
+    for qty, unit in zip(fdsQuantities, fdsUnits):
+        allPatches = []
+        (xmin, xmax, ymin, ymax, zmin, zmax, dx, dz) = (999, -999, 999, -999, 999, -999, 999, 999)
+        for file in bndfFiles:
+            bndfFile = os.path.abspath(file)
+            quantity, shortName, units, npatch = readBoundaryHeader(file)    
+            meshNumber = 0 if numberOfMeshes == 1 else int(file.split('_')[-2])-1
+            if quantity == qty:
+                times, patches, xmin1, xmax1, ymin1, ymax1, zmin1, zmax1, dx1, dz1 = getPatches(bndfFile, smvFile, axis, value, meshNumber)
+                (xmin, xmax) = (min([xmin, xmin1]), max([xmax, xmax1]))
+                (ymin, ymax) = (min([ymin, ymin1]), max([ymax, ymax1]))
+                (zmin, zmax) = (min([zmin, zmin1]), max([zmax, zmax1]))
+                (dx, dz) = (min([dx, dx1]), min([dz, dz1]))
+                for patch in patches: allPatches.append(patch)
+        x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(allPatches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz, axis)
+        datas[qty] = defaultdict(bool)
+        datas[qty]["MESH-%04.0f"%(meshNumber)] = defaultdict(bool)
+        datas[qty]["MESH-%04.0f"%(meshNumber)]['X'] = x_grid_abs
+        datas[qty]["MESH-%04.0f"%(meshNumber)]['Z'] = z_grid_abs
+        datas[qty]["MESH-%04.0f"%(meshNumber)]['DATA'] = data_abs
+    return datas, times
 
 if __name__ == '__main__':
     systemDir = os.path.abspath(os.path.abspath(sys.argv[0])).replace(os.sep+'extractBoundaryData.py','').replace('extractBoundaryData.exe','')

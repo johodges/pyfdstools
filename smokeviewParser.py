@@ -18,6 +18,7 @@
 # # IMPORTS
 #=======================================================================
 import numpy as np
+from .utilities import zreadlines
 
 def parseGRID(lines,i):
     gridPts = [int(x) for x in lines[i+1].replace('\n','').split()]
@@ -68,8 +69,7 @@ def parseBNDF(lines, i):
     return mesh, bndfName, vID, vNum
 
 def parseSMVFile(smvFile):
-    with open(smvFile,'r') as f:
-        linesSMV = f.readlines()
+    linesSMV = zreadlines(smvFile)
     grids = []
     obsts = []
     bndfs = []

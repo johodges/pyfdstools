@@ -21,6 +21,8 @@ sys.path.append('E:\\projects\\customPythonModules\\')
 
 import fdsTools as fds
 import os
+from collections import defaultdict
+import numpy as np
 
 def exampleImportFile():
     fdsPath = os.path.abspath("examples%s%s.fds"%(os.sep, "case001"))
@@ -46,20 +48,135 @@ def exampleErrorCalculation():
     fig, ax1 = fds.plotPercentile(500, 'Plume Temperature', fdsVersion='6.7.1')
     return errorvalues
 
+def exampleReadSlcf3dResults(resultDir=None, chid=None,
+                             fdsQuantities = ['TEMPERATURE'],
+                             tStart=0, tEnd=120):
+    if chid is None: chid = "case001"
+    if resultDir is None: resultDir = os.path.abspath("examples%s%s.zip"%(os.sep, chid))
+    
+    datas = defaultdict(bool)
+    
+    for qty in fdsQuantities:
+        grid, data, times = fds.readSLCF3Ddata(chid, resultDir, qty)
+        tStartInd = np.argwhere(times >= tStart)[0][0]
+        tEndInd = np.argwhere(times <= tEnd)[-1][0]
+        data_tavg = np.nanmean(data[:, :, :, tStartInd:tEndInd], axis=3)
+        datas[qty] = data_tavg.copy()
+    datas['GRID'] = grid
+    datas['TIMES'] = times
+    
+    return datas
+
+def exampleExtract2dFromSlcf3d(datas,
+                               fdsQuantities = ['TEMPERATURE'],
+                               fdsUnits = ['C'],
+                               axis=2, value=4.4,
+                               qnty_mn=20, qnty_mx=150):
+    datas2D = defaultdict(bool)    
+    for qty, unit in zip(fdsQuantities, fdsUnits):
+        x, z, data_slc = fds.findSliceLocation(datas['GRID'], datas[qty], axis, value)
+        datas2D[qty] = data_slc
+        fig = fds.plotSlice(x, z, data_slc, axis,
+                            qnty_mn=qnty_mn, qnty_mx=qnty_mx,
+                            clabel="%s (%s)"%(qty, unit),
+                            cbarticks=[20, 40, 60, 80, 100, 120, 140])
+    datas2D['X'] = x
+    datas2D['Z'] = z
+    
+    return datas2D, fig
+
+def exampleImportBndf(resultDir=None, chid=None, fdsFile=None,
+                       fdsQuantities = ['WALL TEMPERATURE'],
+                       fdsUnits = ['C'],
+                       tStart=0, tEnd=120,
+                       axis=-2, value=4.4,
+                       qnty_mn=20, qnty_mx=100):
+    if chid is None: chid = "case001"
+    if resultDir is None: resultDir = os.path.abspath("examples%s%s.zip"%(os.sep, chid))
+    if fdsFile is None: fdsFilePath = fds.getFileList(resultDir, chid, 'fds')[0]
+    
+    datas, times = fds.queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits, axis, value)
+    tStartInd = np.argwhere(times >= tStart)[0][0]
+    tEndInd = np.argwhere(times <= tEnd)[-1][0]
+    
+    for qty, unit in zip(fdsQuantities, fdsUnits):
+        for mesh in list(datas[qty].keys()):
+            data = datas[qty][mesh]['DATA']
+            x = datas[qty][mesh]['X']
+            z = datas[qty][mesh]['Z']
+        meanData = np.mean(data[:, :, tStartInd:tEndInd], axis=2)
+        fig = fds.plotSlice(x, z, meanData, axis,
+                            qnty_mn=qnty_mn, qnty_mx=qnty_mx,
+                            clabel="%s (%s)"%(qty, unit),
+                            cbarticks=[20, 40, 60, 80, 100, 120, 140])
+    return datas, fig
+
+def linkBndfFileToMesh(fdsFilePath, bndfs, fdsQuantities):
+    if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
+    numberOfMeshes = len(meshes)
+    
+    bndf_dic = defaultdict(bool)
+    for qty in fdsQuantities:
+        bndf_qty = []
+        for bndf in bndfs:
+            quantity, shortName, units, npatch = fds.readBoundaryHeader(bndf)
+            if quantity == qty:
+                meshNumber = 0 if numberOfMeshes == 1 else int(bndf.split('_')[-2])-1
+                bndf_qty.append([bndf, meshNumber])
+        bndf_dic[qty] = bndf_qty
+    return bndf_dic
+
+def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, fdsQuantities,
+                         tStart=0, tEnd=120, tInt=1, tBand=3, orientations=[0]):
+    fdsFile = fds.fdsFileOperations()
+    fdsFile.importFile(fdsFilePath)
+    meshes = list(fdsFile.meshes.keys())
+    names = fds.getPolygonNamesFromFdsFile(fdsFile)
+    linesSMV = fds.zreadlines(smvFilePath)
+    points = fds.parseFDSforPts(fdsFile, linesSMV, names, extend=[0,0,0])
+    polygons, numberOfGroups = fds.pts2polygons(points)
+    
+    bndfs = fds.getFileList(resultDir, chid, 'bf')
+    bndf_dic = linkBndfFileToMesh(meshes, bndfs, fdsQuantities)
+    
+    smvGrids, smvObsts, smvBndfs, smvSurfs = fds.parseSMVFile(smvFilePath)
+    
+    datas = defaultdict(bool)
+    for qty in fdsQuantities:
+        datas[qty] = defaultdict(bool)
+        times, mPts, orients = fds.loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndf_dic[qty], smvGrids, smvObsts, orientations, polygons)
+        datas[qty]['TIMES'] = times
+        datas[qty]['NAMES'] = names
+        datas[qty]['DATA'] = mPts
+    return datas
+
+def exampleExtractBndfMax(resultDir=None, chid=None, fdsFile=None, smvFile=None,
+                          outputName=None,
+                          fdsQuantities = ['WALL TEMPERATURE'], fdsUnits = ['C'],
+                          tStart=0, tEnd=120, tInt=1, tBand=3, orientations=[0],
+                          axis=-2, value=4.4,
+                          qnty_mn=20, qnty_mx=100):
+    if chid is None: chid = "case001"
+    if resultDir is None: resultDir = os.path.abspath("examples%s%s.zip"%(os.sep, chid))
+    if fdsFile is None: fdsFilePath = fds.getFileList(resultDir, chid, 'fds')[0]
+    if smvFile is None: smvFilePath = fds.getFileList(resultDir, chid, 'smv')[0]
+    if outputName is None: outputName = os.path.abspath("generated%s%s_max_"%(os.sep, chid))
+    
+    datas = extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, fdsQuantities,
+                                 tStart=tStart, tEnd=tEnd, tInt=tInt, tBand=tBand, orientations=orientations)
+    
+    figs = []
+    for qty in fdsQuantities:
+        times = datas[qty]['TIMES']
+        mPts = datas[qty]['DATA']
+        names = datas[qty]['NAMES']
+        outName = "%s%s"%(outputName, qty)
+        fds.maxValueCSV(times, mPts, names, outName)
+        fig = fds.maxValuePlot(times, mPts, names, outName, vName=qty, yticks=[20, 50, 100, 150, 200, 250, 300, 350])
+        figs.append(fig)
+    return datas, figs
+
 if __name__ == '__main__':
-    
-    outDirName = "E:\\1MJP00014.002\\"
-    inDirName = "E:\\1MJP00014.002\\"
-    
-    chid = "case001"
-    orientations = [0]
-    vName = 'WALL TEMPERATURE'
-    defaultThreshold = 330
-    meshes = [-1]
-    tStart= 0
-    finalTime = 3600
-    intervalTime = 10
-    bandTime = 10
     
     print("Importing model example")
     file = exampleImportFile()
@@ -67,5 +184,11 @@ if __name__ == '__main__':
     exampleSaveFile(file)
     print("Plotting error example")
     exampleErrorCalculation()
-    
-
+    print("Importing SLCF3D results example")
+    datas = exampleReadSlcf3dResults()
+    print("Extracting 2-D slice from SLCF3D results example")
+    datas2D, fig = exampleExtract2dFromSlcf3d(datas)
+    print("Importing BNDF results example")
+    datas, fig = exampleImportBndf()
+    print("Extracting max value from BNDF results example")
+    datas, figs = exampleExtractBndfMax()

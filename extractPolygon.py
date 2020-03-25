@@ -30,6 +30,17 @@ import pyqtgraph.opengl as gl
 
 import scipy.optimize as scop
 
+
+def getPolygonNamesFromFdsFile(file):
+    names = []
+    obstList = list(file.obsts.keys())
+    if 'unknownCounter' in obstList: obstList.remove('unknownCounter')
+    for key in obstList:
+        if file.obsts[key]['BNDF_OBST']:
+            names.append(file.obsts[key]["ID"])
+    names = list(set(names))
+    return names
+
 def setupQT():
     app = QtGui.QApplication([])
     w = gl.GLViewWidget()
@@ -109,7 +120,8 @@ def getNamesFromInput(params,file):
             params[name] = defaultdict(bool,{'threshold':params['defaultThreshold']})
     return names, params
 
-def parseFDSforPts_old(file,names,extend=[0,0,0]):
+
+def parseFDSforPts(fileFDS, linesSMV, names, extend=[0,0,0]):
     ''' This routine parses an FDS file looking for a list of names and
     stores a list of points defining polygons for each name which is
     found.
@@ -119,117 +131,6 @@ def parseFDSforPts_old(file,names,extend=[0,0,0]):
     the actual coordinate location of the data from FDS may not align exactly
     with the input file.
     '''
-    with open(file,'r') as f:
-        lines = f.readlines()
-    (xmn,xmx) = (100000,-100000)
-    (ymn,ymx) = (100000,-100000)
-    (zmn,zmx) = (100000,-100000)
-    
-    for line2 in lines:
-        line = line2.replace('/\n','')
-        if '&MESH' in line:
-            inds = [float(x) for x in line.split('IJK=')[1].split(',')[:3]]
-            limsStr = line.split('XB=')[1].split(',')[:6]
-            try:
-                float(limsStr[5])
-            except:
-                limsStr[5] = limsStr[5].split('/')[0]
-            lims = [float(x) for x in limsStr]
-            dx = (lims[1]-lims[0])/inds[0]
-            dy = (lims[3]-lims[2])/inds[1]
-            dz = (lims[5]-lims[4])/inds[2]
-            (xmn,xmx) = (min([xmn,lims[0]]),max([xmx,lims[1]]))
-            (ymn,ymx) = (min([ymn,lims[2]]),max([ymx,lims[3]]))
-            (zmn,zmx) = (min([zmn,lims[4]]),max([zmx,lims[5]]))
-    xs = np.linspace(xmn,xmx,(xmx-xmn)/dx+1)
-    ys = np.linspace(ymn,ymx,(ymx-ymn)/dy+1)
-    zs = np.linspace(zmn,zmx,(zmx-zmn)/dz+1)
-    print(xs)
-    print(ys)
-    print(zs)
-    #print(xs)
-    comments = []
-    for x in lines:
-        sLine = x.replace('\n','').split('/')
-        if len(sLine) <= 1:
-            comments.append('')
-        elif len(sLine) == 2:
-            comments.append(sLine[1])
-        else:
-            comments.append('/'.join(sLine[1:]))
-    polygons = []
-    for name in names:
-        linkedPolygons = []
-        for line, cmt in zip(lines,comments):
-            #print(name,cmt)
-            if name in cmt and "&OBST" in line:
-                print(name,cmt,line)
-                coord = [float(x) for x in line.split('XB=')[1].split(',')[:6]]
-                print("Before snapping:",coord)
-                #print(abs(xs-coord[0]))
-                #print(abs(xs-coord[1]))
-                
-                coord[0] = xs[np.where(np.round(abs(xs-coord[0]),3) == np.min(np.round(abs(xs-coord[0]),3)))[0][-1]]
-                coord[1] = xs[np.where(np.round(abs(xs-coord[1]),3) == np.min(np.round(abs(xs-coord[1]),3)))[0][0]]
-                coord[2] = ys[np.where(np.round(abs(ys-coord[2]),3) == np.min(np.round(abs(ys-coord[2]),3)))[0][-1]]
-                coord[3] = ys[np.where(np.round(abs(ys-coord[3]),3) == np.min(np.round(abs(ys-coord[3]),3)))[0][0]]
-                coord[4] = zs[np.where(np.round(abs(zs-coord[4]),3) == np.min(np.round(abs(zs-coord[4]),3)))[0][-1]]
-                coord[5] = zs[np.where(np.round(abs(zs-coord[5]),3) == np.min(np.round(abs(zs-coord[5]),3)))[0][0]]
-                
-                #print(np.argmin(np.round(abs(xs-coord[0]),3)))
-                #print(np.argmin(np.round(abs(xs-coord[1]),3)))
-                '''
-                coord[0] = xs[np.argmin(abs(xs-coord[0]))]
-                coord[1] = xs[np.argmin(abs(xs-coord[1]))]
-                coord[2] = ys[np.argmin(abs(ys-coord[2]))]
-                coord[3] = ys[np.argmin(abs(ys-coord[3]))]
-                coord[4] = zs[np.argmin(abs(zs-coord[4]))]
-                coord[5] = zs[np.argmin(abs(zs-coord[5]))]
-                '''
-                print("After snapping:",coord)
-                pts = [[coord[0]-dx*extend[0],coord[2]-dy*extend[1],coord[4]-dz*extend[2]],
-                       [coord[0]-dx*extend[0],coord[2]-dy*extend[1],coord[5]+dz*extend[2]],
-                       [coord[0]-dx*extend[0],coord[3]+dy*extend[1],coord[4]-dz*extend[2]],
-                       [coord[0]-dx*extend[0],coord[3]+dy*extend[1],coord[5]+dz*extend[2]],
-                       [coord[1]+dx*extend[0],coord[2]-dy*extend[1],coord[4]-dz*extend[2]],
-                       [coord[1]+dx*extend[0],coord[2]-dy*extend[1],coord[5]+dz*extend[2]],
-                       [coord[1]+dx*extend[0],coord[3]+dy*extend[1],coord[4]-dz*extend[2]],
-                       [coord[1]+dx*extend[0],coord[3]+dy*extend[1],coord[5]+dz*extend[2]]]
-                linkedPolygons.append(pts)
-        polygons.append(linkedPolygons)
-    return polygons
-
-def parseFDSforPts(fileFDS,names,extend=[0,0,0],fileSMV=None):
-    ''' This routine parses an FDS file looking for a list of names and
-    stores a list of points defining polygons for each name which is
-    found.
-    
-    The extend argument allows the polygon to be extended by a number of grid
-    cells. This is useful since FDS snaps obstructions to the grid which means
-    the actual coordinate location of the data from FDS may not align exactly
-    with the input file.
-    '''
-    with open(fileFDS,'r') as f:
-        lines = f.readlines()
-    if fileSMV == None:
-        for line in lines:
-            if "&HEAD" in line:
-                tmp = line.split("CHID")[1]
-                tmp = tmp.split(',')[0]
-                if "'" in tmp:
-                    chid = tmp.split("'")[1]
-                elif '"' in tmp:
-                    chid = tmp.split('"')[1]
-                else:
-                    assert False, "Could not determine CHID from fds input file."
-                tmp = fileFDS.split(os.sep)
-                tmp[-1] = "%s.smv"%(chid)
-                fileSMV = os.sep.join(tmp)
-        print(fileSMV)
-
-    with open(fileSMV,'r') as f:
-        linesSMV = f.readlines()
-    
     smvObjs = []
     for i in range(0,len(linesSMV)):
         line2 = linesSMV[i]
@@ -253,6 +154,10 @@ def parseFDSforPts(fileFDS,names,extend=[0,0,0],fileSMV=None):
             tmp2 = [x.replace('\n','') for x in tmp2]
             tmp1 = [[float(y) for y in x.split()] for x in tmp1]
             tmp2 = [[float(y) for y in x.split()] for x in tmp2]
+            for i in range(0, len(tmp1)):
+                if len(tmp2[i]) > 8:
+                    tmp2[i] = tmp2[i][:8]
+                    
             smvObj = np.array([x1+x2 for x1, x2 in zip(tmp1,tmp2)])
             for j in range(0,smvObj.shape[0]):
                 pts = smvObj[j,13:19]
@@ -273,26 +178,15 @@ def parseFDSforPts(fileFDS,names,extend=[0,0,0],fileSMV=None):
                 smvObjs = smvObj
             else:
                 smvObjs = np.append(smvObjs,smvObj,axis=0)
-    print(smvObjs.shape)
-    comments = []
-    for x in lines:
-        sLine = x.replace('\n','').split('/')
-        if len(sLine) <= 1:
-            comments.append('')
-        elif len(sLine) == 2:
-            comments.append(sLine[1])
-        else:
-            comments.append('/'.join(sLine[1:]))
-            
+    
+    obstKeys = list(fileFDS.obsts.keys())
+    if 'unknownCounter' in obstKeys: obstKeys.remove('unknownCounter')
     polygons = []
-    print(names)
     for name in names:
         linkedPolygons = []
-        for line, cmt in zip(lines,comments):
-            #print(name,cmt)
-            if name in cmt and "&OBST" in line:
-                #print(name,cmt,line)
-                coord = np.array([float(x) for x in line.split('XB=')[1].split(',')[:6]])
+        for key in obstKeys:
+            if name in fileFDS.obsts[key]['ID']:
+                coord = fileFDS.obsts[key]['XB']
                 snapInd = np.argmin(np.sum(abs(smvObjs[:,:6]-coord)**2,axis=1)**0.5)
                 snapPts = smvObjs[snapInd,13:19].copy()
                 
@@ -309,7 +203,6 @@ def parseFDSforPts(fileFDS,names,extend=[0,0,0],fileSMV=None):
                 linkedPolygons.append(pts)
         polygons.append(linkedPolygons)
     return polygons
-
 
 def parseFDSforVID(file,vName):
     '''

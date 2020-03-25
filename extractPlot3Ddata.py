@@ -23,6 +23,8 @@ import os
 import struct
 import scipy.interpolate as scpi
 from collections import defaultdict
+from .utilities import getFileListFromZip, zopen
+from .colorSchemes import buildSMVcolormap
 
 def time2str(time):
     timeStr = "%08.0f_%02.0f"%(np.floor(time), (time-np.floor(time))*100)
@@ -57,29 +59,6 @@ def rearrangeGrid(grid, header):
     yGrid = np.swapaxes(yGrid, 0, 1)
     zGrid = np.swapaxes(zGrid, 0, 1)
     return xGrid, yGrid, zGrid
-
-def buildSMVcolormap():
-    from matplotlib.colors import ListedColormap
-    newcmp = np.zeros((256,4))
-    
-    colors = np.array([[0,0,1,1],
-              [0,1,1,1],
-              [0,1,0,1],
-              [1,1,0,1],
-              [1,0,0,1],])
-    colorInds = np.array([0, 64, 128, 192, 255])
-    
-    j = 0
-    for i in range(0,len(newcmp)):
-        if i == colorInds[j]:
-            newcmp[i,:] = colors[j,:]
-            j = j + 1
-        else:
-            m = (colors[j,:]-colors[j-1,:])/(colorInds[j]-colorInds[j-1])
-            newcmp[i] = colors[j-1,:]+m*(i-colorInds[j-1])
-    cmap = ListedColormap(newcmp)
-    
-    return cmap
 
 def buildDataFile(meshStr, time):
     dataStr = meshStr.replace('.xyz','_%s.q'%(time2str(time)))
@@ -139,31 +118,31 @@ def getAbsoluteGrid(grids):
 
 def findSliceLocation(grid, data, axis, value, plot3d=False):
     (xGrid, yGrid, zGrid) = (grid[:,:,:,0], grid[:,:,:,1], grid[:,:,:,2])
-    if axis == 0: 
+    if axis == 1: 
         nGrid = xGrid
         nValues = nGrid[:, 0, 0]
-    if axis == 1: 
+    if axis == 2: 
         nGrid = yGrid
         nValues = nGrid[0, :, 0]
-    if axis == 2: 
+    if axis == 3: 
         nGrid = zGrid
         nValues = nGrid[0, 0, :]
     ind = np.argmin(abs(nValues-value))
-    if axis == 0:
+    if axis == 1:
         x = np.squeeze(yGrid[ind,:,:])
         z = np.squeeze(zGrid[ind,:,:])
         if len(data.shape) == 5:
             data2 = np.squeeze(data[ind,:,:,:])
         else:
             data2 = np.squeeze(data[ind,:,:])
-    elif axis == 1:
+    elif axis == 2:
         x = np.squeeze(xGrid[:,ind,:])
         z = np.squeeze(zGrid[:,ind,:])
         if len(data.shape) == 5:
             data2 = np.squeeze(data[:,ind,:,:])
         else:
             data2 = np.squeeze(data[:,ind,:])
-    elif axis == 2:
+    elif axis == 3:
         x = np.squeeze(xGrid[:,:,ind])
         z = np.squeeze(yGrid[:,:,ind])
         if len(data.shape) == 5:
@@ -203,10 +182,10 @@ def plotSlice(x, z, data_slc, axis,
     cbar = fig.colorbar(im, cmap=cmap, extend='both', ticks=cbarticks)
     cbar.ax.tick_params(labelsize=fs)
     if clabel is not None: cbar.set_label(clabel, fontsize=fs)
-    if axis == 0: ax.set_xlabel('y (m)', fontsize=fs)
-    if (axis == 1) or (axis == 2): ax.set_xlabel('x (m)', fontsize=fs)
-    if (axis == 0) or (axis == 1): ax.set_ylabel('z (m)', fontsize=fs)
-    if (axis == 2): ax.set_ylabel('y (m)', fontsize=fs)
+    if abs(axis) == 1: ax.set_xlabel('y (m)', fontsize=fs)
+    if (abs(axis) == 2) or (abs(axis) == 3): ax.set_xlabel('x (m)', fontsize=fs)
+    if (abs(axis) == 1) or (abs(axis) == 2): ax.set_ylabel('z (m)', fontsize=fs)
+    if (abs(axis) == 3): ax.set_ylabel('y (m)', fontsize=fs)
     ax.tick_params(labelsize=fs)
     return fig, ax
 
@@ -250,15 +229,6 @@ def readPlot3Ddata(chid, resultDir, time):
         
         data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:] = data
     return grid_abs, data_abs
-
-def getFileListFromZip(filename, chid, extension):
-    filelist = []
-    with zipfile.ZipFile(filename, 'r') as zip:
-        for info in zip.infolist():
-            if info.filename.split('.')[-1] == extension:
-                if chid in info.filename:
-                    filelist.append("%s%s%s"%(filename, os.sep, info.filename))
-    return filelist
 
 def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
     if '.zip' in resultDir:
@@ -469,21 +439,12 @@ def readSLCFheader(f):
     
     return quantity, shortName, units, iX, eX, iY, eY, iZ, eZ
 
-def zopen(file):
-    if '.zip' in file:
-        zname = '%s.zip'%(file.split('.zip')[0])
-        fname = file.split('.zip%s'%(os.sep))[1]
-        zip = zipfile.ZipFile(zname, 'r')
-        f = zip.open(fname)
-    else:
-        f = open(file, 'rb')
-    return f
-
 def readSLCFtimes(file):
     f = zopen(file)
     quantity, shortName, units, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
     (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
     data = f.read()
+    f.close()
     if len(data) % 4 == 0:
         fullFile = np.frombuffer(data, dtype=np.float32)
     else:
@@ -565,9 +526,9 @@ if __name__ == "__main__":
     quantity = 'TEMPERATURE'
     resultDir = "E:\\projects\\mineFireLearning\\mineValidation\\scenario06_v2\\"
     
-    (axis, value) = (1, 15.3)
+    (axis, value) = (2, 15.3)
     #(axis, value) = (0, 3.0)
-    (axis, value) = (2, 2.0)
+    (axis, value) = (3, 2.0)
     
     quantities = ['TEMPERATURE',
                   'U-VELOCITY',

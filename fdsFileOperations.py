@@ -29,7 +29,190 @@ import zipfile
 from .fdsTypes import fdsLineTypes
 
 class fdsFileOperations(object):
-    def __init__(self):
+    """
+    A class used to represent an FDS input file
+
+    ...
+
+    Attributes
+    ----------
+    bndfs : defaultdict
+        dictionary containing each key in the bndf namelist
+    ctrls : defaultdict
+        dictionary containing each key in the ctrl namelist
+    customLines : defaultdict
+        dictionary containing custom lines to be added to the input file
+    devcs : defaultdict
+        dictionary containing each key in the devc namelist
+    dump : defaultdict
+        dictionary containing each key in the dump namelist
+    head : defaultdict
+        dictionary containing each key in the head namelist
+    holes : defaultdict
+        dictionary containing each key in the hole namelist
+    inits : defaultdict
+        dictionary containing each key in the init namelist
+    matls : defaultdict
+        dictionary containing each key in the matl namelist
+    meshes : defaultdict
+        dictionary containing each key in the mesh namelist
+    meshOrder : defaultdict
+        dictionary containing the order meshes are to be defined in the
+        input file. This is an intermediate variable used after
+        assigning mpi processes to meshes.
+    misc : defaultdict
+        dictionary containing each key in the misc namelist
+    mpiProcesses : int
+        integer number of mpi processes to use when building the fds
+        input file.
+    obsts : defaultdict
+        dictionary containing each key in the obst namelist
+    pres : defaultdict
+        dictionary containing each key in the pres namelist
+    props : defaultdict
+        dictionary containing each key in the prop namelist
+    radis : defaultdict
+        dictionary containing each key in the radi namelist
+    ramps : defaultdict
+        dictionary containing each key in the ramp namelist
+    reacs : defaultdict
+        dictionary containing each key in the reac namelist
+    slcfs : defaultdict
+        dictionary containing each key in the slcf namelist
+    specs : defaultdict
+        dictionary containing each key in the spec namelist
+    surfs : defaultdict
+        dictionary containing each key in the surf namelist
+    time : defaultdict
+        dictionary containing each key in the time namelist
+    vents : defaultdict
+        dictionary containing each key in the vent namelist
+    version : str
+        string containing the fds version for the input file.
+        Syntax is '#.#.#'. Currently supports 6.7.1 and 6.7.4.
+    zones : defaultdict
+        dictionary containing each key in the zone namelist
+
+
+    Methods
+    -------
+    addBNDF(Qty, CELL_CENTERED=None)
+        Adds a bndf key to the bndfs namelist.
+    addCTRL(ID, FUNCTION_TYPE, INPUT_ID, DELAY=None)
+        Adds a ctrl key to the ctrls namelist.
+    addDEVC(ID, QUANTITY, XYZ=None, XB=None, IOR=None, SPEC_ID=None,
+            TIME_AVERAGED=None, SPATIAL_STATISTIC=None, STATISTICS=None,
+            INITIAL_STATE=None, INIT_ID=None, SETPOINT=None,
+            DUCT_ID=None)
+        Adds a devc key to the devcs namelist.
+    addDUMP(RENDER_FILE=None, COLUMN_DUMP_LIMIT=False, WRITE_XYZ=False,
+            DT_PL3D=None, DT_SL3D=None, DT_SLCF=None, DT_BNDF=None,
+            DT_DEVC=None, DT_CTRL=None, DT_HRR=None, DT_RESTART=None)
+        Adds a dump key to the dump namelist.
+    addHEAD(chid, title=None)
+        Adds a head key to the head namelist.
+    addHOLE(ID, XB)
+        Adds a hole key to the holes namelist.
+    addMATL(ID, Emi=None, Den=None, Con=None, Spe=None, kramp=None,
+            cpramp=None, fyi=None)
+        Adds a matl key to the matls namelist.
+    addMESH(ID, IJK, XB)
+        Adds a mesh key to the meshes namelist.
+    addMISC(BNDF_DEFAULT=None, TMPA=None)
+        Adds a misc key to the misc namelist.
+    addMPIprocesses(numberOfProcesses, allowMeshSplitting=True,
+                    splitMultiplier=1.20)
+        Adds mpi processes to meshes. Can be used to automatically
+        split meshes to balance load on mpi processes.
+    addOBST(ID, XB, SURF_IDS=None, SURF_ID=None, SURF_ID6=None,
+            BNDF_OBST=True, THICKEN=None, TRANSPARENCY=None, COLOR=None)
+        Adds obst key to the obsts namelist.
+    addPRES(VELOCITY_TOLERANCE=None, MAX_PRESSURE_ITERATIONS=None)
+        Adds pres keys to the pres namelist.
+    addRAMP(ID, T, F)
+        Adds ramp keys to the ramps namelist.
+    addREAC(ID, FUEL=None, FORMULA=None, AIT=None, SY=None, COY=None,
+            HOC=None, C=None, H=None, O=None, N=None, FYI=None, RF=None)
+        Adds reac keys to the reacs namelist.
+    addSLCF(Qty, PBX=None, PBY=None, PBZ=None,
+            Vec=False, XB=None, SPEC_ID=None)
+        Adds slcf key to the slcfs namelist.
+    addSURF(ID, Mid=None, Col=None, Thi=None, Bac=None, Geo=None,
+            Fyi=None, Len=None, LeaPat=None, Hrrpua=None, qramp=None,
+            Rgb=None, adiabatic=False, VOLUME_FLOW=None, VEL_T=None)
+        Adds surf key to the surfs namelist.
+    addTIME(T_END=0.0, T_BEGIN=0.0)
+        Adds time key to the times namelist.
+    addVENT(ID, SURF_ID, XB=None, CTRL_ID=None, MB=None, IOR=None)
+        Adds vent key to the vents namelist.
+    addZONE(ID, XB, LEAK_AREA=None)
+        Adds zone key to the zones namelist.
+    calculateMeshCells()
+        Returns a list of mesh keys and number of cells in each mesh.
+    checkOverlappingMESH()
+        Returns True if any meshes are overlapping else False
+    dictFromLine(line, lineType, types)
+        Returns a dictionary with keys and values from a namelist line.
+    dictMerge(template, master, path=None)
+        Returns merged dictionary where keys in master overwrite keys
+        in template.
+    generateFDStext()
+        Returns str of input file.
+    getLineType(line)
+        Returns namelist key from str line.
+    getMeshLimits()
+        Returns a dictionary containing a key 'XB' with an array of the
+        total extents defined in meshes.
+    getPolygonNamesFromFdsFile()
+        Returns a list of polygons defined in the fds input file.
+    importFile(file=None, text=None, textList=None)
+        Adds keys to each namelist from an input file, text, or text
+        list.
+    interpretKey(key, lineType, types)
+        Intermediate function which processes a key from a namelist
+        key pair to returns the keyID, keyType, and keyValue.
+    keyAssist(text, types, dic, internalKeys=['counter'], newline=False)
+        Returns a namelist text line based on an input dictionary and
+        type dictionary.
+    keyFromLineType(lineType)
+        Returns internal attribute name from namelist type.
+    makeFDSLines(textFDS)
+        Returns a list of namelist lines.
+    makeLinesFromDict(items, types, prefix, newline=False)
+        Returns a str generated from a namelist dictionary.
+    makeMESH(meshes, meshTypes, meshOrder=False)
+        Returns a str generated from a meshes namelist dictionary.
+    makeRAMP(ramps)
+        Returns a str generated from a ramps namelist dictionary.
+    mergeTypeFromLineType(lineType)
+        Returns internal merge type based on namelist type.
+    parseFDSLines(lines)
+        Adds each line to internal attribute namelist dictionaries.
+    parseLine(line, lineType, types, key)
+        Adds one line to the corresponding internal attribute namelist
+        dictionary.
+    saveModel(mpiProcesses, location, allowMeshSplitting=True,
+              splitMultiplier=1.2)
+        Saves an fds input file based on internal attribute namelist
+        dictionaries. Allows splitting of meshes to optimize mpi
+        processes balance.
+    splitLineIntoKeys(line2)
+        Returns namelist key pairs from a line.
+    splitMESHonce(mesh)
+        Splits a mesh along its largest axis.
+    zopen(file)
+        Opens a file or zip archive for reading.
+    """
+    
+    def __init__(self, version="6.7.4"):
+        """
+        Parameters
+        ----------
+        version : str
+            string containing the fds version for the input file.
+            Syntax is '#.#.#'. Currently supports 6.7.1 and 6.7.4.
+        """
+        
         self.head = defaultdict(bool)
         self.devcs = defaultdict(bool)
         self.inits = defaultdict(bool)
@@ -64,68 +247,405 @@ class fdsFileOperations(object):
         self.bndfs['unknownCounter'] = 0
         
         self.meshOrder = False
-        self.version = "6.7.4"
+        self.version = version
     
-    def saveModel(self, mpiProcesses, location, allowMeshSplitting=True, splitMultiplier=1.2):
-        self.addMPIprocesses(mpiProcesses, allowMeshSplitting=allowMeshSplitting, splitMultiplier=splitMultiplier)
-        text = self.generateFDStext()
-        with open(location, 'w') as f:
-            f.write(text)
-        print("Input file written to: %s"%(location))
     
-    def dictMerge(self, a, b, path=None):
-        "merges b into a"
-        if path is None: path = []
-        for key in b:
-            if key in a:
-                if isinstance(a[key], dict) and isinstance(b[key], dict):
-                    self.dictMerge(a[key], b[key], path + [str(key)])
-                elif a[key] == b[key]:
-                    pass
-                else:
-                    a[key] = b[key]
-            else:
-                a[key] = b[key]
-        return a
+    def addBNDF(self, QUANTITY, CELL_CENTERED=None):
+        """Adds a bndf key to internal attribute bndfs
+        
+        Adds a bndf key to internal attribte bndfs. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        QUANTITY : str
+            Quantity of the bndf
+        CELL_CENTERED : bool, optional
+            Flag specifying if the quantity should be exported at cell
+            centers or at cell edges (default None).
+        """
+        
+        bndf = defaultdict(bool)
+        bndf['ID'] = "BNDF-%05.0f"%(self.bndfCounter)
+        bndf['QUANTITY'] = QUANTITY
+        if CELL_CENTERED != None: bndf['CELL_CENTERED'] = CELL_CENTERED
+        self.bndfCounter += 1
+        self.bndfs[bndf['ID']] = bndf
     
-    def zopen(self, file):
-        if '.zip' in file:
-            zname = '%s.zip'%(file.split('.zip')[0])
-            fname = file.split('.zip%s'%(os.sep))[1]
-            zip = zipfile.ZipFile(zname, 'r')
-            f = zip.open(fname)
+    
+    def addCTRL(self, ID, FUNCTION_TYPE, INPUT_ID, DELAY=None):
+        """Adds a ctrl key to internal attribute ctrls
+        
+        Adds a bndf key to internal attribte ctrls. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        ID : str
+            Identifier for this control
+        FUNCTION_TYPE : str
+            Identify for type of control.
+            Valid entries are: ANY, ALL
+        INPUT_ID : str
+            Identifier for device or control for logic.
+        DELAY : float, optional
+            Time delay for activation of control (default None)
+        """
+        
+        ctrl = defaultdict(bool)
+        ctrl['ID'] = ID
+        ctrl['FUNCTION_TYPE'] = FUNCTION_TYPE
+        ctrl['INPUT_ID'] = INPUT_ID
+        if DELAY != None: ctrl['DELAY'] = DELAY
+        self.ctrls[ID] = ctrl
+    
+    
+    def addDEVC(self, ID, QUANTITY, XYZ=None, XB=None, IOR=None,
+                SPEC_ID=None, TIME_AVERAGED=None,
+                SPATIAL_STATISTIC=None, STATISTICS=None,
+                INITIAL_STATE=None, INIT_ID=None, SETPOINT=None,
+                DUCT_ID=None):
+        """Adds a devc key to internal attribute devcs
+        
+        Adds a devc key to internal attribte devcs. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        ID : str
+            Identifier for this device
+        QUANTITY : str
+            Quantity of the device
+        XYZ : float array(3), optional
+            Three component array containing X, Y, Z coordinates
+            (default None)
+        XB : float array(6), optional
+            Six component array containing X_min, X_max, Y_min, Y_max,
+            Z_min, Z_max coordinates (default None)
+        IOR : int, optional
+            Integer specifying the orientation of the device
+            (default None)
+        SPEC_ID : str, optional
+            String specifying the species of the device (default None)
+        TIME_AVERAGED : bool, optional
+            Flag specifying if the device is time averaged
+            (default None)
+        SPATIAL_STATISTIC : str, optional
+            String specifying spatial statistic of the device
+            (default None)
+        STATISTICS : str, optional
+            String specifying statistic type
+        INITIAL_STATE : bool, optional
+            Flag specifying if device is initially active (defualt None)
+        INIT_ID : str, optional
+            String specifying init namelist identifier
+        SETPOINT : float, optional
+            Flag value used to determine activation of device
+            (default None)
+        DUCT_ID : str, optional
+            String identifier of duct containing device
+        """
+        
+        devc = defaultdict(bool)
+        devc['ID'] = ID
+        devc['QUANTITY'] = QUANTITY
+        if XYZ != None: devc['XYZ'] = XYZ
+        if XB != None: devc['XB'] = XB
+        if INITIAL_STATE != None: devc['INITIAL_STATE'] = INITIAL_STATE
+        if INIT_ID != None: devc['INIT_ID'] = INIT_ID
+        if SETPOINT != None: devc['SETPOINT'] = SETPOINT
+        if IOR != None: devc['IOR'] = IOR
+        if TIME_AVERAGED != None: devc['TIME_AVERAGED'] = TIME_AVERAGED
+        if SPATIAL_STATISTIC != None:
+            devc['SPATIAL_STATISTIC'] = SPATIAL_STATISTIC
+        if STATISTICS != None: devc["STATISTICS"] = STATISTICS
+        if DUCT_ID != None: devc['DUCT_ID'] = DUCT_ID
+        if SPEC_ID != None: devc['SPEC_ID'] = SPEC_ID
+        self.devcs[ID] = devc
+    
+    
+    def addDUMP(self, RENDER_FILE=None, COLUMN_DUMP_LIMIT=False,
+                WRITE_XYZ=False, DT_PL3D=None, DT_SL3D=None,
+                DT_SLCF=None, DT_BNDF=None, DT_DEVC=None, DT_CTRL=None,
+                DT_HRR=None, DT_RESTART=None):
+        """Adds a dump key to internal attribute dumps
+        
+        Adds a dump key to internal attribute dumps. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        RENDER_FILE : str, optional
+            Filename for render file (default None)
+        COLUMN_DUMP_LIMIT : bool, optional
+            Flag specifying if number of columns in CSV file should be
+            limited (default False)
+        WRITE_XYZ : bool, optional
+            Flag specifying if an XYZ file should be generated by FDS
+            (default False)
+        DT_PL3D : float, optional
+            Time interval to output PL3D data (default None)
+        DT_SL3D : float, optional
+            Time interval to output SL3D data (default None)
+        DT_SLCF : float, optional
+            Time interval to output SLCF data (default None)
+        DT_BNDF : float, optional
+            Time interval to output BNDF data (default None)
+        DT_DEVC : float, optional
+            Time interval to output DEVC data (default None)
+        DT_CTRL : float, optional
+            Time interval to output CTRL data (default None)
+        DT_HRR : float, optional
+            Time interval to output HRR data (default None)
+        DT_RESTART : float, optional
+            Time interval to save restart files (default None)
+        """
+        
+        dump = defaultdict(bool)
+        if RENDER_FILE != None: dump['RENDER_FILE'] = RENDER_FILE
+        if COLUMN_DUMP_LIMIT:
+            dump['COLUMN_DUMP_LIMIT'] = COLUMN_DUMP_LIMIT
+        if WRITE_XYZ: dump['WRITE_XYZ'] = WRITE_XYZ
+        if DT_PL3D != None: dump['DT_PL3D'] = DT_PL3D
+        if DT_SL3D != None: dump['DT_SL3D'] = DT_SL3D
+        if DT_SLCF != None: dump['DT_SLCF'] = DT_SLCF
+        if DT_BNDF != None: dump['DT_BNDF'] = DT_BNDF
+        if DT_DEVC != None: dump['DT_DEVC'] = DT_DEVC
+        if DT_CTRL != None: dump['DT_CTRL'] = DT_CTRL
+        if DT_HRR != None: dump['DT_HRR'] = DT_HRR
+        if DT_RESTART != None: dump['DT_RESTART'] = DT_RESTART
+        self.dump['ID'] = dump
+    
+    
+    def addHEAD(self, chid, title=None):
+        """Adds a head key to internal attribute head
+        
+        Adds a head key to internal attribute head. Note if no title is
+        specified, title will be set to the same as chid.
+        
+        Parameters
+        ----------
+        chid: str
+            Chid for use in the input file
+        title: str, optional
+            Title for use in the input file (default None)
+        """
+        
+        head = defaultdict(bool)
+        head['CHID'] = chid
+        if title != None:
+            head['TITLE'] = title
         else:
-            f = open(file, 'rb')
-        return f
+            head['TITLE'] = chid
+        self.head['ID'] = head
+        
+        
+    def addHOLE(self, ID, XB):
+        """Adds a hole key to internal attribute holes
+        
+        Adds a hole key to internal attribute holes. 
+        
+        Parameters
+        ----------
+        ID : str
+            String identifier for the hole
+        XB : float array(6)
+            Six component array containing X_min, X_max, Y_min, Y_max,
+            Z_min, Z_max coordinates
+        """
+        
+        hole = defaultdict(bool)
+        hole['XB'] = XB
+        hole['ID'] = ID
+        self.holes[ID] = hole
     
-    def importFile(self, file=None, text=None, textList=None):
-        if file != None:
-            f = self.zopen(file)
-            textFDS = f.read()
-            textFDS = textFDS.decode("utf-8")
-        elif text != None:
-            textFDS = text
-        elif textList != None:
-            textFDS = '\n'.join(textList)
-        lines = self.makeFDSLines(textFDS)
-        self.parseFDSLines(lines)
     
-    def makeFDSLines(self, textFDS):
-        #linesFDS = [x.split('/')[0] for x in textFDS.split("&")[1:]]
-        linesFDS = [x for x in textFDS.split("&")[1:]]
-        for i in range(0, len(linesFDS)):
-            line2 = linesFDS[i]
-            line2 = "%s,"%(line2) if line2[-1] != ',' else line2
-            linesFDS[i] = line2
-        lineTypes = [x[:4] for x in linesFDS]
-        if 'TAIL' in lineTypes:
-            ind = np.argwhere([True if x == 'TAIL' else False for x in lineTypes])[0][0]
-            linesFDS = linesFDS[:ind]
-        return linesFDS
+    def addMATL(self, ID, Emi=None, Den=None, Con=None, Spe=None,
+                kramp=None, cpramp=None, fyi=None):
+        """Adds a matl key to internal attribute matls
+        
+        Adds a matl key to internal attribute matls. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        ID : str
+            String identifier for the material
+        Emi : float, optional
+            Emissivity of the material (default None)
+        Den : float, optional
+            Density of the material (default None)
+        Con : float, optional
+            Conductivity of the material (default None)
+        Spe : float, optional
+        kramp : str, optional
+            String identifier of thermal conductivity ramp
+            (default None)
+        cpramp : str, optional
+            String identifier of specific heat capacity ramp
+            (default None)
+        fyi : str, optional
+            String containing comment field to be included in input file
+            (default None)
+        """
+        
+        matl = defaultdict(bool)
+        matl['ID'] = ID
+        if Emi != None: matl['EMISSIVITY'] = Emi
+        if Den != None: matl['DENSITY'] = Den
+        if Con != None: matl['CONDUCTIVITY'] = Con
+        if Spe != None: matl['SPECIFIC_HEAT'] = Spe
+        if kramp != None: matl['CONDUCTIVITY_RAMP'] = kramp
+        if cpramp != None: matl['SPECIFIC_HEAT_RAMP'] = cpramp
+        if fyi != None: matl['FYI'] = fyi
+        self.matls[ID] = matl
+        
+        
+    def addMESH(self, ID, IJK, XB):
+        """Adds a mesh key to internal attribute meshes
+        
+        Adds a mesh key to internal attribute meshes.
+        
+        Parameters
+        ----------
+        ID : str
+            String identifier for the mesh
+        IJK : int array(3)
+            Three component array containing number of grid cells in
+            each axis
+        XB : float array(6)
+            Six component array containing X_min, X_max, Y_min, Y_max,
+            Z_min, Z_max coordinates
+        """
+        
+        mesh = defaultdict(bool)
+        mesh['ID'] = ID
+        mesh['IJK'] = IJK
+        mesh['XB'] = XB
+        self.meshes[ID] = mesh
     
-    def addOBST(self, ID, XB, SURF_IDS=None, SURF_ID=None, SURF_ID6=None,
-                BNDF_OBST=True, THICKEN=None, TRANSPARENCY=None,
-                COLOR=None):
+    
+    def addMISC(self, BNDF_DEFAULT=None, TMPA=None):
+        """Adds a misc key to internal attribute misc
+        
+        Adds a misc key to internal attribute misc. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        BNDF_DEFAULT : bool
+            Flag specifying if boundary data is to be output for all
+            boundary surfaces by default (default None)
+        TMPA : float
+            Ambient air temperature
+        """
+        
+        misc = defaultdict(bool)
+        if BNDF_DEFAULT != None: misc['BNDF_DEFAULT'] = BNDF_DEFAULT
+        if TMPA != None: misc['TMPA'] = TMPA
+        self.misc['ID'] = misc
+    
+    
+    def addMPIprocesses(self, numberOfProcesses, allowMeshSplitting=True, splitMultiplier=1.20):
+        """Adds mpi processes to meshes stored in internal attributes
+        
+        Adds mpi processes to meshes stored in internal attributes.
+        Can be used to automatically split meshes to balance load on
+        mpi processes.
+        
+        Parameters
+        ----------
+        numberOfProcesses : int
+            Number of mpi processes
+        allowMeshSplitting : bool
+            Flag specifying whether meshes can be split
+        splitMultiplier : float
+            Threshold used in splitting meshes
+        """
+        
+        meshes, numCells = self.calculateMeshCells()
+        cellsPerProcess = np.sum(numCells)/numberOfProcesses
+        mpiConverged = False
+        splitConverged = False
+        while not mpiConverged:
+            mpiConverged = True
+            while not splitConverged and allowMeshSplitting:
+                splitConverged = True
+                meshes, numCells = self.calculateMeshCells()
+                for mesh, numCell in zip(meshes, numCells):
+                    if numCell > cellsPerProcess*splitMultiplier:
+                        self.splitMESHonce(self.meshes[mesh])
+                        splitConverged = False
+            
+            meshes, numCells = self.calculateMeshCells()
+            mpiProcessInds = np.zeros((len(numCells),))-1
+            mpiProcess = np.zeros((numberOfProcesses,))
+            while np.argwhere(mpiProcessInds == -1).shape[0] > 0:
+                ind = np.argmax(numCells)
+                ind2 = np.argmin(mpiProcess)
+                mpiProcessInds[ind] = ind2
+                mpiProcess[ind2] += numCells[ind]
+                numCells[ind] = 0
+            if np.max(mpiProcess) > cellsPerProcess*splitMultiplier and allowMeshSplitting:
+                mpiConverged = False
+                splitConverged = False
+                splitMultiplier = splitMultiplier*0.9
+        for key, mp in zip(meshes, mpiProcessInds):
+            self.meshes[key]['MPI_PROCESS'] = mp
+        self.mpiProcesses = numberOfProcesses
+        self.meshOrder = np.argsort(mpiProcessInds)
+        
+        
+    def addOBST(self, ID, XB, SURF_IDS=None, SURF_ID=None,
+                SURF_ID6=None, BNDF_OBST=True, THICKEN=None,
+                TRANSPARENCY=None, COLOR=None):
+        """Adds an obst key to internal attribute obsts
+        
+        Adds an obst key to internal attribute obsts. Optional
+        parameters that are specified as None will not be explicitly
+        specified in a generated input file. These values at runtime
+        will default to current FDS default parameters.
+        
+        Parameters
+        ----------
+        ID : str
+            String identifier for the obstruction
+        XB : float array(6)
+            Six component array containing X_min, X_max, Y_min, Y_max,
+            Z_min, Z_max coordinates
+        SURF_IDS : str array(3), optional
+            Three component array specifying surface definition
+            (default None)
+        SURF_ID : str, optional
+            String specifing surface for all faces
+        SURF_ID6 : str array(6), optional
+            Six component array specifying surface definition for
+            X-, X+, Y-, Y+, Z-, Z+ (default None)
+        BNDF_OBST : bool
+            Flag specifying if boundary data is to be output for all
+            faces of this obstruction (default True)
+        THICKEN : bool
+            Flag specifying if obstruction is to be thickened to be at
+            least one grid cell thick (default None)
+        TRANSPARENCY : float
+            Value specifying how transparent this obstruction should be
+            in visualization (default None)
+        COLOR : str
+            String specifiying a color for the obstruction
+        """
+        
         obst = defaultdict(bool)
         obst['XB'] = XB
         obst['ID'] = ID
@@ -144,194 +664,365 @@ class fdsFileOperations(object):
         else:
             obst['counter'] = 0
             self.obsts[ID] = obst
-    
-    def addHOLE(self, ID, XB):
-        hole = defaultdict(bool)
-        hole['XB'] = XB
-        hole['ID'] = ID
-        self.holes[ID] = hole
-    
-    def addHEAD(self, chid, title=None):
-        head = defaultdict(bool)
-        head['CHID'] = chid
-        if title != None:
-            head['TITLE'] = title
+        
+        
+    def addPRES(self, VELOCITY_TOLERANCE=None,
+                MAX_PRESSURE_ITERATIONS=None):
+        """Adds a pres key to internal attribute pres
+        
+        Adds a pres key to internal attribute pres. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        VELOCITY_TOLERANCE : float
+            Value for the velocity error tolerance
+        MAX_PRESSURE_ITERATIONS : int
+            Maxmium number of iterations allowed in the pressure solver
+        """
+        
+        pres = defaultdict(bool)
+        if VELOCITY_TOLERANCE != None:
+            pres['VELOCITY_TOLERANCE'] = VELOCITY_TOLERANCE
+        if MAX_PRESSURE_ITERATIONS != None:
+            pres['MAX_PRESSURE_ITERATIONS'] = MAX_PRESSURE_ITERATIONS
+        self.pres['ID'] = pres
+        
+        
+    def addRAMP(self, ID, T, F):
+        """Adds a ramp key to internal attribute ramps
+        
+        Adds a ramp key to internal attribute ramps.
+        
+        Parameters
+        ----------
+        ID : str
+            String identifier for the obstruction
+        T : float array(N)
+            Array specifying the x-axis of the ramp
+        F : float array(N)
+            Array specifying the y-axis of the ramp
+        """
+        
+        if self.ramps[ID]:
+            Ts = self.ramps[ID]['T']
+            Fs = self.ramps[ID]['F']
+            for t, f in zip(T, F):
+                Ts.append(t)
+                Fs.append(f)
+            self.ramps[ID]['T'] = Ts
+            self.ramps[ID]['F'] = Fs
         else:
-            head['TITLE'] = chid
-        self.head['ID'] = head
-    
+            self.ramps[ID] = defaultdict(bool)
+            self.ramps[ID]['T'] = T
+            self.ramps[ID]['F'] = F
+            self.ramps[ID]['ID'] = ID
+        
+        
+    def addREAC(self, ID, FUEL=None, FORMULA=None, AIT=None, SY=None, 
+                COY=None, HOC=None,
+                C=None, H=None, O=None, N=None, FYI=None, RF=None):
+        """Adds a reac key to internal attribute reacs
+        
+        Adds a reac key to internal attribute reacs. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        ID : str
+            String identifier for the reaction
+        FUEL : str, optional
+            String name of the fuel in the reaction (default None)
+        FORMULA : str, optional
+            String formula of the reaction (default None)
+        AIT : float, optional
+            Float auto ignition temperature of the reaction
+            (default None)
+        SY : float, optional
+            Float soot yield of the reaction (default None)
+        COY : float, optional
+            Float carbon monoxide yield of the reaction (default None)
+        HOC : float, optional
+            Float heat of combustion of the reaction (default None)
+        C : float, optional
+            Float number of carbon atoms in the chemical formula of the
+            reaction (default None)
+        H : float, optional
+            Float number of hydrogen atoms in the chemical formula of
+            the reaction (default None)
+        O : float, optional
+            Float number of oxygen atoms in the chemical formula of the
+            reaction (default None)
+        N : float, optional
+            Float number of nitrogen atoms in the chemical formula of
+            the reaction (default None)
+        FYI : string, optional
+            String containing comment field to be included in input file
+        RF : float, optional
+            Float radiative fraction of the reaction (default None)
+        """
+        
+        reac = defaultdict(bool)
+        reac['ID'] = ID
+        if FUEL != None: reac['FUEL'] = FUEL
+        if FORMULA != None: reac['FORMULA'] = FORMULA
+        if AIT != None: reac['AUTO_IGNITION_TEMPERATURE'] = AIT
+        if SY != None: reac['SOOT_YIELD'] = SY
+        if COY != None: reac['CO_YIELD'] = COY
+        if HOC != None: reac['HEAT_OF_COMBUSTION'] = HOC
+        if C != None: reac['C'] = C
+        if H != None: reac['H'] = H
+        if O != None: reac['O'] = O
+        if N != None: reac['N'] = N
+        if FYI != None: reac['FYI'] = FYI
+        if RF != None: reac['RADIATIVE_FRACTION'] = RF
+        self.reacs[ID] = reac
+        
+        
+    def addSLCF(self, QUANTITY, PBX=None, PBY=None, PBZ=None, Vec=False, XB=None, SPEC_ID=None):
+        """Adds a slcf key to internal attribute slcfs
+        
+        Adds a slcf key to internal attribute slcfs. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        QUANTITY : str
+            Quantity of the slice
+        PBX : float, optional
+            Value along x-axis of the plane (default None)
+        PBY : float, optional
+            Value along y-axis of the plane (default None)
+        PBZ : float, optional
+            Value along z-axis of the plane (default None)
+        Vec : bool, optional
+            Flag specifying if the slice is a vector slice
+            (default False)
+        XB : float array(6), optional
+            Six component array containing X_min, X_max, Y_min, Y_max,
+            Z_min, Z_max coordinates
+        SPEC_ID : str, optional
+            String specifying the species of the slice
+        """
+        
+        slcf = defaultdict(bool)
+        slcf['ID'] = "SLCF-%05.0f"%(self.slcfCounter)
+        slcf['QUANTITY'] = QUANTITY
+        if PBX != None: slcf['PBX'] = PBX
+        if PBY != None: slcf['PBY'] = PBY
+        if PBZ != None: slcf['PBZ'] = PBZ
+        if SPEC_ID != None: slcf['SPEC_ID'] = SPEC_ID
+        if Vec: slcf['VECTOR'] = 'TRUE'
+        if XB != None: slcf['XB'] = XB
+        self.slcfCounter += 1
+        self.slcfs[slcf['ID']] = slcf
+        
+        
+    def addSURF(self, ID, Mid=None, Col=None, Thi=None, Bac=None,
+                Geo=None, Fyi=None, Len=None, LeaPat=None, Hrrpua=None,
+                qramp=None, Rgb=None, adiabatic=False, VOLUME_FLOW=None,
+                VEL_T=None):
+        """Adds a surf key to internal attribute surfs
+        
+        Adds a surf key to internal attribute surfs. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        ID : str
+            String identifier for the surface
+        Mid : str array(N), optional
+            Array of material IDs in the surface (default None)
+        Col : str, optional
+            String specifying the color of the surface (default None)
+        Thi : float array(N), optional
+            Array of floats specifying the thickness of each material
+            in the surface (default None)
+        Bac : str, optional
+            String specifying the type of back boundary condition
+            (default None)
+        Geo : str, optional
+            String specifying the type of geometry to use for the
+            surface (default None)
+        Fyi : str, optional
+            String containing comment field to be included in input file
+        Len : float, optional
+            Value of length to be used in heat transfer calculation
+            (default None)
+        LeaPat : array(2), optional
+            Array specifying leak path for the surface
+        HRRPUA : float, optional
+            Value of heat release rate per unit area of the surface
+            (default None)
+        qramp : str, optional
+            String identifier of ramp for the heat release rate per unit
+            area (default None)
+        Rgb : float array(3), optional
+            Array specifying the color of the surface (default None)
+        adiabatic : bool, optional
+            Flag specifying if the surface is adiabatic (default False)
+        VOLUME_FLOW : float, optional
+            Value of specified volume flow from the surface
+            (default None)
+        VEL_T : float, optional
+            Value of specified tangential velocity from the surface
+            (default None)
+        """
+        
+        surf = defaultdict(bool)
+        surf['ID'] = ID
+        if Mid != None: surf['MATL_ID'] = Mid
+        if Col != None: surf['COLOR'] = Col
+        if Thi != None: surf['THICKNESS'] = Thi
+        if Bac != None: surf['BACKING'] = Bac
+        if Geo != None: surf['GEOMETRY'] = Geo
+        if Fyi != None: surf['FYI'] = Fyi
+        if Len != None: surf['LENGTH'] = Len
+        if LeaPat != None: surf['LEAK_PATH'] = LeaPat
+        if Hrrpua != None: surf['HRRPUA'] = Hrrpua
+        if qramp != None: surf['RAMP_Q'] = qramp
+        if Rgb != None: surf['RGB'] = Rgb
+        if adiabatic: surf['ADIABATIC'] = True
+        if VOLUME_FLOW != None: surf['VOLUME_FLOW'] = VOLUME_FLOW
+        if VEL_T != None: surf['VEL_T'] = VEL_T
+        self.surfs[ID] = surf
+        
+        
     def addTIME(self, T_END=0.0, T_BEGIN=0.0):
+        """Adds a time key to internal attribute time
+        
+        Adds a time key to internal attribute time. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        T_END : float, optional
+            Time to end the simulation (default None)
+        T_BEGIN : float, optional
+            Time to begin the simulation (default None)
+        """
+        
         time = defaultdict(bool)
         time['T_BEGIN'] = T_BEGIN
         time['T_END'] = T_END
         self.time['ID'] = time
-    
-    def addMISC(self, BNDF_DEFAULT=None, TMPA=None):
-        misc = defaultdict(bool)
-        if BNDF_DEFAULT != None: misc['BNDF_DEFAULT'] = BNDF_DEFAULT
-        if TMPA != None: misc['TMPA'] = TMPA
-        self.misc['ID'] = misc
-    
-    def addDUMP(self, RENDER_FILE=None, COLUMN_DUMP_LIMIT=False,
-                WRITE_XYZ=False, DT_PL3D=None, DT_SL3D=None, DT_SLCF=None,
-                DT_BNDF=None, DT_DEVC=None, DT_CTRL=None, DT_HRR=None,
-                DT_RESTART=None):
-        dump = defaultdict(bool)
-        if RENDER_FILE != None: dump['RENDER_FILE'] = RENDER_FILE
-        if COLUMN_DUMP_LIMIT: dump['COLUMN_DUMP_LIMIT'] = COLUMN_DUMP_LIMIT
-        if WRITE_XYZ: dump['WRITE_XYZ'] = WRITE_XYZ
-        if DT_PL3D != None: dump['DT_PL3D'] = DT_PL3D
-        if DT_SL3D != None: dump['DT_SL3D'] = DT_SL3D
-        if DT_SLCF != None: dump['DT_SLCF'] = DT_SLCF
-        if DT_BNDF != None: dump['DT_BNDF'] = DT_BNDF
-        if DT_DEVC != None: dump['DT_DEVC'] = DT_DEVC
-        if DT_CTRL != None: dump['DT_CTRL'] = DT_CTRL
-        if DT_HRR != None: dump['DT_HRR'] = DT_HRR
-        if DT_RESTART != None: dump['DT_RESTART'] = DT_RESTART
-        self.dump['ID'] = dump
-    
-    def addCTRL(self, ID, FUNCTION_TYPE, INPUT_ID, DELAY=None):
-        ctrl = defaultdict(bool)
-        ctrl['ID'] = ID
-        ctrl['FUNCTION_TYPE'] = FUNCTION_TYPE
-        ctrl['INPUT_ID'] = INPUT_ID
-        if DELAY != None: ctrl['DELAY'] = DELAY
-        self.ctrls[ID] = ctrl
-    
-    def addPRES(self, VELOCITY_TOLERANCE=None, MAX_PRESSURE_ITERATIONS=None):
-        pres = defaultdict(bool)
-        if VELOCITY_TOLERANCE != None: pres['VELOCITY_TOLERANCE'] = VELOCITY_TOLERANCE
-        if MAX_PRESSURE_ITERATIONS != None: pres['MAX_PRESSURE_ITERATIONS'] = MAX_PRESSURE_ITERATIONS
-        self.pres['ID'] = pres
-    
-    def addDEVC(self, ID, QUANTITY, XYZ=None, XB=None, IOR=None, SPEC_ID=None,
-                TIME_AVERAGED=None, SPATIAL_STATISTIC=None, STATISTICS=None,
-                INITIAL_STATE=None, INIT_ID=None, SETPOINT=None,
-                DUCT_ID=None):
-        devc = defaultdict(bool)
-        devc['ID'] = ID
-        devc['QUANTITY'] = QUANTITY
-        if XYZ != None: devc['XYZ'] = XYZ
-        if XB != None: devc['XB'] = XB
-        if INITIAL_STATE != None: devc['INITIAL_STATE'] = INITIAL_STATE
-        if INIT_ID != None: devc['INIT_ID'] = INIT_ID
-        if SETPOINT != None: devc['SETPOINT'] = SETPOINT
-        if IOR != None: devc['IOR'] = IOR
-        if TIME_AVERAGED != None: devc['TIME_AVERAGED'] = TIME_AVERAGED
-        if SPATIAL_STATISTIC != None: devc['SPATIAL_STATISTIC'] = SPATIAL_STATISTIC
-        if STATISTICS != None: devc["STATISTICS"] = STATISTICS
-        if DUCT_ID != None: devc['DUCT_ID'] = DUCT_ID
-        if SPEC_ID != None: devc['SPEC_ID'] = SPEC_ID
-        self.devcs[ID] = devc
-    
-    def addMESHfromCOMP(self, ID, x0, y0, z0, x1, y1, z1, doors,
-                        extSURF_IDS=['OPEN','OPEN','OPEN','OPEN','ADIABATIC','ADIABATIC'],
-                        wallExtension=defaultdict(bool), dx=0.1, dy=0.1, dz=0.1):
-        mesh = defaultdict(bool)
-        IJK = [(x1-x0)/dx, (y1-y0)/dy, (z1-z0)/dz]
-        XB = [x0, x1, y0, y1, z0, z1]
-        mesh['ID'] = ID
-        mesh['IJK'] = IJK
-        mesh['XB'] = XB
-        self.meshes[ID] = mesh
         
-        for key in list(wallExtension.keys()):
-            (xmn, xmx, ymn, ymx, zmn, zmx) = (x0, x1, y0, y1, z0, z1)
-            if (wallExtension[key] > 0) and (doors[key]['vtype'] != 'MECHANICAL'):
-                mesh = defaultdict(bool)
-                meshID = "%s-%s"%(ID, key)
-                mesh['ID'] = meshID
-                
-                door = doors[key]
-                xs = door['xs']
-                ys = door['ys']
-                
-                if (key == 'west'):
-                    xmx = xmn
-                    xmn = xmn-wallExtension[key]
-                    ymn = max(ys[0]-3*dx, y0)
-                    ymx = min(ys[1]+3*dx, y1)
-                    self.addVENT("%s-SOUTH"%(meshID), extSURF_IDS[2], [xmn, xmx, ymn, ymn, zmn, zmx])
-                    self.addVENT("%s-NORTH"%(meshID), extSURF_IDS[3], [xmn, xmx, ymx, ymx, zmn, zmx])
-                    self.addVENT("%s-WEST"%(meshID), extSURF_IDS[0], [xmn, xmn, ymn, ymx, zmn, zmx])
-                elif (key == 'east'):
-                    xmn = xmx
-                    xmx = xmx+wallExtension[key]
-                    ymn = max(ys[0]-3*dx, y0)
-                    ymx = min(ys[1]+3*dx, y1)
-                    self.addVENT("%s-SOUTH"%(meshID), extSURF_IDS[2], [xmn, xmx, ymn, ymn, zmn, zmx])
-                    self.addVENT("%s-NORTH"%(meshID), extSURF_IDS[3], [xmn, xmx, ymx, ymx, zmn, zmx])
-                    self.addVENT("%s-EAST"%(meshID), extSURF_IDS[0], [xmx, xmx, ymn, ymx, zmn, zmx])
-                elif (key == 'north'):
-                    ymn = ymx
-                    ymx = ymx+wallExtension[key]
-                    xmn = max(xs[0]-3*dx, x0)
-                    xmx = min(xs[1]+3*dx, x1)
-                    self.addVENT("%s-EAST"%(meshID), extSURF_IDS[0], [xmx, xmx, ymn, ymx, zmn, zmx])
-                    self.addVENT("%s-WEST"%(meshID), extSURF_IDS[0], [xmn, xmn, ymn, ymx, zmn, zmx])
-                    self.addVENT("%s-NORTH"%(meshID), extSURF_IDS[3], [xmn, xmx, ymx, ymx, zmn, zmx])
-                elif (key == 'south'):
-                    ymx = ymn
-                    ymn = ymn-wallExtension[key]
-                    xmn = max(xs[0]-3*dx, x0)
-                    xmx = min(xs[1]+3*dx, x1)
-                    self.addVENT("%s-EAST"%(meshID), extSURF_IDS[0], [xmx, xmx, ymn, ymx, zmn, zmx])
-                    self.addVENT("%s-WEST"%(meshID), extSURF_IDS[0], [xmn, xmn, ymn, ymx, zmn, zmx])
-                    self.addVENT("%s-SOUTH"%(meshID), extSURF_IDS[2], [xmn, xmx, ymn, ymn, zmn, zmx])
-                elif (key == 'floor'):
-                    zmx = zmn
-                    zmn = zmn-wallExtension[key]
-                elif (key == 'ceiling'):
-                    zmn = zmx
-                    zmx = zmx+wallExtension[key]
-                IJK = [(xmx-xmn)/dx, (ymx-ymn)/dy, (zmx-zmn)/dz]
-                XB = [xmn, xmx, ymn, ymx, zmn, zmx]
-                mesh['IJK'] = IJK
-                mesh['XB'] = XB
-                self.meshes[meshID] = mesh
-                self.addVENT("%s-FLOOR"%(meshID), extSURF_IDS[4], [xmn, xmx, ymn, ymx, zmn, zmn])
-                self.addVENT("%s-CEILING"%(meshID), extSURF_IDS[4], [xmn, xmx, ymn, ymx, zmx, zmx])
+        
+    def addVENT(self, ID, SURF_ID, XB=None, CTRL_ID=None, MB=None,
+                IOR=None):
+        """Adds a vent key to internal attribute vents
+        
+        Adds a vent key to internal attribute vents. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        ID : str
+            String identifier for the vent
+        SURF_ID : str
+            String identifier specifying the surface of the vent
+        XB : float array(6), optional
+            Six component array containing X_min, X_max, Y_min, Y_max,
+            Z_min, Z_max coordinates (default None)
+        CTRL_ID : str, optional
+            String identifier for control determining if the vent is
+            active (default None)
+        MB : str, optional
+            String specifying short-hand position of axis (default None)
+        IOR : int, optional
+            Integer specifying the orientation of the vent
+            (default None)
+        """
+        
+        vent = defaultdict(bool)
+        vent['ID'] = ID
+        vent['SURF_ID'] = SURF_ID
+        if XB != None: vent['XB'] = XB
+        if CTRL_ID != None: vent['CTRL_ID'] = CTRL_ID
+        if MB != None: vent['MB'] = MB
+        if IOR != None: vent['IOR'] = IOR
+        if self.vents[ID]:
+            counter = self.vents[ID]['counter']
+            counter += 1
+            self.vents["%s-%0.0f"%(ID, counter)] = vent
+            self.vents[ID]['counter'] = counter
+        else:
+            vent['counter'] = 0
+            self.vents[ID] = vent
+            
+            
+    def addZONE(self, ID, XB, LEAK_AREA=None):
+        """Adds a zone key to internal attribute zones
+        
+        Adds a zone key to internal attribute zones. Optional parameters
+        that are specified as None will not be explicitly specified in
+        a generated input file. These values at runtime will default to
+        current FDS default parameters.
+        
+        Parameters
+        ----------
+        ID : str
+            String identifier for the zone
+        XB : float array(6)
+            Six component array containing X_min, X_max, Y_min, Y_max,
+            Z_min, Z_max coordinates (default None)
+        LEAK_AREA : float array(N), optional
+            Leakage area to each pressure zone
+        """
+        
+        zone = defaultdict(bool)
+        zone['ID'] = ID
+        zone['XB'] = XB
+        if LEAK_AREA != None: zone['LEAK_AREA'] = LEAK_AREA
+        self.zones[ID] = zone
+        
+        
+    def calculateMeshCells(self):
+        """Returns a list of mesh keys and number of cells in each mesh
+        
+        Returns
+        -------
+        list
+            List of mesh keys
+        list
+            List of number of cells
+        """
+        
+        meshes = []
+        numCells = []
+        meshKeys = list(self.meshes.keys())
+        try:
+            meshKeys.remove('unknownCounter')
+        except:
+            pass
+        for key in meshKeys:
+            IJK = self.meshes[key]['IJK']
+            numCells.append(IJK[0]*IJK[1]*IJK[2])
+            meshes.append(key)
+        return meshes, numCells
     
-    def addOBSTfromCOMP(self, ID, x0, y0, z0, x1, y1, z1, doors, dx=0.1, dy=0.1, dz=0.1, SURF_ID=None, SURF_IDS=None, SURF_ID6=None, BNDF_OBST=True):
-        self.addOBST('%s-WEST'%(ID), [x0, x0+dx, y0, y1, z0, z1], SURF_IDS=SURF_IDS, SURF_ID=SURF_ID, SURF_ID6=SURF_ID6, BNDF_OBST=BNDF_OBST)
-        self.addOBST('%s-EAST'%(ID), [x1-dx, x1, y0, y1, z0, z1], SURF_IDS=SURF_IDS, SURF_ID=SURF_ID, SURF_ID6=SURF_ID6, BNDF_OBST=BNDF_OBST)
-        self.addOBST('%s-NORTH'%(ID), [x0, x1, y1-dy, y1, z0, z1], SURF_IDS=SURF_IDS, SURF_ID=SURF_ID, SURF_ID6=SURF_ID6, BNDF_OBST=BNDF_OBST)
-        self.addOBST('%s-SOUTH'%(ID), [x0, x1, y0, y0+dx, z0, z1], SURF_IDS=SURF_IDS, SURF_ID=SURF_ID, SURF_ID6=SURF_ID6, BNDF_OBST=BNDF_OBST)
-        
-        self.addVENT('%s-FLOOR'%(ID), SURF_ID, XB=[x0, x1, y0, y1, z0, z0])
-        self.addVENT('%s-CEILING'%(ID), SURF_ID, XB=[x0, x1, y0, y1, z1, z1])
-        #self.addOBST('%s-FLOOR'%(ID), [x0, x1, y0, y1, z0-dz, z0], SURF_IDS=SURF_IDS, SURF_ID=SURF_ID, SURF_ID6=SURF_ID6, BNDF_OBST=BNDF_OBST)
-        #self.addOBST('%s-CEILING'%(ID), [x0, x1, y0, y1, z1, z1+dz], SURF_IDS=SURF_IDS, SURF_ID=SURF_ID, SURF_ID6=SURF_ID6, BNDF_OBST=BNDF_OBST)
-        
-        for key in list(doors.keys()):
-            door = doors[key]
-            if door['exist'] == 1:
-                xs = door['xs']
-                ys = door['ys']
-                doorX = abs(xs[1]-xs[0])
-                doorY = abs(ys[1]-ys[0])
-                compX = abs(x1-x0)
-                compY = abs(y1-y0)
-                zs = [0, 2.5]
-                if door['vtype'] != 'MECHANICAL':
-                    if doorX < dx: xs = [xs[0]-2*dx, xs[1]+2*dx]
-                    if doorY < dy: ys = [ys[0]-2*dy, ys[1]+2*dy]
-                    if abs(doorX-compX) < dx: xs = [xs[0]+dx, xs[1]-dx]
-                    elif (xs[0] == x0): xs = [xs[0] + dx, xs[1]]
-                    elif (xs[1] == x1): xs = [xs[0], xs[1] - dx]
-                    if abs(doorY-compY) < dy: ys = [ys[0]+dy, ys[1]-dy]
-                    elif (ys[0] == y0): ys = [ys[0] + dy, ys[1]]
-                    elif (ys[1] == y1): ys = [ys[0], ys[1] - dy]
-                    XB = [xs[0], xs[1], ys[0], ys[1], zs[0], zs[1]]
-                    self.addHOLE('%s-DOOR-%s'%(ID, key),XB)
-                else:
-                    if (key == 'south'): XB = [xs[0], xs[1], ys[0]+dx, ys[1]+dx, zs[0], zs[1]]
-                    if (key == 'north'): XB = [xs[0], xs[1], ys[0]-dx, ys[1]-dx, zs[0], zs[1]]
-                    if (key == 'west'): XB = [xs[0]+dx, xs[1]+dx, ys[0], ys[1], zs[0], zs[1]]
-                    if (key == 'east'): XB = [xs[0]-dx, xs[1]-dx, ys[0], ys[1], zs[0], zs[1]]
-                    self.addVENT('%s-DOOR-%s'%(ID, key), 'MECH-VENT', XB)
     
     def checkOverlappingMESH(self):
+        """Returns True if any meshes are overlapping else False
+        
+        Returns
+        -------
+        bool
+            True if any meshes are overlapping, else False
+        """
+        
         def in_hull(p,hull):
             if not isinstance(hull,scsp.Delaunay):
                 hull = scsp.Delaunay(hull)
@@ -366,323 +1057,30 @@ class fdsFileOperations(object):
                             overlap = True
         return overlap
     
-    def calculateMeshCells(self):
-        meshes = []
-        numCells = []
-        meshKeys = list(self.meshes.keys())
-        try:
-            meshKeys.remove('unknownCounter')
-        except:
-            pass
-        for key in meshKeys:
-            IJK = self.meshes[key]['IJK']
-            numCells.append(IJK[0]*IJK[1]*IJK[2])
-            meshes.append(key)
-        return meshes, numCells
-    
-    def addMPIprocesses(self, numberOfProcesses, allowMeshSplitting=True, splitMultiplier=1.20):
-        meshes, numCells = self.calculateMeshCells()
-        cellsPerProcess = np.sum(numCells)/numberOfProcesses
-        mpiConverged = False
-        splitConverged = False
-        while not mpiConverged:
-            mpiConverged = True
-            while not splitConverged and allowMeshSplitting:
-                splitConverged = True
-                meshes, numCells = self.calculateMeshCells()
-                for mesh, numCell in zip(meshes, numCells):
-                    if numCell > cellsPerProcess*splitMultiplier:
-                        self.splitMESHonce(self.meshes[mesh])
-                        splitConverged = False
-            
-            meshes, numCells = self.calculateMeshCells()
-            mpiProcessInds = np.zeros((len(numCells),))-1
-            mpiProcess = np.zeros((numberOfProcesses,))
-            while np.argwhere(mpiProcessInds == -1).shape[0] > 0:
-                ind = np.argmax(numCells)
-                ind2 = np.argmin(mpiProcess)
-                mpiProcessInds[ind] = ind2
-                mpiProcess[ind2] += numCells[ind]
-                numCells[ind] = 0
-            if np.max(mpiProcess) > cellsPerProcess*splitMultiplier and allowMeshSplitting:
-                mpiConverged = False
-                splitConverged = False
-                splitMultiplier = splitMultiplier*0.9
-        for key, mp in zip(meshes, mpiProcessInds):
-            self.meshes[key]['MPI_PROCESS'] = mp
-        self.mpiProcesses = numberOfProcesses
-        self.meshOrder = np.argsort(mpiProcessInds)
-        
-    def splitMESHonce(self, mesh):
-        IJK = np.round(mesh['IJK'])
-        XB = mesh['XB']
-        dxs = [(XB[1]-XB[0])/float(IJK[0]), (XB[3]-XB[2])/float(IJK[1]), (XB[5]-XB[4])/float(IJK[2])]
-        ind = np.argmax(IJK)
-        if ind == 2:
-            IJK_temp = list(IJK)
-            IJK_temp[2] = 0
-            ind = np.argmax(IJK_temp)
-        
-        IJK2 = list(IJK)
-        XB2 = list(XB)
-        IJK2[ind] = int(IJK[ind]/2)
-        if IJK2[ind] % 2 > 0: IJK2[ind] = IJK2[ind]-1
-        XB2[int(2*ind+1)] = XB2[int(2*ind)] + dxs[ind]*float(IJK2[ind])
-        
-        IJK3 = list(IJK)
-        XB3 = list(XB)
-        IJK3[ind] = IJK[ind] - IJK2[ind]
-        XB3[int(2*ind)] = XB2[int(2*ind+1)]
-        
-        mesh2 = defaultdict(bool)
-        mesh2['ID'] = "%s-00"%(mesh["ID"])
-        mesh2['XB'] = XB2
-        mesh2['IJK'] = IJK2
-        
-        mesh3 = defaultdict(bool)
-        mesh3['ID'] = "%s-01"%(mesh["ID"])
-        mesh3['XB'] = XB3
-        mesh3['IJK'] = IJK3
-        
-        self.meshes.pop(mesh['ID'], False)
-        self.meshes[mesh2['ID']] = mesh2
-        self.meshes[mesh3['ID']] = mesh3
-    
-    def addMESH(self, ID, IJK, XB):
-        mesh = defaultdict(bool)
-        mesh['ID'] = ID
-        mesh['IJK'] = IJK
-        mesh['XB'] = XB
-        self.meshes[ID] = mesh
-        
-    def addREAC(self, ID, FUEL=None, FORMULA=None, AIT=None, SY=None, COY=None, HOC=None,
-                C=None, H=None, O=None, N=None, FYI=None, RF=None):
-        reac = defaultdict(bool)
-        reac['ID'] = ID
-        if FUEL != None: reac['FUEL'] = FUEL
-        if FORMULA != None: reac['FORMULA'] = FORMULA
-        if AIT != None: reac['AUTO_IGNITION_TEMPERATURE'] = AIT
-        if SY != None: reac['SOOT_YIELD'] = SY
-        if COY != None: reac['CO_YIELD'] = COY
-        if HOC != None: reac['HEAT_OF_COMBUSTION'] = HOC
-        if C != None: reac['C'] = C
-        if H != None: reac['H'] = H
-        if O != None: reac['O'] = O
-        if N != None: reac['N'] = N
-        if FYI != None: reac['FYI'] = FYI
-        if RF != None: reac['RADIATIVE_FRACTION'] = RF
-        self.reacs[ID] = reac       
-        
-    def addMATL(self, ID, Emi=None, Den=None, Con=None, Spe=None, kramp=None, cpramp=None, fyi=None):
-        matl = defaultdict(bool)
-        matl['ID'] = ID
-        if Emi != None: matl['EMISSIVITY'] = Emi
-        if Den != None: matl['DENSITY'] = Den
-        if Con != None: matl['CONDUCTIVITY'] = Con
-        if Spe != None: matl['SPECIFIC_HEAT'] = Spe
-        if kramp != None: matl['CONDUCTIVITY_RAMP'] = kramp
-        if cpramp != None: matl['SPECIFIC_HEAT_RAMP'] = cpramp
-        if fyi != None: matl['FYI'] = fyi
-        self.matls[ID] = matl
-    
-    def addRAMP(self, ID, T, F):
-        if self.ramps[ID]:
-            Ts = self.ramps[ID]['T']
-            Fs = self.ramps[ID]['F']
-            for t, f in zip(T, F):
-                Ts.append(t)
-                Fs.append(f)
-            self.ramps[ID]['T'] = Ts
-            self.ramps[ID]['F'] = Fs
-        else:
-            self.ramps[ID] = defaultdict(bool)
-            self.ramps[ID]['T'] = T
-            self.ramps[ID]['F'] = F
-            self.ramps[ID]['ID'] = ID
-    
-    def addSURF(self, ID, Mid=None, Col=None, Thi=None, Bac=None, Geo=None,
-                Fyi=None, Len=None, LeaPat=None, Hrrpua=None, qramp=None,
-                Rgb=None, adiabatic=False, VOLUME_FLOW=None,
-                VEL_T=None):
-        surf = defaultdict(bool)
-        surf['ID'] = ID
-        if Mid != None: surf['MATL_ID'] = Mid
-        if Col != None: surf['COLOR'] = Col
-        if Thi != None: surf['THICKNESS'] = Thi
-        if Bac != None: surf['BACKING'] = Bac
-        if Geo != None: surf['GEOMETRY'] = Geo
-        if Fyi != None: surf['FYI'] = Fyi
-        if Len != None: surf['LENGTH'] = Len
-        if LeaPat != None: surf['LEAK_PATH'] = LeaPat
-        if Hrrpua != None: surf['HRRPUA'] = Hrrpua
-        if qramp != None: surf['RAMP_Q'] = qramp
-        if Rgb != None: surf['RGB'] = Rgb
-        if adiabatic: surf['ADIABATIC'] = True
-        if VOLUME_FLOW != None: surf['VOLUME_FLOW'] = VOLUME_FLOW
-        if VEL_T != None: surf['VEL_T'] = VEL_T
-        self.surfs[ID] = surf
-        
-    def addVENT(self, ID, SURF_ID, XB=None, CTRL_ID=None, MB=None, IOR=None):
-        vent = defaultdict(bool)
-        vent['ID'] = ID
-        vent['SURF_ID'] = SURF_ID
-        if XB != None: vent['XB'] = XB
-        if CTRL_ID != None: vent['CTRL_ID'] = CTRL_ID
-        if MB != None: vent['MB'] = MB
-        if IOR != None: vent['IOR'] = IOR
-        if self.vents[ID]:
-            counter = self.vents[ID]['counter']
-            counter += 1
-            self.vents["%s-%0.0f"%(ID, counter)] = vent
-            self.vents[ID]['counter'] = counter
-        else:
-            vent['counter'] = 0
-            self.vents[ID] = vent
-    
-    def addZONE(self, ID, XB, LEAK_AREA=None):
-        zone = defaultdict(bool)
-        zone['ID'] = ID
-        zone['XB'] = XB
-        if LEAK_AREA != None: zone['LEAK_AREA'] = LEAK_AREA
-        self.zones[ID] = zone
-    
-    def addSLCF(self, Qty, PBX=None, PBY=None, PBZ=None, Vec=False, XB=None, SPEC_ID=None):
-        slcf = defaultdict(bool)
-        slcf['ID'] = "SLCF-%05.0f"%(self.slcfCounter)
-        slcf['QUANTITY'] = Qty
-        if PBX != None: slcf['PBX'] = PBX
-        if PBY != None: slcf['PBY'] = PBY
-        if PBZ != None: slcf['PBZ'] = PBZ
-        if SPEC_ID != None: slcf['SPEC_ID'] = SPEC_ID
-        if Vec: slcf['VECTOR'] = 'TRUE'
-        if XB != None: slcf['XB'] = XB
-        self.slcfCounter += 1
-        self.slcfs[slcf['ID']] = slcf
-    
-    def addBNDF(self, Qty, CELL_CENTERED=None):
-        bndf = defaultdict(bool)
-        bndf['ID'] = "BNDF-%05.0f"%(self.bndfCounter)
-        bndf['QUANTITY'] = Qty
-        if CELL_CENTERED != None: bndf['CELL_CENTERED'] = CELL_CENTERED
-        self.bndfCounter += 1
-        self.bndfs[bndf['ID']] = bndf
-    
-    def getLineType(self, line):
-        lineType = line[:4]
-        return lineType
-    
-    def keyFromLineType(self, lineType):
-        if lineType == 'HEAD': key = 'head'
-        if lineType == 'DEVC': key = 'devcs'
-        if lineType == 'INIT': key = 'inits'
-        if lineType == 'OBST': key = 'obsts'
-        if lineType == 'VENT': key = 'vents'
-        if lineType == 'SURF': key = 'surfs'
-        if lineType == 'RAMP': key = 'ramps'
-        if lineType == 'CTRL': key = 'ctrls'
-        if lineType == 'MESH': key = 'meshes'
-        if lineType == 'SLCF': key = 'slcfs'
-        if lineType == 'BNDF': key = 'bndfs'
-        if lineType == 'TIME': key = 'time'
-        if lineType == 'DUMP': key = 'dump'
-        if lineType == 'MISC': key = 'misc'
-        if lineType == 'ZONE': key = 'zones'
-        if lineType == 'REAC': key = 'reacs'
-        if lineType == 'MATL': key = 'matls'
-        if lineType == 'RADI': key = 'radis'
-        if lineType == 'PRES': key = 'pres'
-        if lineType == 'HOLE': key = 'holes'
-        if lineType == 'PART': key = 'parts'
-        if lineType == 'PROP': key = 'props'
-        if lineType == 'SPEC': key = 'specs'
-        return key
-    
-    def mergeTypeFromLineType(self, lineType):
-        key = 'unknown'
-        if lineType == 'HEAD': key = 'merge'
-        if lineType == 'DEVC': key = 'enumerate'
-        if lineType == 'INIT': key = 'enumerate'
-        if lineType == 'OBST': key = 'enumerate'
-        if lineType == 'VENT': key = 'enumerate'
-        if lineType == 'SURF': key = 'enumerate'
-        if lineType == 'RAMP': key = 'append'
-        if lineType == 'CTRL': key = 'enumerate'
-        if lineType == 'MESH': key = 'enumerate'
-        if lineType == 'SLCF': key = 'enumerate'
-        if lineType == 'BNDF': key = 'enumerate'
-        if lineType == 'TIME': key = 'merge'
-        if lineType == 'DUMP': key = 'merge'
-        if lineType == 'MISC': key = 'merge'
-        if lineType == 'ZONE': key = 'enumerate'
-        if lineType == 'REAC': key = 'enumerate'
-        if lineType == 'MATL': key = 'enumerate'
-        if lineType == 'RADI': key = 'merge'
-        if lineType == 'PRES': key = 'merge'
-        if lineType == 'HOLE': key = 'enumerate'
-        if lineType == 'PART': key = 'enumerate'
-        if lineType == 'PROP': key = 'enumerate'
-        if lineType == 'SPEC': key = 'enumerate'
-        return key
-    
-    def parseLine(self, line, lineType, types, key):
-        lineDict = self.dictFromLine(line, lineType, types)
-        tmp = getattr(self, key)
-        mergeType = self.mergeTypeFromLineType(lineType)
-        if mergeType == 'merge':
-            if not tmp['ID']: tmp['ID'] = defaultdict(bool)
-            tmp['ID'] = self.dictMerge(tmp['ID'], lineDict)
-            setattr(self, key, tmp)
-        elif mergeType == 'append':
-            ID = lineDict['ID']
-            if tmp[ID]:
-                for keyID2 in list(lineDict.keys()):
-                    keyType = getattr(types, lineType.lower())[keyID2]
-                    keyValue = lineDict[keyID2]
-                    if (keyType == 'listrowfloat'):
-                        for v in keyValue:
-                            tmp[ID][keyID2].append(v)
-            else:
-                tmp[ID] = lineDict
-        elif mergeType == 'enumerate':
-            ID = lineDict['ID']
-            if ID is False: ID = "ID"
-            if tmp[ID]:
-                counter = tmp[ID]['counter']
-                tmp["%s-%04.0f"%(ID, counter)] = lineDict
-                tmp[ID]['counter'] += 1
-                pass
-            else:
-                tmp[ID] = lineDict
-                tmp[ID]['counter'] = 0
-        else:
-            assert False, "Stopped"
-    
-    def interpretKey(self, key, lineType, types):
-        keyID = key.split('=')[0]
-        keyValue = '='.join(key.split('=')[1:])
-        #keyValue = key.replace(keyID, '')[1:]
-        regex1 = r"\(\s*.*\)"
-        regex2 = r""
-        try:
-            keyID2 = re.sub(regex1, regex2, keyID)
-        except:
-            keyID2 = keyID
-        while keyID2[-1] == ' ':
-            keyID2 = keyID2[:-1]
-        keyType = getattr(types, lineType.lower())[keyID2]
-        return keyID, keyID2, keyType, keyValue
     
     def dictFromLine(self, line, lineType, types):
+        """Returns a dictionary with keys and values from a namelist
+        
+        Parameters
+        ----------
+        line : str
+            String namelist line
+        lineType : str
+            String type of namelist
+        types : dict
+            Dictionary containing dictionaries of namelist key types
+        
+        Returns
+        -------
+        defaultdict
+            Dictionary containing keys from the namelist line
+        """
+        
         lineDict = defaultdict(bool)
         keys = self.splitLineIntoKeys(line)
         
         for key in keys:
             keyID, keyID2, keyType, keyValue = self.interpretKey(key, lineType, types)
-            '''
-            if lineType != 'OBST':
-                print(line, lineType, keyType, key)
-            '''
-            #print(line, lineType, keyType, key)
             if keyType == 'string':
                 keyValue = keyValue.split("'")[1]
             elif keyType == 'float':
@@ -739,12 +1137,6 @@ class fdsFileOperations(object):
                 keyValues = keyValue.split(",")
                 if 'string' in keyType: keyValues = [x.split("'")[1] for x in keyValues]
                 if 'float' in keyType: keyValues = [float(x) for x in keyValues]
-                '''
-                print(lineType.lower(), keyID, keyID2, keyType)
-                print(keyID)
-                print(re.sub(regex1, '', keyID))
-                print(keyValue)
-                '''
                 tmp = re.search(regex1, keyID)
                 if tmp is not None:
                     ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')]
@@ -766,37 +1158,49 @@ class fdsFileOperations(object):
                 assert False, "Stopped"
             lineDict[keyID2] = keyValue
         return lineDict
-        
-    def parseFDSLines(self, lines):
-        for line in lines:
-            lineType = self.getLineType(line)
-            key = self.keyFromLineType(lineType)
-            types = fdsLineTypes(version=self.version)
-            self.parseLine(line, lineType, types, key)
-        devcKeys = list(self.devcs.keys())
-        devcKeys.remove('unknownCounter')
-        for key in devcKeys:
-            if self.devcs[key]['INIT_ID']:
-                self.devcs[key]['XYZ'] = self.inits[self.devcs[key]['INIT_ID']]['XYZ']
-            else:
-                self.devcs[key].pop('INIT_ID')
     
-    def getMeshLimits(self):
-        meshLimits = defaultdict(bool)
-        limitingXB = [100000, -100000, 100000, -100000, 100000, -100000]
-        for key in list(self.meshes.keys()):
-            mesh = self.meshes[key]
-            XB = mesh['XB']
-            limitingXB[0] = min([limitingXB[0], XB[0]])
-            limitingXB[1] = max([limitingXB[1], XB[1]])
-            limitingXB[2] = min([limitingXB[2], XB[2]])
-            limitingXB[3] = max([limitingXB[3], XB[3]])
-            limitingXB[4] = min([limitingXB[4], XB[4]])
-            limitingXB[5] = max([limitingXB[5], XB[5]])
-            meshLimits[key] = mesh
-        meshLimits['Overall'] = defaultdict(bool)
-        meshLimits['Overall']['XB'] = limitingXB
-        return meshLimits
+    
+    def dictMerge(self, template, master, path=None):
+        """Merges two dictionaries
+        
+        This function merges two dictionaries into a single dictionary.
+        The template dictionary is used as the baseline, and master is
+        merged into template. Entries in master will overwrite entries
+        in template. Note, nested dictionaries will be merged using the
+        same procedure.
+        
+        Parameters
+        ----------
+        template : dict or defaultdict
+            Baseline dictionary
+        master : dict or defaultdict
+            Master dictionary. Entries in template will be overwritten
+            by entries in master.
+        path : str
+            Internal variable storing path to current key.
+            Used in recursive calls for nested dictionaries.
+        
+        Returns
+        -------
+        dict or defaultdict
+            Merged dictionary
+        """
+        
+        if path is None: path = []
+        for key in master:
+            if key in template:
+                tCheck = isinstance(template[key], dict)
+                mCheck = isinstance(master[key], dict)
+                if tCheck and mCheck:
+                    self.dictMerge(template[key], master[key], path + [str(key)])
+                elif template[key] == master[key]:
+                    pass
+                else:
+                    template[key] = master[key]
+            else:
+                template[key] = master[key]
+        return template
+    
     
     def generateFDStext(self):
         date = datetime.date.today()
@@ -840,6 +1244,68 @@ class fdsFileOperations(object):
             text = "%s%s\n"%(text, line)
         
         return text
+
+    def getLineType(self, line):
+        lineType = line[:4]
+        return lineType
+
+    
+    def getMeshLimits(self):
+        meshLimits = defaultdict(bool)
+        limitingXB = [100000, -100000, 100000, -100000, 100000, -100000]
+        for key in list(self.meshes.keys()):
+            mesh = self.meshes[key]
+            XB = mesh['XB']
+            limitingXB[0] = min([limitingXB[0], XB[0]])
+            limitingXB[1] = max([limitingXB[1], XB[1]])
+            limitingXB[2] = min([limitingXB[2], XB[2]])
+            limitingXB[3] = max([limitingXB[3], XB[3]])
+            limitingXB[4] = min([limitingXB[4], XB[4]])
+            limitingXB[5] = max([limitingXB[5], XB[5]])
+            meshLimits[key] = mesh
+        meshLimits['Overall'] = defaultdict(bool)
+        meshLimits['Overall']['XB'] = limitingXB
+        return meshLimits
+
+    def getPolygonNamesFromFdsFile(self):
+        names = []
+        obstList = list(self.obsts.keys())
+        if 'unknownCounter' in obstList: obstList.remove('unknownCounter')
+        for key in obstList:
+            if self.obsts[key]['BNDF_OBST']:
+                names.append(self.obsts[key]["ID"])
+        names = list(set(names))
+        return names
+    
+    
+    
+    def importFile(self, file=None, text=None, textList=None):
+        if file != None:
+            f = self.zopen(file)
+            textFDS = f.read()
+            textFDS = textFDS.decode("utf-8")
+        elif text != None:
+            textFDS = text
+        elif textList != None:
+            textFDS = '\n'.join(textList)
+        lines = self.makeFDSLines(textFDS)
+        self.parseFDSLines(lines)
+        
+        
+    def interpretKey(self, key, lineType, types):
+        keyID = key.split('=')[0]
+        keyValue = '='.join(key.split('=')[1:])
+        #keyValue = key.replace(keyID, '')[1:]
+        regex1 = r"\(\s*.*\)"
+        regex2 = r""
+        try:
+            keyID2 = re.sub(regex1, regex2, keyID)
+        except:
+            keyID2 = keyID
+        while keyID2[-1] == ' ':
+            keyID2 = keyID2[:-1]
+        keyType = getattr(types, lineType.lower())[keyID2]
+        return keyID, keyID2, keyType, keyValue
 
     def keyAssist(self, text, types, dic, internalKeys=['counter'], newline=False):
         keys = list(dic.keys())
@@ -907,7 +1373,46 @@ class fdsFileOperations(object):
             print(dic)
             print(types[key2])
         return text
+
+    def keyFromLineType(self, lineType):
+        if lineType == 'HEAD': key = 'head'
+        if lineType == 'DEVC': key = 'devcs'
+        if lineType == 'INIT': key = 'inits'
+        if lineType == 'OBST': key = 'obsts'
+        if lineType == 'VENT': key = 'vents'
+        if lineType == 'SURF': key = 'surfs'
+        if lineType == 'RAMP': key = 'ramps'
+        if lineType == 'CTRL': key = 'ctrls'
+        if lineType == 'MESH': key = 'meshes'
+        if lineType == 'SLCF': key = 'slcfs'
+        if lineType == 'BNDF': key = 'bndfs'
+        if lineType == 'TIME': key = 'time'
+        if lineType == 'DUMP': key = 'dump'
+        if lineType == 'MISC': key = 'misc'
+        if lineType == 'ZONE': key = 'zones'
+        if lineType == 'REAC': key = 'reacs'
+        if lineType == 'MATL': key = 'matls'
+        if lineType == 'RADI': key = 'radis'
+        if lineType == 'PRES': key = 'pres'
+        if lineType == 'HOLE': key = 'holes'
+        if lineType == 'PART': key = 'parts'
+        if lineType == 'PROP': key = 'props'
+        if lineType == 'SPEC': key = 'specs'
+        return key
     
+    def makeFDSLines(self, textFDS):
+        linesFDS = [x for x in textFDS.split("&")[1:]]
+        for i in range(0, len(linesFDS)):
+            line2 = linesFDS[i]
+            line2 = "%s,"%(line2) if line2[-1] != ',' else line2
+            linesFDS[i] = line2
+        lineTypes = [x[:4] for x in linesFDS]
+        if 'TAIL' in lineTypes:
+            ind = np.argwhere([True if x == 'TAIL' else False for x in lineTypes])[0][0]
+            linesFDS = linesFDS[:ind]
+        return linesFDS
+    
+
     def makeLinesFromDict(self, items, types, prefix, newline=False):
         text = ''
         keys = list(items.keys())
@@ -937,6 +1442,116 @@ class fdsFileOperations(object):
             for F, T in zip(ramps[key]['F'], ramps[key]['T']):
                 text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, /\n"%(text, ID, T, F)
         return text
+
+
+    def mergeTypeFromLineType(self, lineType):
+        key = 'unknown'
+        if lineType == 'HEAD': key = 'merge'
+        if lineType == 'DEVC': key = 'enumerate'
+        if lineType == 'INIT': key = 'enumerate'
+        if lineType == 'OBST': key = 'enumerate'
+        if lineType == 'VENT': key = 'enumerate'
+        if lineType == 'SURF': key = 'enumerate'
+        if lineType == 'RAMP': key = 'append'
+        if lineType == 'CTRL': key = 'enumerate'
+        if lineType == 'MESH': key = 'enumerate'
+        if lineType == 'SLCF': key = 'enumerate'
+        if lineType == 'BNDF': key = 'enumerate'
+        if lineType == 'TIME': key = 'merge'
+        if lineType == 'DUMP': key = 'merge'
+        if lineType == 'MISC': key = 'merge'
+        if lineType == 'ZONE': key = 'enumerate'
+        if lineType == 'REAC': key = 'enumerate'
+        if lineType == 'MATL': key = 'enumerate'
+        if lineType == 'RADI': key = 'merge'
+        if lineType == 'PRES': key = 'merge'
+        if lineType == 'HOLE': key = 'enumerate'
+        if lineType == 'PART': key = 'enumerate'
+        if lineType == 'PROP': key = 'enumerate'
+        if lineType == 'SPEC': key = 'enumerate'
+        return key
+
+    def parseFDSLines(self, lines):
+        for line in lines:
+            lineType = self.getLineType(line)
+            key = self.keyFromLineType(lineType)
+            types = fdsLineTypes(version=self.version)
+            self.parseLine(line, lineType, types, key)
+        devcKeys = list(self.devcs.keys())
+        devcKeys.remove('unknownCounter')
+        for key in devcKeys:
+            if self.devcs[key]['INIT_ID']:
+                self.devcs[key]['XYZ'] = self.inits[self.devcs[key]['INIT_ID']]['XYZ']
+            else:
+                self.devcs[key].pop('INIT_ID')
+    
+    def parseLine(self, line, lineType, types, key):
+        lineDict = self.dictFromLine(line, lineType, types)
+        tmp = getattr(self, key)
+        mergeType = self.mergeTypeFromLineType(lineType)
+        if mergeType == 'merge':
+            if not tmp['ID']: tmp['ID'] = defaultdict(bool)
+            tmp['ID'] = self.dictMerge(tmp['ID'], lineDict)
+            setattr(self, key, tmp)
+        elif mergeType == 'append':
+            ID = lineDict['ID']
+            if tmp[ID]:
+                for keyID2 in list(lineDict.keys()):
+                    keyType = getattr(types, lineType.lower())[keyID2]
+                    keyValue = lineDict[keyID2]
+                    if (keyType == 'listrowfloat'):
+                        for v in keyValue:
+                            tmp[ID][keyID2].append(v)
+            else:
+                tmp[ID] = lineDict
+        elif mergeType == 'enumerate':
+            ID = lineDict['ID']
+            if ID is False: ID = "ID"
+            if tmp[ID]:
+                counter = tmp[ID]['counter']
+                tmp["%s-%04.0f"%(ID, counter)] = lineDict
+                tmp[ID]['counter'] += 1
+                pass
+            else:
+                tmp[ID] = lineDict
+                tmp[ID]['counter'] = 0
+        else:
+            assert False, "Stopped"
+
+
+
+
+
+
+
+    
+    
+    def saveModel(self, mpiProcesses, location,
+                  allowMeshSplitting=True, splitMultiplier=1.2):
+        """Saves an fds input file
+        
+        Input file is generated based on internal attribute namelist
+        dictionaries. This functiona also allows splitting of meshes to
+        optimize mpi processes balance.
+        
+        Parameters
+        ----------
+        mpiProcesses : int
+            The number of mpi processes to define in the input file
+        location : str
+            The path location to save the input file
+        allowMeshSplitting : bool, optional
+            Flag to enable mesh splitting for balancing mpi processes
+            (default is True)
+        splitMultiplier : float, optional
+            Tolerance used in mesh splitting (default is 1.2)
+        """
+        
+        self.addMPIprocesses(mpiProcesses, allowMeshSplitting=allowMeshSplitting, splitMultiplier=splitMultiplier)
+        text = self.generateFDStext()
+        with open(location, 'w') as f:
+            f.write(text)
+        print("Input file written to: %s"%(location))
     
     def splitLineIntoKeys(self, line2):
         line = line2.replace('\n', ',').replace('\r', ',')
@@ -971,3 +1586,76 @@ class fdsFileOperations(object):
                 txt = txt[:-1]
             updatedKeys[i] = txt
         return updatedKeys
+
+
+
+
+        
+    def splitMESHonce(self, mesh):
+        IJK = np.round(mesh['IJK'])
+        XB = mesh['XB']
+        dxs = [(XB[1]-XB[0])/float(IJK[0]), (XB[3]-XB[2])/float(IJK[1]), (XB[5]-XB[4])/float(IJK[2])]
+        ind = np.argmax(IJK)
+        if ind == 2:
+            IJK_temp = list(IJK)
+            IJK_temp[2] = 0
+            ind = np.argmax(IJK_temp)
+        
+        IJK2 = list(IJK)
+        XB2 = list(XB)
+        IJK2[ind] = int(IJK[ind]/2)
+        if IJK2[ind] % 2 > 0: IJK2[ind] = IJK2[ind]-1
+        XB2[int(2*ind+1)] = XB2[int(2*ind)] + dxs[ind]*float(IJK2[ind])
+        
+        IJK3 = list(IJK)
+        XB3 = list(XB)
+        IJK3[ind] = IJK[ind] - IJK2[ind]
+        XB3[int(2*ind)] = XB2[int(2*ind+1)]
+        
+        mesh2 = defaultdict(bool)
+        mesh2['ID'] = "%s-00"%(mesh["ID"])
+        mesh2['XB'] = XB2
+        mesh2['IJK'] = IJK2
+        
+        mesh3 = defaultdict(bool)
+        mesh3['ID'] = "%s-01"%(mesh["ID"])
+        mesh3['XB'] = XB3
+        mesh3['IJK'] = IJK3
+        
+        self.meshes.pop(mesh['ID'], False)
+        self.meshes[mesh2['ID']] = mesh2
+        self.meshes[mesh3['ID']] = mesh3
+
+    
+
+
+
+
+    
+    def zopen(self, file):
+        if '.zip' in file:
+            zname = '%s.zip'%(file.split('.zip')[0])
+            fname = file.split('.zip%s'%(os.sep))[1]
+            zip = zipfile.ZipFile(zname, 'r')
+            f = zip.open(fname)
+        else:
+            f = open(file, 'rb')
+        return f
+
+    
+
+    
+
+    
+    
+    
+
+    
+    
+
+    
+
+
+    
+    
+

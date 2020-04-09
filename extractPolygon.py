@@ -18,14 +18,9 @@
 # # IMPORTS
 #=======================================================================
 import numpy as np
-import matplotlib.colors as pltc
 import os
 from collections import defaultdict
-import sys
 #from . import utilities as ut
-
-from pyqtgraph.Qt import QtCore, QtGui
-import pyqtgraph.opengl as gl
 
 from .fdsFileOperations import fdsFileOperations
 from .utilities import in_hull, zreadlines, getFileList, pts2polygons
@@ -163,70 +158,6 @@ def parseFDSforVID(file,vName):
                 vID = vIDCounter
     return vID
 
-def getMaxValueVersusTime(timeParameters,otherParameters,polygons):
-    (initialTime,finalTime) = (timeParameters[0],timeParameters[1])
-    (intervalTime,bandTime) = (timeParameters[2],timeParameters[3])
-    (dataDir,chid,vIDs) = (otherParameters[0],otherParameters[1],otherParameters[2])
-    (outName,orientations) = (otherParameters[3],otherParameters[4])
-    (dLimited,dLimits) = (otherParameters[5],otherParameters[6])
-    (saveOutputs,names) = (otherParameters[7],otherParameters[8])
-    (outDir,vName) = (otherParameters[9],otherParameters[10])
-    (chid) = (otherParameters[11])
-    times = [initialTime]
-    mPts = []
-    while times[-1] + bandTime/2-intervalTime < finalTime:
-        timeStart = max([times[-1]-bandTime/2,initialTime])
-        timeEnd = min([times[-1]+bandTime/2,finalTime])
-        oPts = []
-        allPts = [[] for x in polygons]
-        for orientation in orientations:
-            pts = []
-            for vID in vIDs:
-                inName = buildFDS2asciiInput(dataDir,chid,vID,outName,
-                                             timeStart,timeEnd,orientation,
-                                             domainLimited=dLimited,
-                                             domainLimits=dLimits)
-                logfile = runFDS2ascii(dataDir,inName,outName)
-                vpts = loadFDS2asciiPoints(dataDir+os.sep+outName)
-                deleteFDS2asciiOutput(dataDir,inName,outName,logfile)
-                if len(pts) == 0:
-                    pts = vpts
-                else:
-                    pts.extend(vpts)
-            pPts = []
-            for i in range(0,len(polygons)):
-                linkedpolygons = polygons[i]
-                vpts = []
-                for p in linkedpolygons:
-                    for pt in pts:
-                        if ut.pnt_in_cvex_hull(p, pt[:-1]):
-                            vpts.append(pt)
-                #vpts = np.array(vpts)
-                if len(vpts) > 0:
-                    mPt = np.max(np.array(vpts)[:,3])
-                else:
-                    mPt = -1
-                pPts.append(mPt)
-                allPts[i].append(vpts)
-            oPts.append(pPts)
-        oPts = np.array(oPts)
-        if saveOutputs:
-            for i in range(0,len(polygons)):
-                thesePoints = []
-                for pt in allPts[i]:
-                    if len(thesePoints) == 0:
-                        thesePoints = pt
-                    else:
-                        thesePoints.extend(pt)
-                np.savetxt(outDir+os.sep+chid+'_'+names[i]+'_t_%.0f_%.0f.csv'%(timeStart,timeEnd),
-                           np.squeeze(thesePoints),delimiter=',',header='X (m),Y (m), Z (m), %s\n'%(vName))
-        
-        mPts.append(np.max(oPts,axis=0))
-        times.append(times[-1]+intervalTime)
-    mPts = np.array(mPts)
-    times = np.array(times)[:-1]
-    return mPts, times
-
 def getCoordinateMasks(coords,polygons):
     masks = np.zeros((coords.shape[0],len(polygons)))
     for i in range(0,len(polygons)):
@@ -234,12 +165,6 @@ def getCoordinateMasks(coords,polygons):
         for p in linkedpolygons:
             masks[np.where(in_hull(coords,p.points)),i] = 1
     return masks
-
-def in_hull(p,hull):
-    from scipy.spatial import Delaunay
-    if not isinstance(hull,Delaunay):
-        hull = Delaunay(hull)
-    return hull.find_simplex(p)>=0
 
 def getCoordinateMasks2(coords,polygons):
     masks = np.zeros((coords.shape[0],len(polygons)))

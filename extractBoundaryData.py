@@ -15,17 +15,14 @@
 #=======================================================================
 # # IMPORTS
 #=======================================================================
-import sys
 import os
-import matplotlib.colors as pltc
-import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from collections import defaultdict
 import glob
-import struct
-from .utilities import zopen, in_hull, zreadlines, getFileList
+from .utilities import zopen, in_hull, zreadlines, getFileList, pts2polygons
 from .fdsFileOperations import fdsFileOperations
+from .smokeviewParser import parseSMVFile
 
 class fdspatch(object):
     def __init__(self,NX,NY,NT,DS,OR):
@@ -128,7 +125,6 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz, axis):
         x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
         z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
     if abs(axis) == 3:
-        #print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz, axis)
         x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
         z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
     
@@ -138,31 +134,22 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz, axis):
     for patch in patches:
         lims = patch.lims
         if abs(axis) == 1:
-            xInd1 = np.argwhere(np.isclose(x_grid_abs, lims[2]))[0][1]
-            xInd2 = np.argwhere(np.isclose(x_grid_abs, lims[3]))[0][1]
-            zInd1 = np.argwhere(np.isclose(z_grid_abs, lims[4]))[1][0]
-            zInd2 = np.argwhere(np.isclose(z_grid_abs, lims[5]))[1][0]
-            x = np.linspace(lims[2], lims[3], int((xInd2-xInd1)))
-            z = np.linspace(lims[4], lims[5], int((zInd2-zInd1)))
-        if abs(axis) == 2:
-            xInd1 = np.argwhere(np.isclose(x_grid_abs, lims[0]))[0][1]
-            xInd2 = np.argwhere(np.isclose(x_grid_abs, lims[1]))[0][1]
-            zInd1 = np.argwhere(np.isclose(z_grid_abs, lims[4]))[1][0]
-            zInd2 = np.argwhere(np.isclose(z_grid_abs, lims[5]))[1][0]
-            x = np.linspace(lims[0], lims[1], int((xInd2-xInd1)))
-            z = np.linspace(lims[4], lims[5], int((zInd2-zInd1)))
-        if abs(axis) == 3:
-            xInd1 = np.argwhere(np.isclose(x_grid_abs, lims[0]))[0][1]
-            xInd2 = np.argwhere(np.isclose(x_grid_abs, lims[1]))[0][1]
-            zInd1 = np.argwhere(np.isclose(z_grid_abs, lims[2]))[1][0]
-            zInd2 = np.argwhere(np.isclose(z_grid_abs, lims[3]))[1][0]
-            x = np.linspace(lims[0], lims[1], int((xInd2-xInd1)))
-            z = np.linspace(lims[2], lims[3], int((zInd2-zInd1)))
+            (xMin, xMax, zMin, zMax) = (lims[2], lims[3], lims[4], lims[5])
+        elif abs(axis) == 2:
+            (xMin, xMax, zMin, zMax) = (lims[0], lims[1], lims[4], lims[5])
+        elif abs(axis) == 3:
+            (xMin, xMax, zMin, zMax) = (lims[0], lims[1], lims[2], lims[3])
+        else:
+            assert False, "Axis %0.0f not in [-1, -2, -3, 1, 2, 3]."%(axis)
+        xInd1 = np.argwhere(np.isclose(x_grid_abs, xMin))[0][1]
+        xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax))[0][1]
+        zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin))[1][0]
+        zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax))[1][0]
         for t in range(0, patch.data.shape[2]):
-            try:
-                data_abs[zInd1:zInd2, xInd1:xInd2, t] = patch.data[:, :, t].T
-            except:
-                pass
+            #try:
+            data_abs[zInd1:zInd2, xInd1:xInd2, t] = patch.data[:, :, t].T
+            #except:
+            #    pass
     return x_grid_abs, z_grid_abs, data_abs
 
 def parseBndfHeader(f):
@@ -364,27 +351,6 @@ def readInputFile(file):
     params = defaultdict(bool,yaml.load(open(file,'r')))
     return params
 
-def getPolygonNames(params, obsts):
-    ''' Get names from entries in parameter dictionary '''
-    if params['polygons']:
-        names = []
-        for p in params['polygons']:
-            if params[p]:
-                pDict = defaultdict(bool,params[p])
-                if pDict['name']:
-                    names.append(pDict['name'])
-                else:
-                    names.append(p)
-            else:
-                names.append(p)
-    else:
-        names = []
-        for key in list(fdsObsts.keys()):
-            if fdsObsts[key]['BNDF_OBST']:
-                names.append(fdsObsts[key]['ID'])
-        params['polygons'] = names
-    return names, params
-
 def parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0],fileSMV=None):
     ''' This routine parses an FDS file looking for a list of names and
     stores a list of points defining polygons for each name which is
@@ -416,34 +382,6 @@ def parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0],fileSMV=None):
         polygons.append(linkedPolygons)
     return polygons
 
-def loadBNDFdata(params, bndfs, smvGrids, smvObsts):
-    tStart, tEnd, tBand, tInt = extractTimeParams(params)
-    coords2, pts2, times, orients2 = f2a.getPointsFromFiles(bndfs, smvGrids, smvObsts, tStart, tEnd, tBand, tInt)
-    orientInds = np.where([True if x in params['orientations'] else False for x in orients2])[0]
-    
-    coords = coords2[orientInds,:]
-    pts = pts2[orientInds,:]
-    orients = orients2[orientInds]
-    
-    # Generate point mask for polygons
-    masks = getCoordinateMasks(coords,polygons)
-    
-    mPts = np.zeros((pts.shape[1],masks.shape[1]))
-    for i in range(0,masks.shape[1]):
-        if np.where(masks[:,i] == 1)[0].shape[0] > 1:
-            mPts[:,i] = np.nanmax(pts[masks[:,i] == 1],axis=0)
-            if params['savePolygons']:
-                np.savetxt('polygon%02.0f.csv'%(i),coords[masks[:,i] == 1,:],delimiter=',',header='x,y,z')
-        else:
-            mPts[:,i] = -1
-    
-    # Remove last time if it is zero
-    if times[-1] == 0:
-        mPts = np.delete(mPts,mPts.shape[0]-1,axis=0)
-        times = np.delete(times,times.shape[0]-1,axis=0)
-        
-    return times, mPts, orients
-
 def loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts, orientations, polygons):
     coords2, pts2, times, orients2 = getPointsFromFiles(bndfs, smvGrids, smvObsts, tStart, tEnd, tBand, tInt)
     if orientations[0] == 0:
@@ -461,8 +399,6 @@ def loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts
     for i in range(0,masks.shape[1]):
         if np.where(masks[:,i] == 1)[0].shape[0] > 1:
             mPts[:,i] = np.nanmax(pts[masks[:,i] == 1],axis=0)
-            #if params['savePolygons']:
-            #    np.savetxt('polygon%02.0f.csv'%(i),coords[masks[:,i] == 1,:],delimiter=',',header='x,y,z')
         else:
             mPts[:,i] = -1
     
@@ -491,16 +427,12 @@ def readBoundaryFile(fname):
         
         data = np.fromfile(f,dtype=np.int32,count=5)
         npatch = data[2]
-        #print(quantity, shortName, units, npatch)
         pts = 0
         patchPts = []
         patchDs = []
         patchIors = []
         for k in range(0,npatch):
             data = np.fromfile(f,dtype=np.int32,count=11)
-            #data2 = np.fromfile(f,dtype=np.int32,count=2)
-            #data3 = np.fromfile(f,dtype=np.int8,count=8)
-            #data2 = np.fromfile(f,dtype=np.int32,count=4)
             (dx,dy,dz) = (data[1]-data[0],data[3]-data[2],data[5]-data[4])
             
             if abs(data[6]) == 1:
@@ -513,7 +445,6 @@ def readBoundaryFile(fname):
                 dx = dx+1
                 dy = dy+1
             nPts = np.max([dx,1])*np.max([dy,1])*np.max([dz,1])+2
-            #print(data,data2,data3,nPts)
             patchPts.append([pts,pts+nPts])
             patchDs.append([dx,dy,dz,data[0],data[1],data[2],data[3],data[4],data[5]])
             patchIors.append(data[6])
@@ -666,3 +597,27 @@ def linkBndfFileToMesh(meshes, bndfs, fdsQuantities):
         bndf_dic[qty] = bndf_qty
     return bndf_dic
 
+def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, chid, fdsQuantities,
+                         tStart=0, tEnd=120, tInt=1, tBand=3, orientations=[0]):
+    fdsFile = fdsFileOperations()
+    fdsFile.importFile(fdsFilePath)
+    meshes = list(fdsFile.meshes.keys())
+    names = fdsFile.getPolygonNamesFromFdsFile()
+    smvGrids, smvObsts, smvBndfs, smvSurfs = parseSMVFile(smvFilePath)
+    #linesSMV = zreadlines(smvFilePath)
+    points = parseFDSforPts(fdsFile.obsts, smvObsts, names, extend=[0,0,0])
+    polygons, numberOfGroups = pts2polygons(points)
+    
+    bndfs = getFileList(resultDir, chid, 'bf')
+    bndf_dic = linkBndfFileToMesh(meshes, bndfs, fdsQuantities)
+    
+    smvGrids, smvObsts, smvBndfs, smvSurfs = parseSMVFile(smvFilePath)
+    
+    datas = defaultdict(bool)
+    for qty in fdsQuantities:
+        datas[qty] = defaultdict(bool)
+        times, mPts, orients = loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndf_dic[qty], smvGrids, smvObsts, orientations, polygons)
+        datas[qty]['TIMES'] = times
+        datas[qty]['NAMES'] = names
+        datas[qty]['DATA'] = mPts
+    return datas

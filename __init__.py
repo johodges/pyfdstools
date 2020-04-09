@@ -22,7 +22,6 @@
 from .smokeviewParser import *
 from .extractBoundaryData import *
 from .extractPlot3Ddata import *
-from .extractPolygon import *
 from .fdsErrorCalculation import *
 from .fdsTypes import *
 from .fdsFileOperations import *

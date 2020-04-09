@@ -117,6 +117,14 @@ def exampleExtractBndfMax(resultDir=None, chid=None, fdsFile=None, smvFile=None,
                           tStart=0, tEnd=120, tInt=1, tBand=3, orientations=[0],
                           axis=-2, value=4.4,
                           qnty_mn=20, qnty_mx=100):
+    """This class defines operations that can be used to read, modify,
+    and generate FDS input files.
+    
+    This is the further elaboration of the docstring. Within this section,
+    you can elaborate further on details as appropriate for the situation.
+    Notice that the summary and the elaboration is separated by a blank new
+    line.
+    """
     if chid is None: chid = "case001"
     if resultDir is None: resultDir = os.path.abspath("examples%s%s.zip"%(os.sep, chid))
     if fdsFile is None: fdsFilePath = fds.getFileList(resultDir, chid, 'fds')[0]

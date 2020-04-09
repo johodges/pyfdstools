@@ -44,6 +44,8 @@ class fdsLineTypes(object):
         self.head = self.getHEADtypes(version)
         self.ramp = self.getRAMPtypes(version)
         self.part = self.getPARTtypes(version)
+        self.spec = self.getSPECtypes(version)
+        self.prop = self.getPROPtypes(version)
         
     def getRAMPtypes(self, version="6.7.4"):
         rampTypes = defaultdict(bool)
@@ -51,6 +53,28 @@ class fdsLineTypes(object):
         rampTypes['F'] = 'listrowfloat'
         rampTypes['ID'] = 'string'
         return rampTypes
+    
+    def getPROPtypes(self, version="6.7.4"):
+        propTypes = defaultdict(bool)
+        propTypes['ID'] = 'string'
+        propTypes['QUANTITY'] = 'string'
+        propTypes['ACTIVATION_TEMPERATURE'] = 'float'
+        propTypes['RTI'] = 'float'
+        propTypes['PART_ID'] = 'string'
+        propTypes['FLOW_RATE'] = 'float'
+        propTypes['PARTICLE_VELOCITY'] = 'float'
+        propTypes['SPRAY_ANGLE'] = 'listfloat'
+        return propTypes
+    
+    def getSPECtypes(self, version="6.7.4"):
+        specTypes = defaultdict(bool)
+        specTypes['ID'] = 'string'
+        specTypes['DENSITY_LIQUID'] = 'float'
+        specTypes['SPECIFIC_HEAT_LIQUID'] = 'float'
+        specTypes['VAPORIZATION_TEMPERATURE'] = 'float'
+        specTypes['MELTING_TEMPERATURE'] = 'float'
+        specTypes['HEAT_OF_VAPORIZATION'] = 'float'
+        return specTypes
         
     def getMATLtypes(self, version="6.7.4"):
         matlTypes = defaultdict(bool)
@@ -134,6 +158,7 @@ class fdsLineTypes(object):
         surfTypes['TMP_FRONT'] = 'float'
         surfTypes['RADIUS'] = 'float'
         surfTypes['TRANSPARENCY'] = 'float'
+        surfTypes['TAU_V'] = 'float'
         return surfTypes
 
     def getVENTtypes(self, version="6.7.4"):
@@ -144,6 +169,7 @@ class fdsLineTypes(object):
         surfTypes['CTRL_ID'] = 'string'
         surfTypes['SURF_ID'] = 'string'
         surfTypes['IOR'] = 'int'
+        surfTypes['DEVC_ID'] = 'string'
         surfTypes['number'] = 'ignore'
         surfTypes['unknownCounter'] = 'ignore'
         return surfTypes
@@ -179,6 +205,14 @@ class fdsLineTypes(object):
         partTypes['ID'] = 'string'
         partTypes['SURF_ID'] = 'string'
         partTypes['STATIC'] = 'bool'
+        partTypes['DRAG_LAW'] = 'string'
+        partTypes['FREE_AREA_FRACTION'] = 'float'
+        partTypes['ORIENTATION'] = 'matrixint'
+        partTypes['SPEC_ID'] = 'string'
+        partTypes['DIAMETER'] = 'float'
+        partTypes['DISTRIBUTION'] = 'string'
+        partTypes['COLOR'] = 'string'
+        partTypes['AGE'] = 'float'
         return partTypes
     
     def getHOLEtypes(self, version="6.7.4"):
@@ -199,6 +233,8 @@ class fdsLineTypes(object):
         initTypes['N_PARTICLES'] = 'int'
         initTypes['DX'] = 'float'
         initTypes['PART_ID'] = 'string'
+        initTypes['N_PARTICLES_PER_CELL'] = 'int'
+        initTypes['CELL_CENTERED'] = 'bool'
         return initTypes
 
     def getDEVCtypes(self, version="6.7.4"):
@@ -215,6 +251,7 @@ class fdsLineTypes(object):
         devcTypes['SPATIAL_STATISTIC'] = 'string'
         devcTypes['STATISTICS'] = 'string'
         devcTypes['DUCT_ID'] = 'string'
+        devcTypes['PROP_ID'] = 'string'
         devcTypes['SPEC_ID'] = 'string'
         devcTypes['unknownCounter'] = 'ignore'
         return devcTypes
@@ -287,6 +324,7 @@ class fdsLineTypes(object):
         miscTypes['SUPPRESSION'] = 'bool'
         miscTypes['BNDF_DEFAULT'] = 'bool'
         miscTypes['ID'] = 'ignore'
+        miscTypes['Y_O2_INFTY'] = 'float'
         return miscTypes
     
     def getHEADtypes(self, version="6.7.4"):

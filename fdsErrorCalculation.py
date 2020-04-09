@@ -24,7 +24,8 @@ import os
 from .colorSchemes import getVTcolors
 
 def readErrorTable(fdsVersion='6.7.1'):
-    file = os.path.abspath("fdsErrorTables%s%s.csv"%(os.sep, fdsVersion))
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    file = os.path.abspath("%s%sfdsErrorTables%s%s.csv"%(dir_path, os.sep, os.sep, fdsVersion))
     data = pd.read_csv(file, index_col=0)
     keys = list(data.index.values)
     return data, keys

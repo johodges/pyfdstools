@@ -24,100 +24,290 @@ from .utilities import zopen, in_hull, zreadlines, getFileList, pts2polygons
 from .fdsFileOperations import fdsFileOperations
 from .smokeviewParser import parseSMVFile
 
+
 class fdspatch(object):
-    def __init__(self,NX,NY,NT,DS,OR):
-        self.data = np.zeros((NX,NY,NT))
+    """
+    A class used to represent a patch from an FDS boundary file
+
+    ...
+
+    Attributes
+    ----------
+    data : int array(NX, NY, NT)
+        array containing data from the patch
+    lims : float array(6)
+        Six component array containing X_min, X_max, Y_min, Y_max,
+        Z_min, Z_max coordinates
+    orientation : int
+        Integer specifying the orientation of the patch
+    x : array(NX, NY)
+        array containing x-coordinates of the patch
+    y : array(NX, NY)
+        array containing y-coordinates of the patch
+    z : array(NX, NY)
+        array containing z-coordinates of the patch
+
+
+    Methods
+    -------
+    append(data, iT)
+        Adds data from one time stamp to the data attribute
+    average(inds)
+        Averages data from multiple time stamps
+    buildSpace()
+        Builds x, y, z coordinates
+    extractPoints()
+        Extracts points from data array
+    """
+    
+    def __init__(self, NX, NY, NT, DS, OR):
+        """
+        Parameters
+        ----------
+        NX : int
+            Number of cells in the x-direction
+        NY : int
+            Number of cells in the y-direction
+        NT : int
+            Number of time stamps
+        DS : array(6)
+            Six component array containing X_min, X_max, Y_min, Y_max,
+            Z_min, Z_max coordinates
+        OR : int
+            Integer specifying the orientation of the patch
+        """
+        
+        self.data = np.zeros((NX, NY, NT))
         self.lims = DS
         self.orientation = OR
-    def append(self,data,iT):
+        
+        
+    def append(self, data, iT):
+        """Adds data from one time stamp to the data attribute
+        
+        Parameters
+        ----------
+        data : int array(NX, NY, NT)
+            array containing data from the patch
+        iT : int
+            time index
+        """
+        
         if len(data.shape) == 3:
             self.data[:, :, iT] = data[:, :, 0]
         else:
-            self.data[:,:,iT] = data
-    def average(self,inds):
-        return np.mean(self.data[:,:,inds],axis=2)
+            self.data[:, :, iT] = data
+        
+        
+    def average(self, inds):
+        """Averages data from multiple time stamps
+        
+        Parameters
+        ----------
+        inds : list
+            List of indices to include in average
+        
+        Returns
+        -------
+        array(NX, NY)
+            Array containing time-averaged data
+        """
+        
+        return np.mean(self.data[:, :, inds], axis=2)
+    
+    
     def buildSpace(self):
-        (NX,NY) = (self.data.shape[0],self.data.shape[1])
+        """Builds x, y, z coordinates
+        
+        This function builds an array of the x, y, and z coordinates and
+        stores them in the x, y, and z attributes
+        """
+        
+        (NX, NY) = (self.data.shape[0], self.data.shape[1])
         if self.lims[0] == self.lims[1]:
-            xGrid = np.zeros((NX,NY))+self.lims[0]
-            y = np.linspace(self.lims[2],self.lims[3],NX)
-            z = np.linspace(self.lims[4],self.lims[5],NY)
-            yGrid,zGrid = np.meshgrid(y,z)
+            xGrid = np.zeros((NX, NY)) + self.lims[0]
+            y = np.linspace(self.lims[2], self.lims[3], NX)
+            z = np.linspace(self.lims[4], self.lims[5], NY)
+            yGrid, zGrid = np.meshgrid(y, z)
         elif self.lims[2] == self.lims[3]:
-            yGrid = np.zeros((NX,NY))+self.lims[2]
-            x = np.linspace(self.lims[0],self.lims[1],NX)
-            z = np.linspace(self.lims[4],self.lims[5],NY)
-            xGrid,zGrid = np.meshgrid(x,z)
+            yGrid = np.zeros((NX, NY)) + self.lims[2]
+            x = np.linspace(self.lims[0], self.lims[1], NX)
+            z = np.linspace(self.lims[4], self.lims[5], NY)
+            xGrid, zGrid = np.meshgrid(x, z)
         elif self.lims[4] == self.lims[5]:
-            zGrid = np.zeros((NX,NY))+self.lims[4]
-            x = np.linspace(self.lims[0],self.lims[1],NX)
-            y = np.linspace(self.lims[2],self.lims[3],NY)
-            xGrid,yGrid = np.meshgrid(x,y)
-        self.x = xGrid
-        self.y = yGrid
-        self.z = zGrid
+            zGrid = np.zeros((NX, NY)) + self.lims[4]
+            x = np.linspace(self.lims[0], self.lims[1], NX)
+            y = np.linspace(self.lims[2], self.lims[3], NY)
+            xGrid, yGrid = np.meshgrid(x, y)
+        (self.x, self.y, self.z) = (xGrid, yGrid, zGrid)
+        
+        
     def extractPoints(self):
-        pts = np.zeros((self.data.shape[0]*self.data.shape[1],self.data.shape[2]))
-        for iT in range(0,self.data.shape[2]):
-            pts[:,iT] = self.data[:,:,iT].flatten()
-        coords = np.zeros((self.data.shape[0]*self.data.shape[1],3))
-        coords[:,0] = self.x.flatten()
-        coords[:,1] = self.y.flatten()
-        coords[:,2] = self.z.flatten()
-        orients = np.zeros((self.data.shape[0]*self.data.shape[1],))+self.orientation
+        """Extracts points from patches
+        
+        Returns
+        -------
+        array(NX*NY, 3)
+            Array containing x, y, z coordinates of points from patch
+        array(NX*NY, NT)
+            Array containing data for each point for each time stamp
+        array(NX*NY, 1)
+            Array containing orientation for each point
+        """
+        
+        NX, NY, NT = self.data.shape
+        pts = np.zeros((NX*NY, NT))
+        coords = np.zeros((NX*NY, 3))
+        for iT in range(0, NT):
+            pts[:, iT] = self.data[:, :, iT].flatten()
+        coords[:, 0] = self.x.flatten()
+        coords[:, 1] = self.y.flatten()
+        coords[:, 2] = self.z.flatten()
+        orients = np.zeros((NX*NY,)) + self.orientation
         return coords, pts, orients
-
-def getPatches(bndfFile, smvFile, axis, value, meshNum, xmin=999, xmax=-999, ymin=999, ymax=-999, zmin=999, zmax=-999, dx=999, dz=999):
+    
+    
+def getPatches(bndfFile, smvFile, axis, value, meshNum,
+               xmin=999, xmax=-999, ymin=999, ymax=-999,
+               zmin=999, zmax=-999, dx=999, dz=999):
+    """Read patches from boundary file
+    
+    Parameters
+    ----------
+    bndfFile : str
+        String containing the path to an archive or boundary file
+    smvFile : str
+        String containing the path to an archive or boundary file
+    axis : int
+        Integer representing the axis of the patch
+    value : float
+        Location along axis of the patch
+    meshNum : int
+        Integer number of the mesh
+    xmin : float, optional
+        Initialized minimum x value of the patches (default 999)
+    xmax : float, optional
+        Initialized maximum x value of the patches (default -999)
+    ymin : float, optional
+        Initialized minimum y value of the patches (default 999)
+    ymax : float, optional
+        Initialized maximum y value of the patches (default -999)
+    zmin : float, optional
+        Initialized minimum z value of the patches (default 999)
+    zmax : float, optional
+        Initialized maximum z value of the patches (default -999)
+    dx : float, optional
+        Initialized x-delta of the patch (default 999)
+    dz : float, optional
+        Initialized z-delta of the patch (default 999)
+    
+    Returns
+    -------
+    list
+        List of floats containing the time stamps
+    list
+        List of patches
+    float
+        Minimum x value of the patches
+    float
+        Maximum x value of the patches
+    float
+        Minimum y value of the paches
+    float
+        Maximum y value of the patches
+    float
+        Minimum z value of the patches
+    float
+        Maximum z value of the patches
+    float
+        X-axis delta of the patches
+    float
+        Z-axis delta of the patches
+    """
+    
     f = zopen(bndfFile)
     quantity, shortName, units, npatch = parseBndfHeader(f)
     patchInfo, data = parseBndfPatches(f, npatch)
     f.close()
     (patchPts,patchDs,patchIors) = patchInfo
-    grid, obst, bndfs = buildMesh(smvFile)
     
-    times, patches = importBoundaryFile(bndfFile, smvFile, gridNum=meshNum)
+    times, patches = importBoundaryFile(
+            bndfFile, smvFile, gridNum=meshNum)
     allPatches = []
     for i in range(0, len(patches)):
-        patches[i].data[patches[i].data < -50] = np.nan
+        patches[i].data[patches[i].data < -1e10] = np.nan
         lims = patches[i].lims
         if lims[0] == lims[1]:
-            #print(lims, patches[i].data.shape)
             pass
         if patches[i].data.shape[0]*patches[i].data.shape[1] > -1:
             check = False
-            if (abs(axis) == 1) and ((lims[0] == value) and (lims[1] == value)): check = True
-            if (abs(axis) == 2) and ((lims[2] == value) and (lims[3] == value)): check = True
-            if (abs(axis) == 3) and ((lims[4] == value) and (lims[5] == value)): check = True
+            if (abs(axis) == 1):
+                if (lims[0] == value) and (lims[1] == value):
+                    check = True
+            if (abs(axis) == 2):
+                if (lims[2] == value) and (lims[3] == value):
+                    check = True
+            if (abs(axis) == 3):
+                if (lims[4] == value) and (lims[5] == value):
+                    check = True
             if check and (axis == patchIors[i]):
                 allPatches.append(patches[i])
-                (xmin, xmax) = (min([xmin, lims[0]]), max([xmax, lims[1]]))
-                (ymin, ymax) = (min([ymin, lims[2]]), max([ymax, lims[3]]))
-                (zmin, zmax) = (min([zmin, lims[4]]), max([zmax, lims[5]]))
+                xmin = min([xmin, lims[0]])
+                xmax = max([xmax, lims[1]])
+                ymin = min([ymin, lims[2]])
+                ymax = max([ymax, lims[3]])
+                zmin = min([zmin, lims[4]])
+                zmax = max([zmax, lims[5]])
+                NX, NZ, NT = patches[i].data.shape
                 if abs(axis) == 1:
-                    dx = np.round((lims[3]-lims[2])/(patches[i].data.shape[0]), decimals=4)
-                    dz = np.round((lims[5]-lims[4])/(patches[i].data.shape[1]), decimals=4)
+                    dx = np.round((lims[3]-lims[2])/NX, decimals=4)
+                    dz = np.round((lims[5]-lims[4])/NZ, decimals=4)
                 elif abs(axis) == 2:
-                    dx = np.round((lims[1]-lims[0])/(patches[i].data.shape[0]), decimals=4)
-                    dz = np.round((lims[5]-lims[4])/(patches[i].data.shape[1]), decimals=4)
+                    dx = np.round((lims[1]-lims[0])/NX, decimals=4)
+                    dz = np.round((lims[5]-lims[4])/NZ, decimals=4)
                 elif abs(axis) == 3:
-                    dx = np.round((lims[1]-lims[0])/(patches[i].data.shape[0]), decimals=4)
-                    dz = np.round((lims[3]-lims[2])/(patches[i].data.shape[1]), decimals=4)
+                    dx = np.round((lims[1]-lims[0])/NX, decimals=4)
+                    dz = np.round((lims[3]-lims[2])/NZ, decimals=4)
                     
                 allPatches.append(patches[i])
-            '''
-            if axis == 2:
-                if (lims[4] == value) and (lims[5] == value):
-                    allPatches.append(patches[i])
-                    (xmin, xmax) = (min([xmin, lims[0]]), max([xmax, lims[1]]))
-                    (ymin, ymax) = (min([ymin, lims[2]]), max([ymax, lims[3]]))
-                    (zmin, zmax) = (min([zmin, lims[4]]), max([zmax, lims[5]]))
-                    dx = np.round((lims[1]-lims[0])/(patches[i].data.shape[0]), decimals=4)
-                    dz = np.round((lims[5]-lims[4])/(patches[i].data.shape[1]), decimals=4)
-                    allPatches.append(patches[i])
-            '''
     return times, allPatches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz
 
-def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz, axis):
+
+def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
+                  dx, dz, axis):
+    """Converts local patches to absolute patches
+    
+    Parameters
+    ----------
+    patches : list
+        List of patches
+    xmin : float
+        Minimum x value of the patches
+    xmax : float
+        Maximum x value of the patches
+    ymin : float
+        Minimum y value of the patches
+    ymax : float
+        Maximum y value of the patches
+    zmin : float
+        Minimum z value of the patches
+    zmax : float, optional
+        Maximum z value of the patches
+    dx : float
+        X-axis delta of the patches
+    dz : float
+        Z-axis delta of the patches
+    
+    Returns
+    -------
+    array(NXA, NZA)
+        Array containing global x-axis coordinates
+    array(NXA, NZA)
+        Array containing global z-axis coordinates
+    array(NXZ, NZA, NT)
+        Array containing data in global coordinates for each timestamp
+    """
+    
     if abs(axis) == 1:
         x_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dx)+1))
         z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
@@ -129,30 +319,54 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz, axis):
         z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
     
     x_grid_abs, z_grid_abs = np.meshgrid(x_abs, z_abs)
-    data_abs = np.zeros((x_grid_abs.shape[0], x_grid_abs.shape[1], patches[0].data.shape[2]))
+    NXA, NZA = x_grid_abs.shape
+    NX, NZ, NT = patches[0].data.shape
+    data_abs = np.zeros((NXA, NZA, NT))
     data_abs[:, :, :] = np.nan
     for patch in patches:
         lims = patch.lims
         if abs(axis) == 1:
-            (xMin, xMax, zMin, zMax) = (lims[2], lims[3], lims[4], lims[5])
+            (xMin, xMax) = (lims[2], lims[3])
+            (zMin, zMax) = (lims[4], lims[5])
         elif abs(axis) == 2:
-            (xMin, xMax, zMin, zMax) = (lims[0], lims[1], lims[4], lims[5])
+            (xMin, xMax) = (lims[0], lims[1])
+            (zMin, zMax) = (lims[4], lims[5])
         elif abs(axis) == 3:
-            (xMin, xMax, zMin, zMax) = (lims[0], lims[1], lims[2], lims[3])
+            (xMin, xMax) = (lims[0], lims[1])
+            (zMin, zMax) = (lims[2], lims[3])
         else:
-            assert False, "Axis %0.0f not in [-1, -2, -3, 1, 2, 3]."%(axis)
+            estr = "Axis %0.0f not in [-1, -2, -3, 1, 2, 3]."%(axis)
+            assert False, estr
         xInd1 = np.argwhere(np.isclose(x_grid_abs, xMin))[0][1]
         xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax))[0][1]
         zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin))[1][0]
         zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax))[1][0]
         for t in range(0, patch.data.shape[2]):
-            #try:
-            data_abs[zInd1:zInd2, xInd1:xInd2, t] = patch.data[:, :, t].T
-            #except:
-            #    pass
+            pdata = patch.data[:, :, t].T
+            data_abs[zInd1:zInd2, xInd1:xInd2, t] = pdata
     return x_grid_abs, z_grid_abs, data_abs
 
+
 def parseBndfHeader(f):
+    """Parse header from boundary file
+    
+    Parameters
+    ----------
+    f : file
+        Binary file open for reading
+    
+    Returns
+    -------
+    str
+        String containing the boundary quantity
+    str
+        String containing the quantity short name
+    str
+        String containing the quantity units
+    int
+        Number of patches
+    """
+    
     data = f.read(130)
     header = data[:110]
     patchInfo = data[110:]
@@ -165,6 +379,7 @@ def parseBndfHeader(f):
     data = np.frombuffer(patchInfo, dtype=np.int32, count=5)
     npatch = data[2]
     return quantity, shortName, units, npatch
+
 
 def parseBndfPatches(f, npatch):
     pts = 0
@@ -224,7 +439,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
     
     (patchPts,patchDs,patchIors) = patchInfo
     if (grid is None) and (smvFile is not None):
-        grid, obst, bndfs = buildMesh(smvFile)
+        grid, obst, bndfs, surfs = parseSMVFile(smvFile)
     elif (grid is None) and (smvFile is None):
         print("Either smokeview file or grid must be provided.")
         return None, None
@@ -284,67 +499,6 @@ def getLimsFromGrid(data,grid):
         assert False, "Stopped"
     return lims
 
-def buildMesh(smvFile):
-    linesSMV = zreadlines(smvFile)
-    
-    grids = []
-    obsts = []
-    bndfs = []
-    for i in range(0,len(linesSMV)):
-        line2 = linesSMV[i]
-        if "GRID" in line2:
-            gridPts = [int(x) for x in linesSMV[i+1].replace('\n','').split()]
-            gridTRNX = np.array([[float(y) for y in x.replace('\n','').split()] for x in linesSMV[i+8:i+9+gridPts[0]]])
-            gridTRNY = np.array([[float(y) for y in x.replace('\n','').split()] for x in linesSMV[i+12+gridPts[0]:i+13+gridPts[0]+gridPts[1]]])
-            gridTRNZ = np.array([[float(y) for y in x.replace('\n','').split()] for x in linesSMV[i+16+gridPts[0]+gridPts[1]:i+17+gridPts[0]+gridPts[1]+gridPts[2]]])
-            #print(gridPts, gridTRNX[:,1].min(), gridTRNX[:,1].max(), gridTRNY[:,1].min(), gridTRNY[:,1].max(), gridTRNZ[:,1].min(), gridTRNZ[:,1].max())
-            #assert False, "Stopped"
-            grids.append([gridTRNX.copy(),gridTRNY.copy(),gridTRNZ.copy()])
-            dx = (gridTRNX.max()-gridTRNX.min())/(gridTRNX.shape[0]-1)
-            dy = (gridTRNY.max()-gridTRNY.min())/(gridTRNY.shape[0]-1)
-            dz = (gridTRNZ.max()-gridTRNZ.min())/(gridTRNZ.shape[0]-1)
-        if "OBST" in line2 and "HIDE_OBST" not in line2:
-            numOBST = int(linesSMV[i+1].replace(' ',''))
-            tmp1 = linesSMV[i+2:i+2+numOBST]
-            tmp2 = linesSMV[i+2+numOBST:i+2+numOBST+numOBST]
-            tmp1 = [x.replace('\n','') for x in tmp1]
-            tmp2 = [x.replace('\n','') for x in tmp2]
-            tmp2_new = []
-            for x in tmp2:
-                tmp2_new_tmp = [float(y) for y in x.split()]
-                while len(tmp2_new_tmp) < 12:
-                    tmp2_new_tmp.append(0)
-                tmp2_new.append(tmp2_new_tmp)
-            tmp1 = [[float(y) for y in x.split()] for x in tmp1]
-            tmp2 = [[float(y) for y in x.split()] for x in tmp2]
-            tmp2 = tmp2_new
-            smvObj = np.array([x1+x2 for x1, x2 in zip(tmp1,tmp2)])
-
-            for j in range(0,smvObj.shape[0]):
-                pts = np.array(smvObj[j])[13:19]
-                x1 = gridTRNX[np.where(gridTRNX[:,0] == pts[0])[0][0],1]
-                x2 = gridTRNX[np.where(gridTRNX[:,0] == pts[1])[0][0],1]
-                y1 = gridTRNY[np.where(gridTRNY[:,0] == pts[2])[0][0],1]
-                y2 = gridTRNY[np.where(gridTRNY[:,0] == pts[3])[0][0],1]
-                z1 = gridTRNZ[np.where(gridTRNZ[:,0] == pts[4])[0][0],1]
-                z2 = gridTRNZ[np.where(gridTRNZ[:,0] == pts[5])[0][0],1]
-                newPts = np.array([x1,x2,y1,y2,z1,z2])
-                if newPts[0] == newPts[1]: newPts[1] = newPts[1] + dx
-                if newPts[2] == newPts[3]: newPts[3] = newPts[3] + dy
-                if newPts[4] == newPts[5]: newPts[5] = newPts[5] + dz
-                #print("Pre-snap:",smvObj[j,:6])
-                #print("Post-snap:",newPts)
-                smvObj[j,13:19] = newPts
-            obsts.append(smvObj)
-        if ".bf" in line2:
-            (_,mesh,_) = linesSMV[i-1].split()
-            bndfName = linesSMV[i].split(' ')[1].replace('\n','')
-            vNum = bndfName.split('_')[-1].replace('.bf','')
-            vID = ' '.join(linesSMV[i+1].split(' ')[1:]).replace('\n','')
-            bndfs.append([float(mesh),bndfName,vID,float(vNum)])
-    #grid = grids[mesh]
-    #obst = obsts[mesh]
-    return grids, obsts, bndfs
 
 def readInputFile(file):
     ''' Load input file '''

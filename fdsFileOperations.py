@@ -158,11 +158,15 @@ class fdsFileOperations(object):
         in template.
     generateFDStext()
         Returns str of input file.
+    getDefaultFields()
+        Returns default field order.
     getLineType(line)
         Returns namelist key from str line.
     getMeshLimits()
         Returns a dictionary containing a key 'XB' with an array of the
         total extents defined in meshes.
+    getNewlineFromTypes()
+        Returns a dictionary containing default new line parameters.
     getPolygonNamesFromFdsFile()
         Returns a list of polygons defined in the fds input file.
     importFile(file=None, text=None, textList=None)
@@ -1202,55 +1206,115 @@ class fdsFileOperations(object):
         return template
     
     
-    def generateFDStext(self):
+    def generateFDStext(self, newlines=None, fields=None):
+        """Returns str of input file
+        
+        This function generates the fds input file based on the stored
+        attribute dictionaries. The optional input parameters provide
+        customization in how the input file is exported. Providing
+        a value of None will produce the default configuration.
+        
+        Parameters
+        ----------
+        newlines : defaultdict, optional
+            Dictionary containing boolean for each field type. If True,
+            each key from the namelist will be placed on a new line.
+            If False, each key will be placed on the same line.
+            (default None)
+        fields : list, optional
+            List containing the order namelists will be exported to
+            the input file. (default None)
+        
+        Returns
+        -------
+        str
+            text of input file
+        """
+        
         date = datetime.date.today()
+        (year, month, day) = (date.year, date.month, date.day)
+        dateStr = "%04.0f-%02.0f-%02.0f"%(year, month, day)
+        intro = "Input file generated with python-fds-tools v1"
+        state = "Copyright Jonathan Hodges %04.0f All right reserved."%(
+                year)
         types = fdsLineTypes(version=self.version)
-        text = "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-        text = "%s!!!!! Input file generated with fdsTools v1 on %04.0f-%02.0f-%02.0f          !!!!!\n"%(text, date.year, date.month, date.day)
-        text = "%s!!!!! Copyright Jonathan Hodges %04.0f All right reserved.           !!!!!\n"%(text, date.year)
-        text = "%s!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"%(text)
+        if newlines is None: newlines = self.getNewlineFromTypes()
+        if fields is None: fields = self.getDefaultFields()
+        if self.meshOrder is False: self.addMPIprocesses(1)
+        text = "%s\n"%("!"*72)
+        text = "%s%s %s on %s%s%s\n"%(
+                text, "!"*5, intro, dateStr, " "*2, "!"*5)
+        text = "%s%s %s%s%s\n"%(text, "!"*5, state, " "*11, "!"*5)
+        text = "%s%s\n"%(text, "!"*72)
         
-        text = "%s%s"%(text, self.makeLinesFromDict(self.head, types.head, '&HEAD', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.time, types.time, '&TIME', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.misc, types.misc, '&MISC', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.inits, types.init, '&INIT', newline=True))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.dump, types.dump, '&DUMP', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.zones, types.zone, '&ZONE', newline=True))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.pres, types.pres, '&PRES', newline=True))
-        
-        if self.meshOrder is False:
-            self.addMPIprocesses(1)
-        text = "%s%s"%(text, self.makeMESH(self.meshes, types.mesh, meshOrder=self.meshOrder))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.reacs, types.reac, '&REAC', newline=True))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.radis, types.radi, '&RADI', newline=True))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.matls, types.matl, '&MATL', newline=True))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.surfs, types.surf, '&SURF', newline=True))
-        text = "%s%s"%(text, self.makeRAMP(self.ramps))
-        
-        text = "%s%s"%(text, self.makeLinesFromDict(self.obsts, types.obst, '&OBST', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.holes, types.hole, '&HOLE', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.vents, types.vent, '&VENT', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.parts, types.part, '&PART', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.devcs, types.devc, '&DEVC', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.ctrls, types.ctrl, '&CTRL', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.bndfs, types.bndf, '&BNDF', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.slcfs, types.slcf, '&SLCF', newline=False))
-        
-        text = "%s%s"%(text, self.makeLinesFromDict(self.props, types.prop, '&PROP', newline=False))
-        text = "%s%s"%(text, self.makeLinesFromDict(self.specs, types.spec, '&SPEC', newline=False))
-        
+        for field in fields:
+            key = self.keyFromLineType(field)
+            keyN = "&%s"%(field)
+            keyT = getattr(types, field.lower())
+            keyD = getattr(self, key)
+            if key == 'MESH':
+                txt = self.makeMESH(keyD, keyT, order=self.meshOrder)
+            elif key == 'RAMP':
+                self.makeRAMP(keyD)
+            else:
+                newline = newlines[key]
+                txt = self.makeLinesFromDict(keyD, keyT, keyN, newline)
+            text = "%s%s"%(text, txt)
         
         for line in self.customLines:
             text = "%s%s\n"%(text, line)
         
         return text
-
+    
+    
+    def getDefaultFields(self):
+        """Returns default field order
+        
+        Returns
+        -------
+        list
+            List of default field order
+        """
+        
+        fields = ["HEAD", "TIME", "MISC", "INIT", "DUMP", "ZONE", 
+                  "PRES", "MESH", "REAC", "RADI", "MATL", "SURF",
+                  "RAMP", "OBST", "HOLE", "VENT", "PART", "DEVC",
+                  "CTRL", "BNDF", "SLCF", "PROP", "SPEC"]
+        return fields
+    
+    
     def getLineType(self, line):
+        """Returns namelist key from str line
+        
+        This function extracts the namelist key from a string line
+        
+        Parameters
+        ----------
+        line : str
+            String containing the fortran namelist line
+        
+        Returns
+        -------
+        str
+            String containing fortran namelist type
+        """
+        
         lineType = line[:4]
         return lineType
-
+    
     
     def getMeshLimits(self):
+        """Returns a dictionary containing the extents of defined meshes
+        
+        This function returns a dictionary containing a key 'XB' with an
+        array of the total extents defined in meshes.
+        
+        Returns
+        -------
+        dict
+            Nested dictionary containing 'Overall'->'XB'->float array(6)
+        """
+        
         meshLimits = defaultdict(bool)
         limitingXB = [100000, -100000, 100000, -100000, 100000, -100000]
         for key in list(self.meshes.keys()):
@@ -1266,11 +1330,61 @@ class fdsFileOperations(object):
         meshLimits['Overall'] = defaultdict(bool)
         meshLimits['Overall']['XB'] = limitingXB
         return meshLimits
-
+    
+    
+    def getNewlineFromTypes(self):
+        """Returns a dictionary containing default new line parameters
+        
+        Returns
+        -------
+        dict
+            Dictionary containing default new line parameters
+        """
+        
+        newlines = defaultdict(bool)
+        newlines['HEAD'] = False
+        newlines['TIME'] = False
+        newlines['MISC'] = False
+        newlines['INIT'] = True
+        newlines['DUMP'] = False
+        newlines['ZONE'] = True
+        newlines['PRES'] = True
+        newlines['MESH'] = False
+        newlines['REAC'] = True
+        newlines['RADI'] = True
+        newlines['MATL'] = True
+        newlines['SURF'] = True
+        newlines['RAMP'] = False
+        newlines['OBST'] = False
+        newlines['HOLE'] = False
+        newlines['VENT'] = False
+        newlines['PART'] = False
+        newlines['DEVC'] = False
+        newlines['CTRL'] = False
+        newlines['BNDF'] = False
+        newlines['SLCF'] = False
+        newlines['PROP'] = False
+        newlines['SPEC'] = False
+        return newlines
+    
+    
     def getPolygonNamesFromFdsFile(self):
+        """Returns alist of polygons defined in the fds input file
+        
+        This function returns a list of polygons defined in the fds
+        input file.
+        
+        Returns
+        -------
+        list
+            List containing names of all obstructions which have
+            boundary data available.
+        """
+        
         names = []
         obstList = list(self.obsts.keys())
-        if 'unknownCounter' in obstList: obstList.remove('unknownCounter')
+        if 'unknownCounter' in obstList:
+            obstList.remove('unknownCounter')
         for key in obstList:
             if self.obsts[key]['BNDF_OBST']:
                 names.append(self.obsts[key]["ID"])
@@ -1278,8 +1392,22 @@ class fdsFileOperations(object):
         return names
     
     
-    
     def importFile(self, file=None, text=None, textList=None):
+        """Adds keys to each namelist from an input file, text, or list
+        
+        This function will add keys to each namelist from an input file,
+        text, or text list.
+        
+        Parameters
+        ----------
+        file : str, optional
+            String containing path to input file
+        text : str, optional
+            String containing imported text from an input file
+        text : str, optional
+            List of strings containing individual namelist lines
+        """
+        
         if file != None:
             f = self.zopen(file)
             textFDS = f.read()
@@ -1293,9 +1421,34 @@ class fdsFileOperations(object):
         
         
     def interpretKey(self, key, lineType, types):
+        """Processes a key from a namelist key pair
+        
+        This function processes a key from a namelist key pair to
+        return the keyID, keyType, and keyValue.
+        
+        Parameters
+        ----------
+        key : str
+            String containing namelist key pair
+        lineType : str
+            String containing namelist type
+        types : defaultdict
+            Dictionary containing types for each key in a namelist type
+        
+        Returns
+        -------
+        str
+            raw keyID containing all text left of = sign
+        str
+            regex keyID searching for matrix values left of = sign
+        dict
+            dictionary containing key types for namelist
+        str
+           raw keyValue containing all text right of = sign
+        """
+
         keyID = key.split('=')[0]
         keyValue = '='.join(key.split('=')[1:])
-        #keyValue = key.replace(keyID, '')[1:]
         regex1 = r"\(\s*.*\)"
         regex2 = r""
         try:
@@ -1306,8 +1459,36 @@ class fdsFileOperations(object):
             keyID2 = keyID2[:-1]
         keyType = getattr(types, lineType.lower())[keyID2]
         return keyID, keyID2, keyType, keyValue
-
-    def keyAssist(self, text, types, dic, internalKeys=['counter'], newline=False):
+    
+    
+    def keyAssist(self, text, types, dic,
+                  internalKeys=['counter'], newline=False):
+        """Returns a namelist text line from dictionary inputs.
+        
+        This function returns a namelist text line based on an input
+        dictionary and type dictionary.
+        
+        Parameters
+        ----------
+        text : str
+            String to which to append namelist fields
+        types : dict
+            Dictionary containing types for namelist fields
+        dic : dict
+            Dictionary containing namelist keys and values
+        internalKeys : list, optional
+            List containing internal software fields not to be exported
+            to the text line
+        newline : bool, optional
+            Flag specifying whether each key in the namelist is to be
+            entered on the same of different lines
+            
+        Returns
+        -------
+        str
+            Updated text string
+        """
+        
         keys = list(dic.keys())
         keys.sort()
         try:
@@ -1327,42 +1508,51 @@ class fdsFileOperations(object):
                 elif (types[key2] == 'int'):
                     text = "%s%s=%0.0f, "%(text, key2, dic[key2])
                 elif (types[key2] == 'bool'):
-                    if (dic[key2] is True) or (dic[key2] == 'TRUE') or (dic[key2] == '.TRUE.'):
+                    boolCheck = False
+                    if (dic[key2] is True): boolCheck = True
+                    if (dic[key2] == 'TRUE'): boolCheck = True
+                    if (dic[key2] == '.TRUE.'): boolCheck = True
+                    if boolCheck:
                         text = "%s%s=.TRUE., "%(text, key2)
                     else:
                         text = "%s%s=.FALSE., "%(text, key2)
                 elif ('listind' in types[key2]):
                     temp = dic[key2]
-                    tempTxt = "%s(%0.0f:%0.0f)="%(key2, 1, temp.shape[0])
+                    tempTxt = "%s(%0.0f:%0.0f)="%(
+                            key2, 1, temp.shape[0])
                     for t in temp:
-                        if ('string' in types[key2]): tempTxt = "%s '%s',"%(tempTxt, t[0])
-                        if ('float' in types[key2]): tempTxt = "%s %0.4f,"%(tempTxt, t[0])
-                        if ('int' in types[key2]): tempTxt = "%s %0.0f,"%(tempTxt, t[0])
+                        if ('string' in types[key2]):
+                            tempTxt = "%s '%s',"%(tempTxt, t[0])
+                        if ('float' in types[key2]):
+                            tempTxt = "%s %0.4f,"%(tempTxt, t[0])
+                        if ('int' in types[key2]):
+                            tempTxt = "%s %0.0f,"%(tempTxt, t[0])
                     text = "%s%s "%(text, tempTxt)
                 elif ('list' in types[key2]):
                     temp = dic[key2]
                     tempTxt = "%s="%(key2)
                     for t in temp:
-                        if ('string' in types[key2]): tempTxt = "%s '%s',"%(tempTxt, t)
-                        if ('float' in types[key2]): tempTxt = "%s %0.4f,"%(tempTxt, t)
-                        if ('int' in types[key2]): tempTxt = "%s %0.0f,"%(tempTxt, t)
+                        if ('string' in types[key2]):
+                            tempTxt = "%s '%s',"%(tempTxt, t)
+                        if ('float' in types[key2]):
+                            tempTxt = "%s %0.4f,"%(tempTxt, t)
+                        if ('int' in types[key2]):
+                            tempTxt = "%s %0.0f,"%(tempTxt, t)
                     text = "%s%s "%(text, tempTxt)
                 elif ('matrix' in types[key2]):
                     temp = dic[key2]
                     sz = dic[key2].shape
-                    ar1 = "(%0.0f:%0.0f,%0.0f:%0.0f)"%(1, sz[0], 1, sz[1])
+                    ar1 = "(%0.0f:%0.0f,%0.0f:%0.0f)"%(
+                            1, sz[0], 1, sz[1])
                     tempTxt = "%s%s="%(key2, ar1)
                     for t in dic[key2].flatten():
-                        if ('string' in types[key2]): tempTxt = "%s '%s',"%(tempTxt, t)
-                        if ('float' in types[key2]): tempTxt = "%s %0.4f,"%(tempTxt, t)
-                        if ('int' in types[key2]): tempTxt = "%s %0.0f,"%(tempTxt, t)
+                        if ('string' in types[key2]):
+                            tempTxt = "%s '%s',"%(tempTxt, t)
+                        if ('float' in types[key2]):
+                            tempTxt = "%s %0.4f,"%(tempTxt, t)
+                        if ('int' in types[key2]):
+                            tempTxt = "%s %0.0f,"%(tempTxt, t)
                     text = "%s%s "%(text, tempTxt)
-                    '''
-                    print(key2, dic[key2], dic[key2].shape)
-                    print(tempTxt)
-                    print(re.sub(regex1, '', key2))
-                    assert False, "Stopped"
-                    '''
                     
                 else:
                     print(key2, types[key2])
@@ -1373,8 +1563,22 @@ class fdsFileOperations(object):
             print(dic)
             print(types[key2])
         return text
-
+    
+    
     def keyFromLineType(self, lineType):
+        """Returns internal attribute name from namelist type
+        
+        Parameters
+        ----------
+        lineType : str
+            String containing namelist type
+        
+        Returns
+        -------
+        str
+            String containing internal attribute name
+        """
+        
         if lineType == 'HEAD': key = 'head'
         if lineType == 'DEVC': key = 'devcs'
         if lineType == 'INIT': key = 'inits'
@@ -1400,7 +1604,24 @@ class fdsFileOperations(object):
         if lineType == 'SPEC': key = 'specs'
         return key
     
+    
     def makeFDSLines(self, textFDS):
+        """Returns a list of namelist lines
+        
+        This function cleans the input file, removing line breaks, and
+        splitting the text into lines based on namelist grouping.
+        
+        Parameters
+        ----------
+        textFDS : str
+            String containg text from an fds input file
+        
+        Returns
+        -------
+        list
+            List of strings containing namelist lines
+        """
+        
         linesFDS = [x for x in textFDS.split("&")[1:]]
         for i in range(0, len(linesFDS)):
             line2 = linesFDS[i]
@@ -1412,8 +1633,31 @@ class fdsFileOperations(object):
             linesFDS = linesFDS[:ind]
         return linesFDS
     
-
+    
     def makeLinesFromDict(self, items, types, prefix, newline=False):
+        """Returns a str generated from a namelist dictionary
+        
+        This function generates a text string from a namelist
+        dictionary.
+        
+        Parameters
+        ----------
+        items : dict
+            Dictionary containing key pairs from a namelist group
+        types : dict
+            Dictionary containing types from a namelist group
+        prefix : str
+            String containing the namelist type
+        newline : bool, optional
+            Flag specifying whether each key in the namelist is to be
+            entered on the same of different lines
+        
+        Returns
+        -------
+        str
+            Text containing name list line
+        """
+        
         text = ''
         keys = list(items.keys())
         keys.sort()
@@ -1424,27 +1668,74 @@ class fdsFileOperations(object):
             text = "%s /\n"%(text)
         return text
     
-    def makeMESH(self, meshes, meshTypes, meshOrder=False):
+    
+    def makeMESH(self, meshes, meshTypes, order=False):
+        """Returns a str generated from a meshes namelist dictionary.
+        
+        Parameters
+        ----------
+        meshes : dict
+            Dictionary containing mesh definitions
+        meshTypes : dict
+            Dictionary containing types from mesh namelists
+        order : list, optional
+            Order to output mehes. If False, meshes are not output in
+            any particular order. (default False)
+        
+        Returns
+        -------
+        str
+            Text line generated from dictionary
+        """
+        
         text = ''
         meshList = list(meshes.keys())
-        if 'unknownCounter' in meshList: meshList.remove('unknownCounter')
-        if (meshOrder is not False): meshList = [meshList[x] for x in meshOrder]
+        if 'unknownCounter' in meshList:
+            meshList.remove('unknownCounter')
+        if (order is not False): meshList = [meshList[x] for x in order]
         for key in meshList:
             text = "%s&MESH "%(text)
             text = self.keyAssist(text, meshTypes, meshes[key])
             text = "%s /\n"%(text)
         return text
     
+    
     def makeRAMP(self, ramps):
+        """Returns a str generated from a ramps namelist dictionary.
+        
+        Parameters
+        ----------
+        ramps : dict
+            Dictionary containing ramp definitions
+        
+        Returns
+        -------
+        str
+            Text line generated from dictionary
+        """
+        
         text = ''
         for key in list(ramps.keys()):
             ID = ramps[key]['ID']
             for F, T in zip(ramps[key]['F'], ramps[key]['T']):
                 text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, /\n"%(text, ID, T, F)
         return text
-
-
+    
+    
     def mergeTypeFromLineType(self, lineType):
+        """Returns internal merge type based on namelist type.
+        
+        Parameters
+        ----------
+        lineType : str
+            String containing namelist type
+        
+        Returns
+        -------
+        str
+            String containing merge type for namelist type
+        """
+        
         key = 'unknown'
         if lineType == 'HEAD': key = 'merge'
         if lineType == 'DEVC': key = 'enumerate'
@@ -1470,8 +1761,17 @@ class fdsFileOperations(object):
         if lineType == 'PROP': key = 'enumerate'
         if lineType == 'SPEC': key = 'enumerate'
         return key
-
+    
+    
     def parseFDSLines(self, lines):
+        """Adds each line to internal attribute namelist dictionaries.
+        
+        Parameters
+        ----------
+        lines : list
+            List containing strings of namelist lines
+        """
+        
         for line in lines:
             lineType = self.getLineType(line)
             key = self.keyFromLineType(lineType)
@@ -1481,11 +1781,28 @@ class fdsFileOperations(object):
         devcKeys.remove('unknownCounter')
         for key in devcKeys:
             if self.devcs[key]['INIT_ID']:
-                self.devcs[key]['XYZ'] = self.inits[self.devcs[key]['INIT_ID']]['XYZ']
+                initXYZ = self.inits[self.devcs[key]['INIT_ID']]['XYZ']
+                self.devcs[key]['XYZ'] = initXYZ
             else:
                 self.devcs[key].pop('INIT_ID')
-    
+        
+        
     def parseLine(self, line, lineType, types, key):
+        """Adds one line to the internal attribute namelist dictionary.
+        
+        Parameters
+        ----------
+        line : str
+            String containing namelist line
+        lineType : str
+            String containing namelist line type
+        types : dict
+            Dictionary containing key types for namelist pair
+        key : str
+            String containing internal attribute key for namelist line
+            type
+        """
+        
         lineDict = self.dictFromLine(line, lineType, types)
         tmp = getattr(self, key)
         mergeType = self.mergeTypeFromLineType(lineType)
@@ -1517,15 +1834,8 @@ class fdsFileOperations(object):
                 tmp[ID]['counter'] = 0
         else:
             assert False, "Stopped"
-
-
-
-
-
-
-
-    
-    
+        
+        
     def saveModel(self, mpiProcesses, location,
                   allowMeshSplitting=True, splitMultiplier=1.2):
         """Saves an fds input file
@@ -1547,13 +1857,29 @@ class fdsFileOperations(object):
             Tolerance used in mesh splitting (default is 1.2)
         """
         
-        self.addMPIprocesses(mpiProcesses, allowMeshSplitting=allowMeshSplitting, splitMultiplier=splitMultiplier)
+        self.addMPIprocesses(
+                mpiProcesses, allowMeshSplitting=allowMeshSplitting, 
+                splitMultiplier=splitMultiplier)
         text = self.generateFDStext()
         with open(location, 'w') as f:
             f.write(text)
         print("Input file written to: %s"%(location))
-    
+        
+        
     def splitLineIntoKeys(self, line2):
+        """Returns namelist key pairs from a line.
+        
+        Parameters
+        ----------
+        line2 : str
+            String containing namelist line
+        
+        Returns
+        -------
+        list
+            List containing namelist keys
+        """
+        
         line = line2.replace('\n', ',').replace('\r', ',')
         while (',,' in line) or ('  ' in line):
             line = line.replace(',,', ',').replace('  ', ' ')    
@@ -1586,12 +1912,17 @@ class fdsFileOperations(object):
                 txt = txt[:-1]
             updatedKeys[i] = txt
         return updatedKeys
-
-
-
-
-        
+    
+    
     def splitMESHonce(self, mesh):
+        """Splits a mesh along its largest axis.
+        
+        Parameters
+        ----------
+        mesh : dict
+            Dictionary containing information for a single mesh
+        """
+        
         IJK = np.round(mesh['IJK'])
         XB = mesh['XB']
         dxs = [(XB[1]-XB[0])/float(IJK[0]), (XB[3]-XB[2])/float(IJK[1]), (XB[5]-XB[4])/float(IJK[2])]
@@ -1625,14 +1956,22 @@ class fdsFileOperations(object):
         self.meshes.pop(mesh['ID'], False)
         self.meshes[mesh2['ID']] = mesh2
         self.meshes[mesh3['ID']] = mesh3
-
-    
-
-
-
-
-    
+        
+        
     def zopen(self, file):
+        """Opens a file or zip archive for reading.
+        
+        Parameters
+        ----------
+        file : str
+            String containing path to file or zip archive
+        
+        Returns
+        -------
+        file
+            Open binary file for reading
+        """
+        
         if '.zip' in file:
             zname = '%s.zip'%(file.split('.zip')[0])
             fname = file.split('.zip%s'%(os.sep))[1]
@@ -1641,21 +1980,5 @@ class fdsFileOperations(object):
         else:
             f = open(file, 'rb')
         return f
-
-    
-
-    
-
     
     
-    
-
-    
-    
-
-    
-
-
-    
-    
-

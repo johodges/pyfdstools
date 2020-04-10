@@ -1125,6 +1125,7 @@ def linkBndfFileToMesh(meshes, bndfs, fdsQuantities):
         bndf_dic[qty] = bndf_qty
     return bndf_dic
 
+
 def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
                          tStart=0, tEnd=120, tInt=1, tBand=3,
                          orientations=[0]):

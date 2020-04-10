@@ -382,14 +382,29 @@ def parseBndfHeader(f):
 
 
 def parseBndfPatches(f, npatch):
+    """Parse patches from boundary file
+    
+    Parameters
+    ----------
+    f : file
+        Binary file open for reading
+    npatch : int
+        Number of patches in boundary file
+    
+    Returns
+    -------
+    tuple
+        Tuple containing points, limits, and orientations
+    float array(NX*NZ*NT)
+        Array containing data from patches
+    """
+    
     pts = 0
     patchPts = []
     patchDs = []
     patchIors = []
     for k in range(0, npatch):
         data = np.frombuffer(f.read(44), dtype=np.int32, count=11)
-        #data = np.fromfile(f,dtype=np.int32,count=11)
-        #print(k, data)
         (dx,dy,dz) = (data[1]-data[0],data[3]-data[2],data[5]-data[4])
         if abs(data[6]) == 1:
             dy = dy+1
@@ -402,21 +417,61 @@ def parseBndfPatches(f, npatch):
             dy = dy+1
         nPts = np.max([dx,1])*np.max([dy,1])*np.max([dz,1])+2
         patchPts.append([pts,pts+nPts])
-        patchDs.append([dx,dy,dz,data[0],data[1],data[2],data[3],data[4],data[5]])
+        patchDs.append([dx,dy,dz,
+                        data[0],data[1],data[2],
+                        data[3],data[4],data[5]])
         patchIors.append(data[6])
         pts = pts+nPts
-    #data = np.fromfile(f,dtype=np.float32,count=-1)
     data = np.frombuffer(f.read(), dtype=np.float32)
     patchInfo = (patchPts, patchDs, patchIors)
     return patchInfo, data
 
+
 def readBoundaryHeader(file):
+    """Read boundary header from boundary file
+    
+    Parameters
+    ----------
+    file : str
+        Path to boundary file to read
+    
+    Returns
+    -------
+    str
+        String containing the boundary quantity
+    str
+        String containing the quantity short name
+    str
+        String containing the quantity units
+    int
+        Number of patches
+    """
+    
     f = zopen(file)
     quantity, shortName, units, npatch = parseBndfHeader(f)
     f.close()
     return quantity, shortName, units, npatch
 
+
 def readBoundaryQuantities(dataDir, chid):
+    """Returns quantities available in boundary files
+    
+    This function searches through a data directory or archive and
+    determines which QUANTITIES are available in all files.
+    
+    Parameters
+    ----------
+    dataDir : str
+        Path to data file
+    chid : str
+        CHID of simulation to check
+    
+    Returns
+    -------
+    defaultdict
+        Dictionary containing the quantities available in the files
+    """
+    
     files = glob.glob("%s%s*.bf"%(dataDir, chid))
     quantities = defaultdict(bool)
     for file in files:
@@ -427,7 +482,28 @@ def readBoundaryQuantities(dataDir, chid):
             quantities[quantity] = [file]
     return quantities
 
+
 def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
+    """Import patches from a single boundary file
+    
+    Parameters
+    ----------
+    fname : str
+        Path to boundary file to import
+    smvFile : str
+        Path to smokeview file
+    gridNum : int, optional
+        Grid corresponding to the patch. Must be specified if multiple
+        meshes are used.
+    
+    Returns
+    -------
+    list
+        List of float time stamps
+    list
+        List of patches
+    """
+    
     try:
         f = zopen(fname)
     except:
@@ -443,10 +519,35 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
     elif (grid is None) and (smvFile is None):
         print("Either smokeview file or grid must be provided.")
         return None, None
-    times, patches = buildPatches(patchPts, patchDs, patchIors, data, grid[gridNum])
+    times, patches = buildPatches(
+            patchPts, patchDs, patchIors, data, grid[gridNum])
     return times, patches
 
+
 def buildPatches(patchPts, patchDs, patchIors, data, grid):
+    """Build spatial patches from patch points
+    
+    Parameters
+    ----------
+    patchPts : list
+        Point indicies
+    patchDs : list
+        Patch deltas and limits
+    patchIors : list
+        Patch orientations
+    data : float array(NX*NZ*NT)
+        Array containing data from the boundary file
+    grid : list
+        List of arrays containing the grid of the mesh
+        
+    Returns
+    -------
+    float array(NT)
+        Array containing time stamps
+    list
+        List containing each patch
+    """
+    
     pts = patchPts[-1][1]
         
     timeSteps = int((data.shape[0]+1)/(pts+3))
@@ -470,15 +571,33 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid):
                 patchData = patchData.reshape((pdx,pdy),order='F')
             patchData = patchData[:-1,:-1]
             if i == 1:
-                #print(k)
                 lims = getLimsFromGrid(patchDs[k][3:],grid)
-                patches.append(fdspatch(patchData.shape[0],patchData.shape[1],timeSteps-1,lims,patchIors[k]))
+                patch = fdspatch(patchData.shape[0],
+                                 patchData.shape[1],
+                                 timeSteps-1, lims, patchIors[k])
+                patches.append(patch)
                 patches[k].append(patchData,i-1)
             else:
                 patches[k].append(patchData,i-1)
     return times, patches
 
-def getLimsFromGrid(data,grid):
+
+def getLimsFromGrid(data, grid):
+    """Extracts limits from mesh grid and patch data
+    
+    Parameters
+    ----------
+    data : list
+        List containing limits from patch
+    grid : list
+        List of arrays containing the grid of the mesh
+        
+    Returns
+    -------
+    float array(6)
+        Array containing limit extents
+    """
+    
     try:
         ind1 = np.argwhere(grid[0][:,0] == data[0])[0][0]
         ind2 = np.argwhere(grid[0][:,0] == data[1])[0][0]
@@ -487,9 +606,9 @@ def getLimsFromGrid(data,grid):
         ind5 = np.argwhere(grid[2][:,0] == data[4])[0][0]
         ind6 = np.argwhere(grid[2][:,0] == data[5])[0][0]
         
-        lims = [grid[0][ind1,1],grid[0][ind2,1],
-                grid[1][ind3,1],grid[1][ind4,1],
-                grid[2][ind5,1],grid[2][ind6,1]]
+        lims = [grid[0][ind1,1], grid[0][ind2,1],
+                grid[1][ind3,1], grid[1][ind4,1],
+                grid[2][ind5,1], grid[2][ind6,1]]
     except:
         print(grid[0][:,0])
         print(grid[1][:,0])
@@ -500,47 +619,103 @@ def getLimsFromGrid(data,grid):
     return lims
 
 
-def readInputFile(file):
-    ''' Load input file '''
-    params = defaultdict(bool,yaml.load(open(file,'r')))
-    return params
-
-def parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0],fileSMV=None):
-    ''' This routine parses an FDS file looking for a list of names and
+def parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0]):
+    """ Builds a list of polygons from an fds input file
+    
+    This routine parses an FDS file looking for a list of names and
     stores a list of points defining polygons for each name which is
     found.
     
-    The extend argument allows the polygon to be extended by a number of grid
-    cells. This is useful since FDS snaps obstructions to the grid which means
-    the actual coordinate location of the data from FDS may not align exactly
-    with the input file.
-    '''
-
+    The extend argument allows the polygon to be extended by a number of
+    grid cells. This is useful since FDS snaps obstructions to the grid
+    which means the actual coordinate location of the data from FDS may
+    not align exactly with the input file.
+    
+    Parameters
+    ----------
+    fdsObsts : dict
+        Dictionary containing obstruction definitions from fds input
+    smvObsts : dict
+        Dictionary containing obstruction definitions from smv input
+    names : list
+        List of obstruction names of interest
+    extend : float array(3), optional
+        Distance to extend polygon along each axis
+    
+    Returns
+    -------
+    list
+        List of polygons corresponding to each name
+    """
+    
     polygons = []
     for name in names:
         linkedPolygons = []
         for key in list(fdsObsts.keys()):
             if key == name:
                 coord = fdsObsts[name]['XB']
-                snapInd = np.argmin(np.sum(abs(smvObsts[:,:6]-coord)**2,axis=1)**0.5)
+                obstdif = abs(smvObsts[:,:6]-coord)
+                obstsum = np.sum((obstdif)**2, axis=1)**0.5
+                snapInd = np.argmin(obstsum)
                 snapPts = smvObsts[snapInd,13:19].copy()
-                pts = [[snapPts[0]-extend[0],snapPts[2]-extend[1],snapPts[4]-extend[2]],
-                       [snapPts[0]-extend[0],snapPts[2]-extend[1],snapPts[5]+extend[2]],
-                       [snapPts[0]-extend[0],snapPts[3]+extend[1],snapPts[4]-extend[2]],
-                       [snapPts[0]-extend[0],snapPts[3]+extend[1],snapPts[5]+extend[2]],
-                       [snapPts[1]+extend[0],snapPts[2]-extend[1],snapPts[4]-extend[2]],
-                       [snapPts[1]+extend[0],snapPts[2]-extend[1],snapPts[5]+extend[2]],
-                       [snapPts[1]+extend[0],snapPts[3]+extend[1],snapPts[4]-extend[2]],
-                       [snapPts[1]+extend[0],snapPts[3]+extend[1],snapPts[5]+extend[2]]]
+                p1 = snapPts[0]-extend[0]
+                p2 = snapPts[2]-extend[1]
+                p3 = snapPts[4]-extend[2]
+                p4 = snapPts[5]+extend[2]
+                p5 = snapPts[3]+extend[1]
+                p6 = snapPts[1]+extend[0]
+                pts = [[p1, p2, p3], [p1, p2, p4], [p1, p5, p3],
+                       [p1, p5, p4], [p6, p2, p3], [p6, p2, p4],
+                       [p6, p5, p3], [p6, p5, p4]]
                 linkedPolygons.append(pts)
         polygons.append(linkedPolygons)
     return polygons
 
-def loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts, orientations, polygons):
-    coords2, pts2, times, orients2 = getPointsFromFiles(bndfs, smvGrids, smvObsts, tStart, tEnd, tBand, tInt)
+
+def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts,
+                 orientations, polygons):
+    """Loads maximum boundary data versus time from boundary files
+    
+    This routine will read all boundary data from boundary files for
+    a simulation.
+    
+    Parameters
+    ----------
+    tStart : float
+        Timestamp to start extracting data
+    tEnd : float
+        Timestamp to finish extracting data
+    tInt : float
+        Timestamp interval to include in extracted data
+    tBand : float
+        Time averaging window to include in extracted data
+    bndfs : list
+        List containing string names of boundary files to be loaded
+    smvGrids : list
+        List containing grid arrays from smokeview input
+    smvObsts : list
+        List containing obstruction definitinos from smokeview input
+    orientations : list
+        List containing plane orientations to include in loading
+    polygons : list
+        List of polygons corresponding to each name
+    
+    Returns
+    -------
+    float array(NT)
+        Array containing time stamps
+    float array(NT)
+        Array containing max temperature from patch
+    float array(NT)
+        Array containing orientations
+    """
+    
+    coords2, pts2, times, orients2 = getPointsFromFiles(
+            bndfs, smvGrids, smvObsts, tStart, tEnd, tBand, tInt)
     if orientations[0] == 0:
         orientations = [-3, -2, -1, 1, 2, 3]
-    orientInds = np.where([True if x in orientations else False for x in orients2])[0]
+    mask = [True if x in orientations else False for x in orients2]
+    orientInds = np.where(mask)[0]
     
     coords = coords2[orientInds,:]
     pts = pts2[orientInds,:]
@@ -563,13 +738,32 @@ def loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts
         
     return times, mPts, orients
 
+
 def readBoundaryFile(fname):
+    """Loads data from a boundary file
+    
+    This routine will read all boundary data from a boundary file
+    
+    Parameters
+    ----------
+    fname : str
+        Path to boundary file to import
+    
+    Returns
+    -------
+    tuple
+        Tuple containing boundary quantity, short name, nunits, and
+        number of patches
+    tuple
+        Tuple containing patchPts, patchDs, and patchIors
+    float array(NX, NZ, NT)
+        Array containing arranged data from boundary file
+    """
     
     try:
         f = zopen(fname)
     except:
         return None, None, None
-
     
     with open(fname,'rb') as f:
         bytes_read = f.read(110)
@@ -579,15 +773,17 @@ def readBoundaryFile(fname):
         shortName = tmp[3].decode('utf-8').replace('\x00','').strip(' ')
         units = tmp[5].decode('utf-8').replace('\x00','').strip(' ')
         
-        data = np.fromfile(f,dtype=np.int32,count=5)
+        data = np.fromfile(f, dtype=np.int32, count=5)
         npatch = data[2]
         pts = 0
         patchPts = []
         patchDs = []
         patchIors = []
-        for k in range(0,npatch):
-            data = np.fromfile(f,dtype=np.int32,count=11)
-            (dx,dy,dz) = (data[1]-data[0],data[3]-data[2],data[5]-data[4])
+        for k in range(0, npatch):
+            data = np.fromfile(f, dtype=np.int32, count=11)
+            dx = data[1] - data[0]
+            dy = data[3] - data[2]
+            dz = data[5] - data[4]
             
             if abs(data[6]) == 1:
                 dy = dy+1
@@ -598,50 +794,127 @@ def readBoundaryFile(fname):
             elif abs(data[6]) == 3:
                 dx = dx+1
                 dy = dy+1
-            nPts = np.max([dx,1])*np.max([dy,1])*np.max([dz,1])+2
-            patchPts.append([pts,pts+nPts])
-            patchDs.append([dx,dy,dz,data[0],data[1],data[2],data[3],data[4],data[5]])
+            nPts = np.max([dx, 1])*np.max([dy, 1])*np.max([dz, 1]) + 2
+            patchPts.append([pts, pts+nPts])
+            patchDs.append([dx, dy, dz, data[0], data[1], data[2],
+                            data[3], data[4], data[5]])
             patchIors.append(data[6])
             pts = pts+nPts
-        data = np.fromfile(f,dtype=np.float32,count=-1)
-    bndfInfo = (quantity,shortName,units,npatch)
-    patchInfo = (patchPts,patchDs,patchIors)
+        data = np.fromfile(f, dtype=np.float32, count=-1)
+    bndfInfo = (quantity, shortName, units, npatch)
+    patchInfo = (patchPts, patchDs, patchIors)
     return bndfInfo, patchInfo, data
 
+
 def extractTime(tStart, tEnd, tBand, tInt, patches, times):
-    NT = int((tEnd-tStart)/tInt+1)
+    """Extracts a timestamp interval from a patch time series
+    
+    Parameters
+    ----------
+    tStart : float
+        Timestamp to start extracting data
+    tEnd : float
+        Timestamp to finish extracting data
+    tInt : float
+        Timestamp interval to include in extracted data
+    tBand : float
+        Time averaging window to include in extracted data
+    patches : list
+        List of patches
+    times : list
+        List of timestamps
+    
+    Returns
+    -------
+    list
+        List containing new time stamps
+    list
+        List containing new patches
+    """
+    
+    NT = int((tEnd-tStart)/tInt + 1)
     newPatches = []
     for patch in patches:
-        newPatches.append(fdspatch(patch.data.shape[0],patch.data.shape[1],NT,patch.lims,patch.orientation))
+        newPatch = fdspatch(patch.data.shape[0],
+                            patch.data.shape[1],
+                            NT, patch.lims, patch.orientation)
+        newPatches.append(newPatch)
     tCurrent = tStart
     iT = 0
     newTimes = np.zeros((NT,))
     while tCurrent < tEnd:
-        t1 = max([tCurrent-tBand/2,0])
-        t2 = min([tCurrent+tBand/2,tEnd])
-        newTimes[iT] = (t1+t2)/2
-        #print(t1,t2)
-        tCurrent = tCurrent+tInt
+        t1 = max([tCurrent - tBand/2, 0])
+        t2 = min([tCurrent + tBand/2, tEnd])
+        newTimes[iT] = (t1 + t2)/2
+        tCurrent = tCurrent + tInt
         tMask = np.argwhere((times >= t1) & (times <= t2))
-        for i in range(0,len(patches)):
-            newPatches[i].append(patches[i].average(tMask),iT)
-        iT = iT+1
+        for i in range(0, len(patches)):
+            newPatches[i].append(patches[i].average(tMask), iT)
+        iT = iT + 1
     return newTimes, newPatches
 
-def getPatchesFromMesh(grid,obst,bndfFile):
+
+def getPatchesFromMesh(grid, obst, bndfFile):
+    """Extracts patches from a mesh
+    
+    Parameters
+    ----------
+    grid : list
+        List of arrays containing grid coordinates
+    obst : list
+        List of obstructions from smokeview file
+    bndfFile : str
+        String path to boundary file
+    
+    Returns
+    -------
+    list
+        List containing time stamps
+    list
+        List containing patches
+    """
+    
     bndfInfo, patchInfo, data = readBoundaryFile(bndfFile)
     if bndfInfo == None:
         return [None], [None]
-    (quantity,shortName,units,npatch) = bndfInfo
-    (patchPts,patchDs,patchIors) = patchInfo
-    times, patches = buildPatches(patchPts, patchDs, patchIors, data, grid)
+    (quantity, shortName, units, npatch) = bndfInfo
+    (patchPts, patchDs, patchIors) = patchInfo
+    times, patches = buildPatches(
+            patchPts, patchDs, patchIors, data, grid)
     return times, patches
 
+
 def buildSpace(patches):
+    """Builds spatial grid for each patch in a list
+    
+    Parameters
+    ----------
+    patches : list
+        List of patches
+    """
+    
     for i in range(0,len(patches)):
         patches[i].buildSpace()
-
+    
+    
 def extractPoints(patches):
+    """Extracts points from a list of patches
+    
+    Parameters
+    ----------
+    patches : list
+        List of patches
+    
+    Returns
+    -------
+    list
+        List containing all coordinates
+    list
+        List containing all points
+    list
+        List containing all orientations
+    """
+    
     allCoords = []
     allPoints = []
     allOrients = []
@@ -652,24 +925,55 @@ def extractPoints(patches):
             allPoints = pts
             allOrients = orients
         else:
-            allCoords = np.append(allCoords,coords,axis=0)
-            allPoints = np.append(allPoints,pts,axis=0)
-            allOrients = np.append(allOrients,orients,axis=0)
+            allCoords = np.append(allCoords, coords, axis=0)
+            allPoints = np.append(allPoints, pts, axis=0)
+            allOrients = np.append(allOrients, orients, axis=0)
     return allCoords, allPoints, allOrients
 
+
 def getPointsFromFiles(bndfs, grids, obsts, tStart, tEnd, tBand, tInt):
+    """Extracts a timestamp interval from a patch time series
+    
+    Parameters
+    ----------
+    bndfs : list
+        List of filenames for boundary files
+    grids : list
+        List of arrays containing grid coordinates
+    obsts : list
+        List of obstructions from smokeview file
+    tStart : float
+        Timestamp to start extracting data
+    tEnd : float
+        Timestamp to finish extracting data
+    tInt : float
+        Timestamp interval to include in extracted data
+    tBand : float
+        Time averaging window to include in extracted data
+    
+    Returns
+    -------
+    list
+        List containing all coordinates
+    list
+        List containing all points
+    list
+        List containing all times
+    list
+        List containing all orientations
+    """
     allCoords = []
     allPts = []
     allOrients = []
     newTimes = []
     for file, mesh in bndfs:
         mesh = int(mesh)
-        #times, patches = getPatchesFromMesh(grids[mesh-1], obsts[mesh-1], file)
-        times, patches = importBoundaryFile(file, gridNum=mesh, grid=grids)
+        times, patches = importBoundaryFile(
+                file, gridNum=mesh, grid=grids)
         if len(times) > 1:
-            newTimes, newPatches = extractTime(tStart, tEnd, tBand, tInt, patches, times)
+            newTimes, newPatches = extractTime(
+                    tStart, tEnd, tBand, tInt, patches, times)
             buildSpace(newPatches)
-            #savePatches(dataDir,chid,times,patches)
             coords, pts, orients = extractPoints(newPatches)
             
             if len(allCoords) == 0:
@@ -677,32 +981,69 @@ def getPointsFromFiles(bndfs, grids, obsts, tStart, tEnd, tBand, tInt):
                 allPts = pts
                 allOrients = orients
             else:
-                allCoords = np.append(allCoords,coords,axis=0)
-                allPts = np.append(allPts,pts,axis=0)
-                allOrients = np.append(allOrients,orients,axis=0)
+                allCoords = np.append(allCoords, coords, axis=0)
+                allPts = np.append(allPts, pts, axis=0)
+                allOrients = np.append(allOrients, orients, axis=0)
                 
     if len(newTimes) == 0:
         print(bndfs)
         assert False, "No valid patches found."
     return allCoords, allPts, newTimes, allOrients
 
-def extractTimeParams(params):
-    ''' Extract time parameters from parameter dictionary '''
-    initialTime = params['time']['initial']
-    finalTime = params['time']['final']
-    intervalTime = params['time']['interval']
-    bandTime = params['time']['band']
-    return initialTime,finalTime,intervalTime,bandTime
 
-def getCoordinateMasks(coords,polygons):
-    masks = np.zeros((coords.shape[0],len(polygons)))
+def getCoordinateMasks(coords, polygons):
+    """Returns a mask of coordinates contained in a polygon
+    
+    Parameters
+    ----------
+    coords : list
+        List of coordinates
+    polygons : list
+        List of polygons
+    
+    Returns
+    -------
+    list
+        List of coordinate masks
+    """
+    
+    masks = np.zeros((coords.shape[0], len(polygons)))
     for i in range(0,len(polygons)):
         linkedpolygons = polygons[i]
         for p in linkedpolygons:
-            masks[np.where(in_hull(coords,p.points)),i] = 1
+            masks[np.where(in_hull(coords, p.points)), i] = 1
     return masks
 
-def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits, axis, value):
+
+def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
+              axis, value):
+    """Query boundary files
+    
+    Parameters
+    ----------
+    resultDir : str
+        String containing path to results directory
+    chid : str
+        String containing CHID from simulation
+    fdsFilePath : str
+        String containing path to fds file or achive
+    fdsQuantities : list
+        List containing quantities to query from boundary file
+    fdsUnits : list
+        List containing units for fds quantities
+    axis : int
+        Integer specifying axis to query
+    value : float
+        Axis value to query
+    
+    Returns
+    -------
+    dict
+        Dictionary containty data for each quantity
+    list
+        List of timestamps
+    """
+    
     datas = defaultdict(bool)
     
     bndfFiles = getFileList(resultDir, chid, 'bf')
@@ -716,27 +1057,56 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits, axis, value
     
     for qty, unit in zip(fdsQuantities, fdsUnits):
         allPatches = []
-        (xmin, xmax, ymin, ymax, zmin, zmax, dx, dz) = (999, -999, 999, -999, 999, -999, 999, 999)
+        (xmin, xmax) = (999, -999)
+        (ymin, ymax) = (999, -999)
+        (zmin, zmax) = (999, -999)
+        (dx, dz) = (999, 999)
         for file in bndfFiles:
             bndfFile = os.path.abspath(file)
-            quantity, shortName, units, npatch = readBoundaryHeader(file)    
-            meshNumber = 0 if numberOfMeshes == 1 else int(file.split('_')[-2])-1
+            quantity, shortName, units, npatch = readBoundaryHeader(
+                    file)
+            if numberOfMeshes == 1:
+                meshNumber = 0
+            else:
+                meshNumber = int(file.split('_')[-2]) - 1
             if quantity == qty:
-                times, patches, xmin1, xmax1, ymin1, ymax1, zmin1, zmax1, dx1, dz1 = getPatches(bndfFile, smvFile, axis, value, meshNumber)
-                (xmin, xmax) = (min([xmin, xmin1]), max([xmax, xmax1]))
-                (ymin, ymax) = (min([ymin, ymin1]), max([ymax, ymax1]))
-                (zmin, zmax) = (min([zmin, zmin1]), max([zmax, zmax1]))
+                ts, ps, x1, x2, y1, y2, z1, z2, dx1, dz1 = getPatches(
+                        bndfFile, smvFile, axis, value, meshNumber)
+                (xmin, xmax) = (min([xmin, x1]), max([xmax, x2]))
+                (ymin, ymax) = (min([ymin, y1]), max([ymax, y2]))
+                (zmin, zmax) = (min([zmin, z1]), max([zmax, z2]))
                 (dx, dz) = (min([dx, dx1]), min([dz, dz1]))
-                for patch in patches: allPatches.append(patch)
-        x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(allPatches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz, axis)
+                for patch in ps:
+                    allPatches.append(patch)
+        x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
+                allPatches, xmin, xmax, ymin, ymax, zmin, zmax,
+                dx, dz, axis)
         datas[qty] = defaultdict(bool)
         datas[qty]["MESH-%04.0f"%(meshNumber)] = defaultdict(bool)
         datas[qty]["MESH-%04.0f"%(meshNumber)]['X'] = x_grid_abs
         datas[qty]["MESH-%04.0f"%(meshNumber)]['Z'] = z_grid_abs
         datas[qty]["MESH-%04.0f"%(meshNumber)]['DATA'] = data_abs
-    return datas, times
+    return datas, ts
+
 
 def linkBndfFileToMesh(meshes, bndfs, fdsQuantities):
+    """Links boundary file back to mesh
+    
+    Parameters
+    ----------
+    meshes : list
+        List containing mesh definitions
+    bndfs : list
+        List containing path to each boundary file to query
+    fdsQuantities : list
+        List containing quantities to query from boundary file
+    
+    Returns
+    -------
+    dict
+        Dictionary containty mesh for each boundary file
+    """
+    
     if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
     numberOfMeshes = len(meshes)
     
@@ -744,34 +1114,71 @@ def linkBndfFileToMesh(meshes, bndfs, fdsQuantities):
     for qty in fdsQuantities:
         bndf_qty = []
         for bndf in bndfs:
-            quantity, shortName, units, npatch = readBoundaryHeader(bndf)
+            quantity, shortName, units, npatch = readBoundaryHeader(
+                    bndf)
             if quantity == qty:
-                meshNumber = 0 if numberOfMeshes == 1 else int(bndf.split('_')[-2])-1
+                if numberOfMeshes == 1:
+                    meshNumber = 0
+                else:
+                    meshNumber = int(bndf.split('_')[-2]) - 1
                 bndf_qty.append([bndf, meshNumber])
         bndf_dic[qty] = bndf_qty
     return bndf_dic
 
-def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, chid, fdsQuantities,
-                         tStart=0, tEnd=120, tInt=1, tBand=3, orientations=[0]):
+def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
+                         tStart=0, tEnd=120, tInt=1, tBand=3,
+                         orientations=[0]):
+    """Extract maximum value from boundary file
+    
+    Parameters
+    ----------
+    fdsF : str
+        String containing path to fds file or archive
+    smvF : str
+        String containing path to smv file or archive
+    resultDir : str
+        String containing path to results directory
+    chid : str
+        String containing CHID from simulation
+    quantities : list
+        List containing quantities to query from boundary file
+    tStart : float
+        Timestamp to start extracting data
+    tEnd : float
+        Timestamp to finish extracting data
+    tInt : float
+        Timestamp interval to include in extracted data
+    tBand : float
+        Time averaging window to include in extracted data
+    orientations : list
+        List of integers specifying which orientations to consider
+    
+    Returns
+    -------
+    dict
+        Dictionary containty data for each quantity
+    """
     fdsFile = fdsFileOperations()
-    fdsFile.importFile(fdsFilePath)
+    fdsFile.importFile(fdsF)
     meshes = list(fdsFile.meshes.keys())
     names = fdsFile.getPolygonNamesFromFdsFile()
-    smvGrids, smvObsts, smvBndfs, smvSurfs = parseSMVFile(smvFilePath)
-    #linesSMV = zreadlines(smvFilePath)
-    points = parseFDSforPts(fdsFile.obsts, smvObsts, names, extend=[0,0,0])
+    smvGrids, smvObsts, smvBndfs, smvSurfs = parseSMVFile(smvF)
+    
+    fdsObsts = fdsFile.obsts
+    points = parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0])
     polygons, numberOfGroups = pts2polygons(points)
     
     bndfs = getFileList(resultDir, chid, 'bf')
-    bndf_dic = linkBndfFileToMesh(meshes, bndfs, fdsQuantities)
-    
-    smvGrids, smvObsts, smvBndfs, smvSurfs = parseSMVFile(smvFilePath)
+    bndf_dic = linkBndfFileToMesh(meshes, bndfs, quantities)
     
     datas = defaultdict(bool)
-    for qty in fdsQuantities:
+    for qty in quantities:
         datas[qty] = defaultdict(bool)
-        times, mPts, orients = loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndf_dic[qty], smvGrids, smvObsts, orientations, polygons)
+        times, mPts, orients = loadBNDFdata(
+                tStart, tEnd, tInt, tBand, bndf_dic[qty], 
+                smvGrids, smvObsts, orientations, polygons)
         datas[qty]['TIMES'] = times
         datas[qty]['NAMES'] = names
         datas[qty]['DATA'] = mPts
     return datas
+

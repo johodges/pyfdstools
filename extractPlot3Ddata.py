@@ -256,10 +256,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
         
         times3D = []
         datas3D = []
-        datas2D = []
-        lims2D = []
         lims3D = []
-        coords2D = []
         for slcfFile in slcfFiles:
             timesSLCF = readSLCFtimes(slcfFile)
             times = []
@@ -268,96 +265,57 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
             #with open(slcfFile, 'rb') as f:
             quantity, shortName, units, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
             # Check if slice is correct quantity
-            if (quantity == quantityToExport):
+            correctQuantity = (quantity == quantityToExport)
+            # Check if slice is 2-dimensional
+            threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
+            
+            if correctQuantity and threeDimSlice:
                 (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
                 # Check if slice is 3-D
-                if (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0):
-                    print(slcfFile, quantity, shortName, units, iX, eX, iY, eY, iZ, eZ)
-                    if time == None:
-                        datas2 = np.zeros((NX+1, NY+1, NZ+1, len(timesSLCF)))
-                        for i in range(0, len(timesSLCF)):
-                            t, data = readNextTime(f, NX, NY, NZ)
-                            data = np.reshape(data, (NX+1, NY+1, NZ+1),order='F')
-                            datas2[:,:,:,i] = data
-                        times = timesSLCF
-                    elif (time != None) and (dt == None):
-                        datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-                        i = np.argmin(abs(timesSLCF-time))
-                        f.seek(i*4*(5+(NX+1)*(NY+1)*(NZ+1)),1)
+                print(slcfFile, quantity, shortName, units, iX, eX, iY, eY, iZ, eZ)
+                if time == None:
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, len(timesSLCF)))
+                    for i in range(0, len(timesSLCF)):
                         t, data = readNextTime(f, NX, NY, NZ)
                         data = np.reshape(data, (NX+1, NY+1, NZ+1),order='F')
-                        datas2[:,:,:,0] = data
-                        times = [timesSLCF[i]]
-                    elif (time != None) and (dt != None):
-                        datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-                        i = np.argmin(abs(timesSLCF-(time-dt/2)))
-                        j = np.argmin(abs(timesSLCF-(time+dt/2)))
-                        f.seek(i*4*(5+(NX+1)*(NY+1)*(NZ+1)),1)
-                        data = True
-                        for ii in range(i,j+1):
-                            if data is not False:
-                                t, data = readNextTime(f, NX, NY, NZ)
-                                data = np.reshape(data, (NX+1, NY+1, NZ+1), order='F')
-                                datas2[:,:,:,0] = datas2[:,:,:,0] + data
-                        if j-i > 0: datas2[:,:,:,0] = datas2[:,:,:,0] / (j-i)
-                        times = [timesSLCF[i]]
-                    lims3D.append([iX, eX, iY, eY, iZ, eZ])
-                    datas3D.append(datas2)
-                    times3D.append(times)
-                else:
-                    '''
-                    print("2-D slice:", slcfFile)
-                    if time == None:
-                        datas2 = np.zeros((NX+1, NY+1, NZ+1, len(timesSLCF)))
-                        for i in range(0, len(timesSLCF)):
+                        datas2[:,:,:,i] = data
+                    times = timesSLCF
+                elif (time != None) and (dt == None):
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+                    i = np.argmin(abs(timesSLCF-time))
+                    f.seek(i*4*(5+(NX+1)*(NY+1)*(NZ+1)),1)
+                    t, data = readNextTime(f, NX, NY, NZ)
+                    data = np.reshape(data, (NX+1, NY+1, NZ+1),order='F')
+                    datas2[:,:,:,0] = data
+                    times = [timesSLCF[i]]
+                elif (time != None) and (dt != None):
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+                    i = np.argmin(abs(timesSLCF-(time-dt/2)))
+                    j = np.argmin(abs(timesSLCF-(time+dt/2)))
+                    f.seek(i*4*(5+(NX+1)*(NY+1)*(NZ+1)),1)
+                    data = True
+                    for ii in range(i,j+1):
+                        if data is not False:
                             t, data = readNextTime(f, NX, NY, NZ)
-                            data = np.reshape(data, (NX+1, NY+1, NZ+1),order='F')
-                            datas2[:,:,:,i] = data
-                    elif (time != None) and (dt == None):
-                        datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-                        i = np.argmin(abs(timesSLCF-time))
-                        f.seek(i*4*(5+(NX+1)*(NY+1)*(NZ+1)),1)
-                        t, data = readNextTime(f, NX, NY, NZ)
-                        data = np.reshape(data, (NX+1, NY+1, NZ+1),order='F')
-                        datas2[:,:,:,0] = data
-                        times = [timesSLCF[i]]
-                    elif (time != None) and (dt != None):
-                        datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-                        i = np.argmin(abs(timesSLCF-(time-dt/2)))
-                        j = np.argmin(abs(timesSLCF-(time+dt/2)))
-                        f.seek(i*4*(5+(NX+1)*(NY+1)*(NZ+1)),1)
-                        for ii in range(i,j+1):
-                            t, data = readNextTime(f, NX, NY, NZ)
-                            data = np.reshape(data, (NX+1, NY+1, NZ+1),order='F')
+                            data = np.reshape(data, (NX+1, NY+1, NZ+1), order='F')
                             datas2[:,:,:,0] = datas2[:,:,:,0] + data
-                            
-                        if j-i > 0: datas2[:,:,:,0] = datas2[:,:,:,0] / (j-i)
-                        times = [timesSLCF[i]]
-                    lims2D.append([iX, eX, iY, eY, iZ, eZ])
-                    datas2D.append(datas2)
-                    coords2D.append([xGrid[iX, iY, iZ], yGrid[iX, iY, iZ], zGrid[iX, iY, iZ]])
-                    '''
+                    if j-i > 0: datas2[:,:,:,0] = datas2[:,:,:,0] / (j-i)
+                    times = [timesSLCF[i]]
+                lims3D.append([iX, eX, iY, eY, iZ, eZ])
+                datas3D.append(datas2)
+                times3D.append(times)
             f.close()
         grids[meshStr]['datas3D'] = datas3D
         grids[meshStr]['lims3D'] = lims3D
-        grids[meshStr]['datas2D'] = datas2D
-        grids[meshStr]['lims2D'] = lims2D
-        grids[meshStr]['coords2D'] = coords2D
         
     grid_abs = getAbsoluteGrid(grids)
     (xGrid_abs, yGrid_abs, zGrid_abs) = (grid_abs[:,:,:,0], grid_abs[:,:,:,1], grid_abs[:,:,:,2])
-    #print(xGrid_abs.shape)
-    #print(len(datas))
-    #print(datas[0].shape)
-    #print(np.where(np.isnan(datas[0])))
-    #print(lims)
     tInd = grids[list(grids.keys())[0]]['datas3D'][0].shape[3]
     data_abs = np.zeros((xGrid_abs.shape[0], xGrid_abs.shape[1], xGrid_abs.shape[2], tInd))
     data_abs[:,:,:,:] = np.nan
     for key in list(grids.keys()):
         (xGrid, yGrid, zGrid) = (grids[key]['xGrid'], grids[key]['yGrid'], grids[key]['zGrid'])
         (datas3D, lims3D) = (grids[key]['datas3D'], grids[key]['lims3D'])
-        (datas2D, lims2D, coords2D) = (grids[key]['datas2D'], grids[key]['lims2D'], grids[key]['coords2D'])
         for data, lim, times in zip(datas3D, lims3D, times3D):
             xloc_mn = np.where(np.isclose(abs(xGrid_abs-xGrid[lim[0],0,0]),0, atol=1e-04))[0][0]
             xloc_mx = np.where(np.isclose(abs(xGrid_abs-xGrid[lim[1],0,0]),0, atol=1e-04))[0][0]
@@ -383,16 +341,105 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
                 
                 tmpGrid = np.array([xi, yi, zi]).T
                 for i in range(0, NT):
-                    #print(x.shape, y.shape, z.shape, data.shape)
-                    #print(xGrid[lim[0],0,0], xGrid[lim[1],0,0], yGrid[0,lim[2],0], yGrid[0,lim[3],0], zGrid[0,0,lim[4]], zGrid[0,0,lim[5]])
-                    #print(xGrid_abs[xloc_mn,0,0], xGrid_abs[xloc_mx,0,0], yGrid_abs[0,yloc_mn,0], yGrid_abs[0,yloc_mx,0], zGrid_abs[0,0,zloc_mn], zGrid_abs[0,0,zloc_mx])
                     interpolator = scpi.RegularGridInterpolator((x, y, z), data[:, :, :, i])
                     data2 = interpolator(tmpGrid)
                     data2 = np.reshape(data2, (ANX, ANY, ANZ), order='C')
                     data_abs[xloc_mn:xloc_mx+1, yloc_mn:yloc_mx+1, zloc_mn:zloc_mx+1,i] = data2
             else:
                 data_abs[xloc_mn:xloc_mx+1, yloc_mn:yloc_mx+1, zloc_mn:zloc_mx+1,:] = data
-            #data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:] = data
+        
+    return grid_abs, data_abs, times3D[0]
+
+
+
+
+
+def readSLCF2Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
+    if '.zip' in resultDir:
+        xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
+    else:
+        xyzFiles = glob.glob("%s%s*.xyz"%(resultDir, chid))
+    grids = defaultdict(bool)
+    
+    for xyzFile in xyzFiles:
+        grid, gridHeader = readXYZfile(xyzFile)
+        xGrid, yGrid, zGrid = rearrangeGrid(grid, gridHeader)
+        
+        mesh = xyzFile.split(chid)[-1].split('.xyz')[0].replace('_','')
+        meshStr = "%s"%(chid) if mesh == '' else "%s_%s"%(chid, mesh)
+        if '.zip' in resultDir:
+            slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
+            slcfFiles = [x for x in slcfFiles if '%s'%(meshStr) in x]
+        else:
+            slcfFiles = glob.glob("%s%s_*.sf"%(resultDir, meshStr))
+        
+        grids[meshStr] = defaultdict(bool)
+        grids[meshStr]['xGrid'] = xGrid
+        grids[meshStr]['yGrid'] = yGrid
+        grids[meshStr]['zGrid'] = zGrid
+        
+        datas2D = []
+        lims2D = []
+        coords2D = []
+        times2D = []
+        for slcfFile in slcfFiles:
+            timesSLCF = readSLCFtimes(slcfFile)
+            times = []
+            f = zopen(slcfFile)
+            
+            quantity, shortName, units, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+            # Check if slice is correct quantity
+            correctQuantity = (quantity == quantityToExport)
+            # Check if slice is 2-dimensional
+            threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
+            
+            if correctQuantity and not threeDimSlice:
+                (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
+                print("2-D slice:", slcfFile)
+                if time == None:
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, len(timesSLCF)))
+                    for i in range(0, len(timesSLCF)):
+                        t, data = readNextTime(f, NX, NY, NZ)
+                        data = np.reshape(data, (NX+1, NY+1, NZ+1), order='F')
+                        datas2[:, :, :, i] = data
+                    times = timesSLCF
+                elif (time != None) and (dt == None):
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+                    i = np.argmin(abs(timesSLCF-time))
+                    f.seek(i*4*(5+(NX+1)*(NY+1)*(NZ+1)),1)
+                    t, data = readNextTime(f, NX, NY, NZ)
+                    data = np.reshape(data, (NX+1, NY+1, NZ+1), order='F')
+                    datas2[:, :, :, 0] = data
+                    times = [timesSLCF[i]]
+                elif (time != None) and (dt != None):
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+                    i = np.argmin(abs(timesSLCF-(time-dt/2)))
+                    j = np.argmin(abs(timesSLCF-(time+dt/2)))
+                    f.seek(i*4*(5+(NX+1)*(NY+1)*(NZ+1)),1)
+                    for ii in range(i,j+1):
+                        t, data = readNextTime(f, NX, NY, NZ)
+                        data = np.reshape(data, (NX+1, NY+1, NZ+1),order='F')
+                        datas2[:,:,:,0] = datas2[:,:,:,0] + data
+                        
+                    if j-i > 0: datas2[:,:,:,0] = datas2[:,:,:,0] / (j-i)
+                    times = [timesSLCF[i]]
+                lims2D.append([iX, eX, iY, eY, iZ, eZ])
+                datas2D.append(datas2)
+                coords2D.append([xGrid[iX, iY, iZ], yGrid[iX, iY, iZ], zGrid[iX, iY, iZ]])
+                times2D.append(np.array(times))
+            f.close()
+        grids[meshStr]['datas2D'] = datas2D
+        grids[meshStr]['lims2D'] = lims2D
+        grids[meshStr]['coords2D'] = coords2D
+        
+    grid_abs = getAbsoluteGrid(grids)
+    (xGrid_abs, yGrid_abs, zGrid_abs) = (grid_abs[:,:,:,0], grid_abs[:,:,:,1], grid_abs[:,:,:,2])
+    tInd = grids[list(grids.keys())[0]]['datas2D'][0].shape[3]
+    data_abs = np.zeros((xGrid_abs.shape[0], xGrid_abs.shape[1], xGrid_abs.shape[2], tInd))
+    data_abs[:,:,:,:] = np.nan
+    for key in list(grids.keys()):
+        (xGrid, yGrid, zGrid) = (grids[key]['xGrid'], grids[key]['yGrid'], grids[key]['zGrid'])
+        (datas2D, lims2D, coords2D) = (grids[key]['datas2D'], grids[key]['lims2D'], grids[key]['coords2D'])
         
         for data, coord in zip(datas2D, coords2D):
             xloc = np.where(np.isclose(abs(xGrid_abs-coord[0]),0, atol=1e-04))[0][0]
@@ -401,7 +448,13 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
             (NX, NY, NZ, NT) = np.shape(data)
             data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:NT] = data
         
-    return grid_abs, data_abs, times3D[0]
+    return grid_abs, data_abs, times2D[0]
+
+
+
+
+
+
 
 def extractPoint(point, grid, data):
     ind = np.argmin(np.sum(abs(grid-point),axis=3).flatten())
@@ -423,7 +476,6 @@ def readNextTime(f, NX, NY, NZ):
         data = np.frombuffer(f.read((NX+1)*(NY+1)*(NZ+1)*4), dtype=np.float32)
     except:
         data = False
-    #data = np.fromfile(f,dtype=np.float32,count=(NX+1)*(NY+1)*(NZ+1))
     return time, data
 
 def readSLCFheader(f):
@@ -509,8 +561,8 @@ def visualizePlot3D(x, z, T, U, V, W, HRR):
         plt.figure(figsize=(12*xrange/zrange,12))
     else:
         plt.figure(figsize=(12,12*zrange/xrange))
-    (qnty_mn, qnty_mx) = (np.nanmin(data_slc), np.nanmax(data_slc))
+    (qnty_mn, qnty_mx) = (np.nanmin(T), np.nanmax(T))
     qnty_mn = 20
     qnty_mx = 370
-    plt.contourf(x, z, T, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, levels=np.linspace(qnty_mn,qnty_mx,100), extend='both')
+    plt.contourf(x, z, T, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, levels=np.linspace(qnty_mn, qnty_mx,100), extend='both')
     plt.colorbar()

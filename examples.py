@@ -17,9 +17,9 @@
 #=======================================================================
 import sys
 
-sys.path.append('E:\\projects\\customPythonModules\\')
+sys.path.append('C:\\Users\\Jonathan\\Desktop\\')
 
-import fdsTools as fds
+import pyfdstools as fds
 import os
 from collections import defaultdict
 import numpy as np
@@ -47,6 +47,43 @@ def exampleErrorCalculation():
     errorvalues = fds.calculatePercentile([100, 200, 300, 400, 500, 600], 'Plume Temperature', 0.95, fdsVersion='6.7.1')
     fig, ax1 = fds.plotPercentile(500, 'Plume Temperature', fdsVersion='6.7.1')
     return errorvalues
+
+def exampleReadSlcf2dResults(resultDir=None, chid=None,
+                             fdsQuantities = ['TEMPERATURE'],
+                             tStart=0, tEnd=120):
+    if chid is None: chid = "case001"
+    if resultDir is None: resultDir = os.path.abspath("examples%s%s.zip"%(os.sep, chid))
+    
+    datas = defaultdict(bool)
+    
+    for qty in fdsQuantities:
+        grid, data, times = fds.readSLCF2Ddata(chid, resultDir, qty)
+        tStartInd = np.argwhere(times >= tStart)[0][0]
+        tEndInd = np.argwhere(times <= tEnd)[-1][0]
+        data_tavg = np.nanmean(data[:, :, :, tStartInd:tEndInd], axis=3)
+        datas[qty] = data_tavg.copy()
+    datas['GRID'] = grid
+    datas['TIMES'] = times
+    
+    return datas
+
+def exampleExtract2dFromSlcf2d(datas,
+                               fdsQuantities = ['TEMPERATURE'],
+                               fdsUnits = ['C'],
+                               axis=1, value=2.5,
+                               qnty_mn=20, qnty_mx=150):
+    datas2D = defaultdict(bool)    
+    for qty, unit in zip(fdsQuantities, fdsUnits):
+        x, z, data_slc = fds.findSliceLocation(datas['GRID'], datas[qty], axis, value)
+        datas2D[qty] = data_slc
+        fig = fds.plotSlice(x, z, data_slc, axis,
+                            qnty_mn=qnty_mn, qnty_mx=qnty_mx,
+                            clabel="%s (%s)"%(qty, unit),
+                            cbarticks=[20, 40, 60, 80, 100, 120, 140])
+    datas2D['X'] = x
+    datas2D['Z'] = z
+    
+    return datas2D, fig
 
 def exampleReadSlcf3dResults(resultDir=None, chid=None,
                              fdsQuantities = ['TEMPERATURE'],
@@ -153,6 +190,10 @@ if __name__ == '__main__':
     exampleSaveFile(file)
     print("Plotting error example")
     exampleErrorCalculation()
+    print("Importing SLCF2D results example")
+    datas = exampleReadSlcf2dResults()
+    print("Extracting slice from SLCF2D results example")
+    datas2D, fig = exampleExtract2dFromSlcf2d(datas)
     print("Importing SLCF3D results example")
     datas = exampleReadSlcf3dResults()
     print("Extracting 2-D slice from SLCF3D results example")

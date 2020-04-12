@@ -17,10 +17,9 @@
 #=======================================================================
 import os
 import numpy as np
-import yaml
 from collections import defaultdict
 import glob
-from .utilities import zopen, in_hull, zreadlines, getFileList, pts2polygons
+from .utilities import zopen, in_hull, getFileList, pts2polygons
 from .fdsFileOperations import fdsFileOperations
 from .smokeviewParser import parseSMVFile
 

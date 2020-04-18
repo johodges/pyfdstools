@@ -24,7 +24,7 @@ def load_devc(file):
     with open(file, 'r') as f:
         line = f.readline()
         line = f.readline()
-    header = line.split(',')
+    header = line.replace('\n','').split(',')
     data = pd.read_csv(file, delimiter=',', names=header, skiprows=2)
     return data
 
@@ -32,6 +32,6 @@ def load_hrr(file):
     with open(file, 'r') as f:
         line = f.readline()
         line = f.readline()
-    header = line.split(',')
+    header = line.replace('\n','').split(',')
     data = pd.read_csv(file, delimiter=',', names=header, skiprows=2)
     return data

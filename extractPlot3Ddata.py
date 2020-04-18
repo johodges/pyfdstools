@@ -160,25 +160,35 @@ def findSliceLocation(grid, data, axis, value, plot3d=False):
         return x, z, data2
 
 def plotSlice(x, z, data_slc, axis,
-              cmap=None, figsize=None, fs=16,
+              cmap=None, figsize=None, fs=16, figsizeMult=12,
               qnty_mn=None, qnty_mx=None,
-              levels=None, cbarticks=None, clabel=None):
-    if cmap == None: cmap = buildSMVcolormap()
-    if cmap == 'SMV': cmap = buildSMVcolormap()
+              levels=None, cbarticks=None, clabel=None,
+              highlightValue=None, highlightWidth=None,
+              reverseXY=False):
+    percentile = None
+    if highlightValue is not None: percentile = (highlightValue-qnty_mn)/(qnty_mx-qnty_mn)
+    if cmap == None: cmap = buildSMVcolormap(percentile=percentile, width=highlightWidth)
+    if cmap == 'SMV': cmap = buildSMVcolormap(percentile=percentile, width=highlightWidth)
     if levels == None: levels = 100
     if cbarticks is None: cbarticks = np.linspace(qnty_mn, qnty_mx, 10)
-    if figsize == None:
+    if reverseXY:
+        (x1 , z1, d1) = (z, x, data_slc[:, :])
+        zrange = x.max()-x.min()
+        xrange = z.max()-z.min()
+    else:
+        (x1, z1, d1) = (x, z, data_slc[:, :])
         xrange = x.max()-x.min()
         zrange = z.max()-z.min()
+    if figsize == None:
         if zrange > xrange:
-            fig, ax = plt.subplots(1, 1, figsize=(12*xrange/zrange,12))
+            fig, ax = plt.subplots(1, 1, figsize=(figsizeMult*xrange/zrange, figsizeMult))
         else:
-            fig, ax = plt.subplots(1, 1, figsize=(12,12*zrange/xrange))
+            fig, ax = plt.subplots(1, 1, figsize=(figsizeMult, figsizeMult*zrange/xrange))
     else:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
     if qnty_mn == None: qnty_mn = np.nanmin(data_slc)
     if qnty_mx == None: qnty_mx = np.nanmax(data_slc)
-    im = ax.contourf(x, z, data_slc[:,:], cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, levels=np.linspace(qnty_mn,qnty_mx,levels), extend='both')
+    im = ax.contourf(x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, levels=np.linspace(qnty_mn,qnty_mx,levels), extend='both')
     cbar = fig.colorbar(im, cmap=cmap, extend='both', ticks=cbarticks)
     cbar.ax.tick_params(labelsize=fs)
     if clabel is not None: cbar.set_label(clabel, fontsize=fs)
@@ -316,6 +326,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport, time=None, dt=None):
     for key in list(grids.keys()):
         (xGrid, yGrid, zGrid) = (grids[key]['xGrid'], grids[key]['yGrid'], grids[key]['zGrid'])
         (datas3D, lims3D) = (grids[key]['datas3D'], grids[key]['lims3D'])
+        print("Starting Grid %s"%(key))
         for data, lim, times in zip(datas3D, lims3D, times3D):
             xloc_mn = np.where(np.isclose(abs(xGrid_abs-xGrid[lim[0],0,0]),0, atol=1e-04))[0][0]
             xloc_mx = np.where(np.isclose(abs(xGrid_abs-xGrid[lim[1],0,0]),0, atol=1e-04))[0][0]

@@ -159,6 +159,8 @@ class fdsLineTypes(object):
         surfTypes['RADIUS'] = 'float'
         surfTypes['TRANSPARENCY'] = 'float'
         surfTypes['TAU_V'] = 'float'
+        surfTypes['CELL_SIZE_FACTOR'] = 'float'
+        surfTypes['STRETCH_FACTOR'] = 'float'
         return surfTypes
 
     def getVENTtypes(self, version="6.7.4"):
@@ -253,6 +255,8 @@ class fdsLineTypes(object):
         devcTypes['DUCT_ID'] = 'string'
         devcTypes['PROP_ID'] = 'string'
         devcTypes['SPEC_ID'] = 'string'
+        devcTypes['POINTS'] = 'int'
+        devcTypes['Z_ID'] = 'string'
         devcTypes['unknownCounter'] = 'ignore'
         return devcTypes
 

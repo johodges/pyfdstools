@@ -17,7 +17,7 @@
 #=======================================================================
 import sys
 
-sys.path.append('C:\\Users\\Jonathan\\Desktop\\')
+sys.path.append('E:\\projects\\customPythonModules\\')
 
 import pyfdstools as fds
 import os

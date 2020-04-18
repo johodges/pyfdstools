@@ -58,7 +58,7 @@ def getJHcolors():
     colors = colors/255
     return colors
 
-def buildSMVcolormap():
+def buildSMVcolormap(percentile=None, width=None):
     newcmp = np.zeros((256,4))
     
     colors = np.array([[0,0,1,1],
@@ -77,6 +77,9 @@ def buildSMVcolormap():
             m = (colors[j,:]-colors[j-1,:])/(colorInds[j]-colorInds[j-1])
             b = colors[j,:]-m*(colorInds[j]-colorInds[j-1])
             newcmp[i] = colors[j-1,:]+m*(i-colorInds[j-1])
+    if percentile is not None:
+        pind = int(percentile*newcmp.shape[0])
+        newcmp[pind-width:pind+width, :3] = 0.0
     cmap = ListedColormap(newcmp)
     
     return cmap

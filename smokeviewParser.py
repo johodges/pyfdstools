@@ -205,10 +205,11 @@ def parseSMVFile(smvFile):
         if ("OBST" in line2) and ("HIDE_OBST" not in line2):
             smvObj = parseOBST(
                     linesSMV, i, gridTRNX, gridTRNY, gridTRNZ)
-            if len(obsts) == 0:
-                obsts = smvObj
-            else:
-                obsts = np.append(obsts,smvObj,axis=0)
+            if len(smvObj) > 0:
+                if len(obsts) == 0:
+                    obsts = smvObj
+                else:
+                    obsts = np.append(obsts, smvObj, axis=0)
         if (".bf" in line2):
             mesh, bndfName, vID, vNum = parseBNDF(linesSMV, i)
             bndfs.append([mesh, bndfName, vID, vNum])

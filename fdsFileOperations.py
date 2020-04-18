@@ -272,10 +272,10 @@ class fdsFileOperations(object):
         """
         
         bndf = defaultdict(bool)
-        bndf['ID'] = "BNDF-%05.0f"%(self.bndfCounter)
+        bndf['ID'] = "BNDF-%05.0f"%(self.bndfs['unknownCounter'])
         bndf['QUANTITY'] = QUANTITY
         if CELL_CENTERED != None: bndf['CELL_CENTERED'] = CELL_CENTERED
-        self.bndfCounter += 1
+        self.bndfs['unknownCounter'] += 1
         self.bndfs[bndf['ID']] = bndf
     
     
@@ -816,7 +816,7 @@ class fdsFileOperations(object):
         """
         
         slcf = defaultdict(bool)
-        slcf['ID'] = "SLCF-%05.0f"%(self.slcfCounter)
+        slcf['ID'] = "SLCF-%05.0f"%(self.slcfs['unknownCounter'])
         slcf['QUANTITY'] = QUANTITY
         if PBX != None: slcf['PBX'] = PBX
         if PBY != None: slcf['PBY'] = PBY
@@ -824,7 +824,7 @@ class fdsFileOperations(object):
         if SPEC_ID != None: slcf['SPEC_ID'] = SPEC_ID
         if Vec: slcf['VECTOR'] = 'TRUE'
         if XB != None: slcf['XB'] = XB
-        self.slcfCounter += 1
+        self.slcfs['unknownCounter'] += 1
         self.slcfs[slcf['ID']] = slcf
         
         
@@ -1082,7 +1082,7 @@ class fdsFileOperations(object):
         
         lineDict = defaultdict(bool)
         keys = self.splitLineIntoKeys(line)
-        
+        #print(line)
         for key in keys:
             keyID, keyID2, keyType, keyValue = self.interpretKey(key, lineType, types)
             if keyType == 'string':
@@ -1491,77 +1491,85 @@ class fdsFileOperations(object):
         
         keys = list(dic.keys())
         keys.sort()
-        try:
-            if 'ID' in keys:
-                keys.insert(0, keys.pop(keys.index('ID')))
-                if dic['ID'] is False: dic['ID'] = 'UNKNOWN'
-            for key in internalKeys:
-                if key in keys:
-                    keys.remove(key)
-            for key2 in keys:
-                if (types[key2] == 'ignore'):
-                    pass
-                elif (types[key2] == 'string'):
-                    text = "%s%s='%s', "%(text, key2, dic[key2])
-                elif (types[key2] == 'float'):
-                    text = "%s%s=%0.4f, "%(text, key2, dic[key2])
-                elif (types[key2] == 'int'):
-                    text = "%s%s=%0.0f, "%(text, key2, dic[key2])
-                elif (types[key2] == 'bool'):
-                    boolCheck = False
-                    if (dic[key2] is True): boolCheck = True
-                    if (dic[key2] == 'TRUE'): boolCheck = True
-                    if (dic[key2] == '.TRUE.'): boolCheck = True
-                    if boolCheck:
-                        text = "%s%s=.TRUE., "%(text, key2)
-                    else:
-                        text = "%s%s=.FALSE., "%(text, key2)
-                elif ('listind' in types[key2]):
-                    temp = dic[key2]
-                    tempTxt = "%s(%0.0f:%0.0f)="%(
-                            key2, 1, temp.shape[0])
-                    for t in temp:
-                        if ('string' in types[key2]):
-                            tempTxt = "%s '%s',"%(tempTxt, t[0])
-                        if ('float' in types[key2]):
-                            tempTxt = "%s %0.4f,"%(tempTxt, t[0])
-                        if ('int' in types[key2]):
-                            tempTxt = "%s %0.0f,"%(tempTxt, t[0])
-                    text = "%s%s "%(text, tempTxt)
-                elif ('list' in types[key2]):
-                    temp = dic[key2]
-                    tempTxt = "%s="%(key2)
-                    for t in temp:
-                        if ('string' in types[key2]):
-                            tempTxt = "%s '%s',"%(tempTxt, t)
-                        if ('float' in types[key2]):
-                            tempTxt = "%s %0.4f,"%(tempTxt, t)
-                        if ('int' in types[key2]):
-                            tempTxt = "%s %0.0f,"%(tempTxt, t)
-                    text = "%s%s "%(text, tempTxt)
-                elif ('matrix' in types[key2]):
-                    temp = dic[key2]
-                    sz = dic[key2].shape
-                    ar1 = "(%0.0f:%0.0f,%0.0f:%0.0f)"%(
-                            1, sz[0], 1, sz[1])
-                    tempTxt = "%s%s="%(key2, ar1)
-                    for t in dic[key2].flatten():
-                        if ('string' in types[key2]):
-                            tempTxt = "%s '%s',"%(tempTxt, t)
-                        if ('float' in types[key2]):
-                            tempTxt = "%s %0.4f,"%(tempTxt, t)
-                        if ('int' in types[key2]):
-                            tempTxt = "%s %0.0f,"%(tempTxt, t)
-                    text = "%s%s "%(text, tempTxt)
-                    
+        #try:
+        if 'ID' in keys:
+            keys.insert(0, keys.pop(keys.index('ID')))
+            if dic['ID'] is False: dic['ID'] = 'UNKNOWN'
+        for key in internalKeys:
+            if key in keys:
+                keys.remove(key)
+        for key2 in keys:
+            if (types[key2] == 'ignore'):
+                pass
+            elif (types[key2] == 'string'):
+                text = "%s%s='%s', "%(text, key2, dic[key2])
+            elif (types[key2] == 'float'):
+                text = "%s%s=%0.4f, "%(text, key2, dic[key2])
+            elif (types[key2] == 'int'):
+                text = "%s%s=%0.0f, "%(text, key2, dic[key2])
+            elif (types[key2] == 'bool'):
+                boolCheck = False
+                if (dic[key2] is True): boolCheck = True
+                if (dic[key2] == 'TRUE'): boolCheck = True
+                if (dic[key2] == '.TRUE.'): boolCheck = True
+                if boolCheck:
+                    text = "%s%s=.TRUE., "%(text, key2)
                 else:
-                    print(key2, types[key2])
-                if newline and (types[key2] != 'ignore'):
-                    text = "%s\n      "%(text)
-        except:
-            print(keys)
-            print(dic)
-            print(types[key2])
+                    text = "%s%s=.FALSE., "%(text, key2)
+            elif ('listind' in types[key2]):
+                temp = np.array(dic[key2])
+                tempTxt = "%s(%0.0f:%0.0f)="%(
+                        key2, 1, temp.shape[0])
+                if type(temp[0]) == np.float64: temp = [temp]
+                for t in temp:
+                    if ('string' in types[key2]):
+                        tempTxt = "%s '%s',"%(tempTxt, t[0])
+                    if ('float' in types[key2]):
+                        tempTxt = "%s %0.4f,"%(tempTxt, t[0])
+                    if ('int' in types[key2]):
+                        tempTxt = "%s %0.0f,"%(tempTxt, t[0])
+                text = "%s%s "%(text, tempTxt)
+            elif ('list' in types[key2]):
+                temp = dic[key2]
+                tempTxt = "%s="%(key2)
+                for t in temp:
+                    if ('string' in types[key2]):
+                        tempTxt = "%s '%s',"%(tempTxt, t)
+                    if ('float' in types[key2]):
+                        tempTxt = "%s %0.4f,"%(tempTxt, t)
+                    if ('int' in types[key2]):
+                        tempTxt = "%s %0.0f,"%(tempTxt, t)
+                text = "%s%s "%(text, tempTxt)
+            elif ('matrix' in types[key2]):
+                temp = np.array(dic[key2])
+                sz = temp.shape
+                if len(sz) == 1:
+                    temp = np.reshape(temp, (temp.shape[0], 1))
+                    sz = temp.shape
+                ar1 = "(%0.0f:%0.0f,%0.0f:%0.0f)"%(
+                        1, sz[0], 1, sz[1])
+                tempTxt = "%s%s="%(key2, ar1)
+                for t in temp.flatten():
+                    if ('string' in types[key2]):
+                        tempTxt = "%s '%s',"%(tempTxt, t)
+                    if ('float' in types[key2]):
+                        tempTxt = "%s %0.4f,"%(tempTxt, t)
+                    if ('int' in types[key2]):
+                        tempTxt = "%s %0.0f,"%(tempTxt, t)
+                text = "%s%s "%(text, tempTxt)
+                
+            else:
+                print(keys)
+                print(dic)
+                print(key2)
+                print(types[key2])
+                assert False, "Stopped"
+            if newline and (types[key2] != 'ignore'):
+                text = "%s\n      "%(text)
+        #except:
+        #    print(keys)
+        #    print(dic)
+        #    print(types[key2])
         return text
     
     
@@ -1908,7 +1916,7 @@ class fdsFileOperations(object):
                 txt = txt[1:]
             updatedKeys[i] = txt
         for i, txt in enumerate(updatedKeys):
-            while txt[-1] == ' ' or txt[-1] == ',':
+            while txt[-1] == ' ' or txt[-1] == ',' or txt[-1] == '/':
                 txt = txt[:-1]
             updatedKeys[i] = txt
         return updatedKeys

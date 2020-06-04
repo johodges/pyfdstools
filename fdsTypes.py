@@ -65,6 +65,7 @@ class fdsLineTypes(object):
         propTypes['FLOW_RATE'] = 'float'
         propTypes['PARTICLE_VELOCITY'] = 'float'
         propTypes['SPRAY_ANGLE'] = 'listfloat'
+        propTypes['GAUGE_EMISSIVITY'] = 'float'
         return propTypes
     
     def getSPECtypes(self, version="6.7.4"):

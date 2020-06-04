@@ -166,9 +166,33 @@ class fdspatch(object):
         return coords, pts, orients
     
     
+def getPatchOptions(bndfFile, smvFile, meshNum):
+    """Read patches from boundary file and return options for each axis
+    """
+    f = zopen(bndfFile)
+    quantity, shortName, units, npatch = parseBndfHeader(f)
+    patchInfo, data = parseBndfPatches(f, npatch)
+    f.close()
+    (patchPts,patchDs,patchIors) = patchInfo
+    
+    times, patches = importBoundaryFile(
+            bndfFile, smvFile, gridNum=meshNum)
+    xoptions = []
+    yoptions = []
+    zoptions = []
+    for i in range(0, len(patches)):
+        patches[i].data[patches[i].data < -1e10] = np.nan
+        lims = patches[i].lims
+        if lims[0] == lims[1]: xoptions.append([lims, patchIors[i]])
+        if lims[2] == lims[3]: yoptions.append([lims, patchIors[i]])
+        if lims[4] == lims[5]: zoptions.append([lims, patchIors[i]])
+    return xoptions, yoptions, zoptions
+
+        
 def getPatches(bndfFile, smvFile, axis, value, meshNum,
                xmin=999, xmax=-999, ymin=999, ymax=-999,
-               zmin=999, zmax=-999, dx=999, dz=999):
+               zmin=999, zmax=-999, dx=999, dz=999,
+               showOptions=False):
     """Read patches from boundary file
     
     Parameters
@@ -236,8 +260,6 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
     for i in range(0, len(patches)):
         patches[i].data[patches[i].data < -1e10] = np.nan
         lims = patches[i].lims
-        if lims[0] == lims[1]:
-            pass
         if patches[i].data.shape[0]*patches[i].data.shape[1] > -1:
             check = False
             if (abs(axis) == 1):
@@ -340,6 +362,12 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax))[0][1]
         zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin))[1][0]
         zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax))[1][0]
+        #print("LIMS")
+        #print(lims)
+        #print("X_GRID")
+        #print(x_grid_abs[zInd1:zInd2, xInd1:xInd2])
+        #print("Z_GRID")
+        #print(z_grid_abs[zInd1:zInd2, xInd1:xInd2])
         for t in range(0, patch.data.shape[2]):
             pdata = patch.data[:, :, t].T
             data_abs[zInd1:zInd2, xInd1:xInd2, t] = pdata
@@ -415,13 +443,17 @@ def parseBndfPatches(f, npatch):
             dx = dx+1
             dy = dy+1
         nPts = np.max([dx,1])*np.max([dy,1])*np.max([dz,1])+2
-        patchPts.append([pts,pts+nPts])
+        patchPts.append([pts, pts+nPts])
         patchDs.append([dx,dy,dz,
                         data[0],data[1],data[2],
                         data[3],data[4],data[5]])
         patchIors.append(data[6])
         pts = pts+nPts
-    data = np.frombuffer(f.read(), dtype=np.float32)
+    dat = f.read()
+    if len(dat) % 4 != 0:
+        data = np.frombuffer(dat[:int(len(dat)/4)*4], dtype=np.float32)
+    else:
+        data = np.frombuffer(dat, dtype=np.float32)
     patchInfo = (patchPts, patchDs, patchIors)
     return patchInfo, data
 
@@ -548,7 +580,7 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid):
     """
     
     pts = patchPts[-1][1]
-        
+    
     timeSteps = int((data.shape[0]+1)/(pts+3))
     patches = []
     times = np.zeros((timeSteps-1,))
@@ -1061,7 +1093,6 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
         (zmin, zmax) = (999, -999)
         (dx, dz) = (999, 999)
         for file in bndfFiles:
-            bndfFile = os.path.abspath(file)
             quantity, shortName, units, npatch = readBoundaryHeader(
                     file)
             if numberOfMeshes == 1:
@@ -1070,13 +1101,36 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                 meshNumber = int(file.split('_')[-2]) - 1
             if quantity == qty:
                 ts, ps, x1, x2, y1, y2, z1, z2, dx1, dz1 = getPatches(
-                        bndfFile, smvFile, axis, value, meshNumber)
+                        file, smvFile, axis, value, meshNumber)
+                #print(x1, x2, y1, y2, z1, z2)
                 (xmin, xmax) = (min([xmin, x1]), max([xmax, x2]))
                 (ymin, ymax) = (min([ymin, y1]), max([ymax, y2]))
                 (zmin, zmax) = (min([zmin, z1]), max([zmax, z2]))
                 (dx, dz) = (min([dx, dx1]), min([dz, dz1]))
                 for patch in ps:
                     allPatches.append(patch)
+        if len(allPatches) == 0:
+            for file in bndfFiles:
+                quantity, shortName, units, npatch = readBoundaryHeader(
+                        file)
+                if numberOfMeshes == 1:
+                    meshNumber = 0
+                else:
+                    meshNumber = int(file.split('_')[-2]) - 1
+                if quantity == qty:
+                    xoptions, yoptions, zoptions = getPatchOptions(
+                            file, smvFile, meshNumber)
+                    print("Queried axis and value not found.")
+                    print("Options for IOR %0.0f in %s"%(axis, file))
+                    for option in xoptions:
+                        if option[1] == axis:
+                            print(option[0])
+                    for option in yoptions:
+                        if option[1] == axis:
+                            print(option[0])
+                    for option in zoptions:
+                        if option[1] == axis:
+                            print(option[0])
         x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
                 allPatches, xmin, xmax, ymin, ymax, zmin, zmax,
                 dx, dz, axis)

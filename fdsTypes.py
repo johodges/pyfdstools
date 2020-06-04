@@ -52,6 +52,7 @@ class fdsLineTypes(object):
         rampTypes['T'] = 'listrowfloat'
         rampTypes['F'] = 'listrowfloat'
         rampTypes['ID'] = 'string'
+        rampTypes['CTRL_ID'] = 'string'
         return rampTypes
     
     def getPROPtypes(self, version="6.7.4"):
@@ -84,11 +85,18 @@ class fdsLineTypes(object):
         matlTypes['CONDUCTIVITY'] = 'float'
         matlTypes['DENSITY'] = 'float'
         matlTypes['EMISSIVITY'] = 'float'
+        matlTypes['ABSORPTION_COEFFICIENT'] = 'float'
         matlTypes['SPECIFIC_HEAT_RAMP'] = 'string'
         matlTypes['CONDUCTIVITY_RAMP'] = 'string'
         matlTypes['N_REACTIONS'] = 'int'
-        matlTypes['NU_SPEC'] = 'float'
-        matlTypes['SPEC_ID'] = 'string'
+        matlTypes['A'] = 'listfloat'
+        matlTypes['E'] = 'listfloat'
+        matlTypes['N_S'] = 'listfloat'
+        matlTypes['N_O2'] = 'listfloat'
+        matlTypes['NU_SPEC'] = 'matrixfloat'
+        matlTypes['NU_MATL'] = 'matrixfloat'
+        matlTypes['MATL_ID'] = 'matrixstring'
+        matlTypes['SPEC_ID'] = 'matrixstring'
         matlTypes['REFERENCE_TEMPERATURE'] = 'float'
         matlTypes['HEAT_OF_REACTION'] = 'float'
         matlTypes['HEAT_OF_COMBUSTION'] = 'float'
@@ -128,39 +136,46 @@ class fdsLineTypes(object):
 
     def getSURFtypes(self, version="6.7.4"):
         surfTypes = defaultdict(bool)
-        surfTypes['ID'] = 'string'
-        surfTypes['MATL_ID'] = 'matrixstring'
-        surfTypes['MATL_MASS_FRACTION'] = 'matrixfloat'
-        surfTypes['THICKNESS'] = 'listindfloat'
-        surfTypes['RGB'] = 'listfloat'
-        surfTypes['COLOR'] = 'string'
+        surfTypes['ADIABATIC'] = 'bool'
         surfTypes['BACKING'] = 'string'
-        surfTypes['GEOMETRY'] = 'string'
-        surfTypes['FYI'] = 'string'
-        surfTypes['LENGTH'] = 'float'
-        surfTypes['WIDTH'] = 'float'
+        surfTypes['BURN_AWAY'] = 'bool'
         surfTypes['C_FORCED_RE'] = 'float'
         surfTypes['C_FORCED_CONSTANT'] = 'float'
         surfTypes['C_FORCED_RE_EXP'] = 'float'
         surfTypes['C_FORCED_PR_EXP'] = 'float'
-        surfTypes['CONVECTION_LENGTH_SCALE'] = 'float'
         surfTypes['C_HORIZONTAL'] = 'float'
         surfTypes['C_VERTICAL'] = 'float'
-        surfTypes['EMISSIVITY'] = 'float'
-        surfTypes['LEAK_PATH'] = 'listint'
-        surfTypes['HRRPUA'] = 'float'
-        surfTypes['RAMP_Q'] = 'string'
-        surfTypes['ADIABATIC'] = 'bool'
-        surfTypes['DEFAULT'] = 'bool'
-        surfTypes['VOLUME_FLOW'] = 'float'
-        surfTypes['VEL_T'] = 'listfloat'
-        surfTypes['BURN_AWAY'] = 'bool'
-        surfTypes['TMP_FRONT'] = 'float'
-        surfTypes['RADIUS'] = 'float'
-        surfTypes['TRANSPARENCY'] = 'float'
-        surfTypes['TAU_V'] = 'float'
         surfTypes['CELL_SIZE_FACTOR'] = 'float'
+        surfTypes['COLOR'] = 'string'
+        surfTypes['CONVECTION_LENGTH_SCALE'] = 'float'
+        surfTypes['DEFAULT'] = 'bool'
+        surfTypes['EMISSIVITY'] = 'float'
+        surfTypes['EXTERNAL_FLUX'] = 'float'
+        surfTypes['EXTINCTION_TEMPERATURE'] = 'float'
+        surfTypes['FYI'] = 'string'        
+        surfTypes['GEOMETRY'] = 'string'
+        surfTypes['HEAT_TRANSFER_COEFFICIENT'] = 'float'
+        surfTypes['HEAT_TRANSFER_COEFFICIENT_BACK'] = 'float'
+        surfTypes['HRRPUA'] = 'float'
+        surfTypes['ID'] = 'string'
+        surfTypes['IGNITION_TEMPERATURE'] = 'float'
+        surfTypes['LEAK_PATH'] = 'listint'
+        surfTypes['LENGTH'] = 'float'
+        surfTypes['MATL_ID'] = 'matrixstring'
+        surfTypes['MATL_MASS_FRACTION'] = 'matrixfloat'
+        surfTypes['THICKNESS'] = 'listindfloat'
+        surfTypes['RADIUS'] = 'float'
+        surfTypes['RAMP_Q'] = 'string'
+        surfTypes['RGB'] = 'listfloat'
         surfTypes['STRETCH_FACTOR'] = 'float'
+        surfTypes['TAU_V'] = 'float'
+        surfTypes['TMP_BACK'] = 'float'
+        surfTypes['TMP_FRONT'] = 'float'
+        surfTypes['TMP_INNER'] = 'float'
+        surfTypes['TRANSPARENCY'] = 'float'
+        surfTypes['VEL_T'] = 'listfloat'
+        surfTypes['VOLUME_FLOW'] = 'float'
+        surfTypes['WIDTH'] = 'float'
         return surfTypes
 
     def getVENTtypes(self, version="6.7.4"):
@@ -237,6 +252,7 @@ class fdsLineTypes(object):
         initTypes['PART_ID'] = 'string'
         initTypes['N_PARTICLES_PER_CELL'] = 'int'
         initTypes['CELL_CENTERED'] = 'bool'
+        initTypes['TEMPERATURE'] = 'float'
         return initTypes
 
     def getDEVCtypes(self, version="6.7.4"):
@@ -257,6 +273,8 @@ class fdsLineTypes(object):
         devcTypes['SPEC_ID'] = 'string'
         devcTypes['POINTS'] = 'int'
         devcTypes['Z_ID'] = 'string'
+        devcTypes['NO_UPDATE_DEVC_ID'] = 'string'
+        devcTypes['CTRL_ID'] = 'string'
         devcTypes['unknownCounter'] = 'ignore'
         return devcTypes
 
@@ -264,6 +282,7 @@ class fdsLineTypes(object):
         bndfTypes = defaultdict(bool)
         bndfTypes['QUANTITY'] = 'string'
         bndfTypes['CELL_CENTERED'] = 'bool'
+        bndfTypes['SPEC_ID'] = 'string'
         bndfTypes['ID'] = 'ignore'
         bndfTypes['unknownCounter'] = 'ignore'
         return bndfTypes
@@ -289,6 +308,8 @@ class fdsLineTypes(object):
         ctrlTypes['FUNCTION_TYPE'] = 'string'
         ctrlTypes['INPUT_ID'] = 'liststring'
         ctrlTypes['DELAY'] = 'float'
+        ctrlTypes['CONSTANT'] = 'float'
+        ctrlTypes['RAMP_ID'] = 'string'
         return ctrlTypes
     
     def getZONEtypes(self, version="6.7.4"):
@@ -312,6 +333,9 @@ class fdsLineTypes(object):
         dumpTypes['COLUMN_DUMP_LIMIT'] = 'bool'
         dumpTypes['WRITE_XYZ'] = 'bool'
         dumpTypes['ID'] = 'ignore'
+        dumpTypes['NFRAMES'] = 'int'
+        dumpTypes['PLOT3D_QUANTITY'] = 'liststring'
+        dumpTypes['PLOT3D_SPEC_ID'] = 'liststring'
         return dumpTypes
     
     def getTIMEtypes(self, version="6.7.4"):
@@ -319,6 +343,7 @@ class fdsLineTypes(object):
         timeTypes['T_BEGIN'] = 'float'
         timeTypes['T_END'] = 'float'
         timeTypes['ID'] = 'ignore'
+        timeTypes['WALL_INCREMENT'] = 'float'
         return timeTypes
     
     def getMISCtypes(self, version="6.7.4"):
@@ -329,6 +354,8 @@ class fdsLineTypes(object):
         miscTypes['BNDF_DEFAULT'] = 'bool'
         miscTypes['ID'] = 'ignore'
         miscTypes['Y_O2_INFTY'] = 'float'
+        miscTypes['RESTART'] = 'bool'
+        miscTypes['SOLID_PHASE_ONLY'] = 'bool'
         return miscTypes
     
     def getHEADtypes(self, version="6.7.4"):

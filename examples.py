@@ -201,4 +201,4 @@ if __name__ == '__main__':
     print("Importing BNDF results example")
     datas, fig = exampleImportBndf()
     print("Extracting max value from BNDF results example")
-    datas, figs = exampleExtractBndfMax()
+    #datas, figs = exampleExtractBndfMax()

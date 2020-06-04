@@ -279,7 +279,8 @@ class fdsFileOperations(object):
         self.bndfs[bndf['ID']] = bndf
     
     
-    def addCTRL(self, ID, FUNCTION_TYPE, INPUT_ID, DELAY=None):
+    def addCTRL(self, ID, FUNCTION_TYPE, INPUT_ID, DELAY=None,
+                CONSTANT=None, RAMP_ID=None):
         """Adds a ctrl key to internal attribute ctrls
         
         Adds a bndf key to internal attribte ctrls. Optional parameters
@@ -298,6 +299,10 @@ class fdsFileOperations(object):
             Identifier for device or control for logic.
         DELAY : float, optional
             Time delay for activation of control (default None)
+        CONSTANT : float, optional
+            Value for constant defined in input id
+        RAMP_ID : str, optional
+            Name of ramp to be used to map control output
         """
         
         ctrl = defaultdict(bool)
@@ -305,6 +310,8 @@ class fdsFileOperations(object):
         ctrl['FUNCTION_TYPE'] = FUNCTION_TYPE
         ctrl['INPUT_ID'] = INPUT_ID
         if DELAY != None: ctrl['DELAY'] = DELAY
+        if CONSTANT != None: ctrl['CONSTANT'] = CONSTANT
+        if RAMP_ID != None: ctrl['RAMP_ID'] = RAMP_ID
         self.ctrls[ID] = ctrl
     
     
@@ -312,7 +319,7 @@ class fdsFileOperations(object):
                 SPEC_ID=None, TIME_AVERAGED=None,
                 SPATIAL_STATISTIC=None, STATISTICS=None,
                 INITIAL_STATE=None, INIT_ID=None, SETPOINT=None,
-                DUCT_ID=None):
+                DUCT_ID=None, NO_UPDATE_DEVC_ID=None, CTRL_ID=None):
         """Adds a devc key to internal attribute devcs
         
         Adds a devc key to internal attribte devcs. Optional parameters
@@ -354,6 +361,10 @@ class fdsFileOperations(object):
             (default None)
         DUCT_ID : str, optional
             String identifier of duct containing device
+        NO_UPDATE_DEVC_ID : str, optional
+            String identifier of device activation to stop updating
+        CTRL_ID : str, optional
+            String identifier of control for device
         """
         
         devc = defaultdict(bool)
@@ -371,6 +382,9 @@ class fdsFileOperations(object):
         if STATISTICS != None: devc["STATISTICS"] = STATISTICS
         if DUCT_ID != None: devc['DUCT_ID'] = DUCT_ID
         if SPEC_ID != None: devc['SPEC_ID'] = SPEC_ID
+        if NO_UPDATE_DEVC_ID != None: devc['NO_UPDATE_DEVC_ID'] = NO_UPDATE_DEVC_ID
+        if CTRL_ID != None: devc['CTRL_ID'] = CTRL_ID
+        if SETPOINT != None: devc['SETPOINT'] = SETPOINT
         self.devcs[ID] = devc
     
     
@@ -1082,9 +1096,9 @@ class fdsFileOperations(object):
         
         lineDict = defaultdict(bool)
         keys = self.splitLineIntoKeys(line)
-        #print(line)
         for key in keys:
             keyID, keyID2, keyType, keyValue = self.interpretKey(key, lineType, types)
+            #print(keyID, keyID2, keyType, keyValue)
             if keyType == 'string':
                 keyValue = keyValue.split("'")[1]
             elif keyType == 'float':
@@ -1149,9 +1163,11 @@ class fdsFileOperations(object):
                     (ar1, ar2) = ([1], [1])
                 tmp = np.zeros((np.max(ar1), np.max(ar2)), dtype='object')
                 
+                counter = 0
                 for i in ar1:
                     for j in ar2:
-                        tmp[i-1, j-1] = keyValues[(i*j)-1]
+                        tmp[i-1, j-1] = keyValues[counter]
+                        counter += 1
                 keyValue = tmp
                 
             else:
@@ -1252,10 +1268,10 @@ class fdsFileOperations(object):
             keyN = "&%s"%(field)
             keyT = getattr(types, field.lower())
             keyD = getattr(self, key)
-            if key == 'MESH':
+            if key == 'meshes':
                 txt = self.makeMESH(keyD, keyT, order=self.meshOrder)
-            elif key == 'RAMP':
-                self.makeRAMP(keyD)
+            elif key == 'ramps':
+                txt = self.makeRAMP(keyD)
             else:
                 newline = newlines[key]
                 txt = self.makeLinesFromDict(keyD, keyT, keyN, newline)
@@ -1455,8 +1471,13 @@ class fdsFileOperations(object):
             keyID2 = re.sub(regex1, regex2, keyID)
         except:
             keyID2 = keyID
+        #keyID = keyID.strip()
+        #keyID2 = keyID.strip()
+        keyID2 = keyID2.replace("\t","")
         while keyID2[-1] == ' ':
             keyID2 = keyID2[:-1]
+        while keyID2[0] == ' ':
+            keyID2 = keyID2[1:]
         keyType = getattr(types, lineType.lower())[keyID2]
         return keyID, keyID2, keyType, keyValue
     
@@ -1502,11 +1523,14 @@ class fdsFileOperations(object):
             if (types[key2] == 'ignore'):
                 pass
             elif (types[key2] == 'string'):
-                text = "%s%s='%s', "%(text, key2, dic[key2])
+                if dic[key2] is not False:
+                    text = "%s%s='%s', "%(text, key2, dic[key2])
             elif (types[key2] == 'float'):
-                text = "%s%s=%0.4f, "%(text, key2, dic[key2])
+                if dic[key2] is not False:
+                    text = "%s%s=%0.4f, "%(text, key2, dic[key2])
             elif (types[key2] == 'int'):
-                text = "%s%s=%0.0f, "%(text, key2, dic[key2])
+                if dic[key2] is not False:
+                    text = "%s%s=%0.0f, "%(text, key2, dic[key2])
             elif (types[key2] == 'bool'):
                 boolCheck = False
                 if (dic[key2] is True): boolCheck = True
@@ -1532,14 +1556,15 @@ class fdsFileOperations(object):
             elif ('list' in types[key2]):
                 temp = dic[key2]
                 tempTxt = "%s="%(key2)
-                for t in temp:
-                    if ('string' in types[key2]):
-                        tempTxt = "%s '%s',"%(tempTxt, t)
-                    if ('float' in types[key2]):
-                        tempTxt = "%s %0.4f,"%(tempTxt, t)
-                    if ('int' in types[key2]):
-                        tempTxt = "%s %0.0f,"%(tempTxt, t)
-                text = "%s%s "%(text, tempTxt)
+                if temp is not False:
+                    for t in temp:
+                        if ('string' in types[key2]):
+                            tempTxt = "%s '%s',"%(tempTxt, t)
+                        if ('float' in types[key2]):
+                            tempTxt = "%s %0.4f,"%(tempTxt, t)
+                        if ('int' in types[key2]):
+                            tempTxt = "%s %0.0f,"%(tempTxt, t)
+                    text = "%s%s "%(text, tempTxt)
             elif ('matrix' in types[key2]):
                 temp = np.array(dic[key2])
                 sz = temp.shape
@@ -1633,7 +1658,20 @@ class fdsFileOperations(object):
         linesFDS = [x for x in textFDS.split("&")[1:]]
         for i in range(0, len(linesFDS)):
             line2 = linesFDS[i]
+            line2 = '/'.join(line2.split('/')[:1])
+            line2 = line2.replace('\r', ',')
+            line2 = line2.replace('\n', ',')
             line2 = "%s,"%(line2) if line2[-1] != ',' else line2
+            line2 = '%s /'%(line2)
+            
+            while ',,' in line2: line2 = line2.replace(',,',',')
+            while ' ,' in line2: line2 = line2.replace(' ,',',')
+            while '  ' in line2: line2 = line2.replace("  ", " ")
+            line_tmp = list(line2)
+            if line_tmp[4] == ',':
+                line_tmp[4] = ' '
+                line2 = "".join(line_tmp)
+                while '  ' in line2: line2 = line2.replace("  ", " ")
             linesFDS[i] = line2
         lineTypes = [x[:4] for x in linesFDS]
         if 'TAIL' in lineTypes:
@@ -1725,8 +1763,13 @@ class fdsFileOperations(object):
         text = ''
         for key in list(ramps.keys()):
             ID = ramps[key]['ID']
+            makeControl = True
             for F, T in zip(ramps[key]['F'], ramps[key]['T']):
-                text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, /\n"%(text, ID, T, F)
+                if makeControl and ramps[key]['CTRL_ID']:
+                    text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, CTRL_ID='%s'/\n"%(text, ID, T, F, ramps[key]['CTRL_ID'])
+                    makeControl = False
+                else:
+                    text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, /\n"%(text, ID, T, F)
         return text
     
     
@@ -1810,8 +1853,12 @@ class fdsFileOperations(object):
             String containing internal attribute key for namelist line
             type
         """
-        
-        lineDict = self.dictFromLine(line, lineType, types)
+        #print(line)
+        try:
+            lineDict = self.dictFromLine(line, lineType, types)
+        except:
+            print(line)
+            assert False, "Unknown line in input file"
         tmp = getattr(self, key)
         mergeType = self.mergeTypeFromLineType(lineType)
         if mergeType == 'merge':

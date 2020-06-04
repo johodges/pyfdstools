@@ -270,6 +270,7 @@ class fdsLineTypes(object):
         devcTypes['SPATIAL_STATISTIC'] = 'string'
         devcTypes['STATISTICS'] = 'string'
         devcTypes['DUCT_ID'] = 'string'
+        devcTypes['MATL_ID'] = 'string'
         devcTypes['PROP_ID'] = 'string'
         devcTypes['SPEC_ID'] = 'string'
         devcTypes['POINTS'] = 'int'

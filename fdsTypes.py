@@ -284,6 +284,7 @@ class fdsLineTypes(object):
         bndfTypes['QUANTITY'] = 'string'
         bndfTypes['CELL_CENTERED'] = 'bool'
         bndfTypes['SPEC_ID'] = 'string'
+        bndfTypes['PROP_ID'] = 'string'
         bndfTypes['ID'] = 'ignore'
         bndfTypes['unknownCounter'] = 'ignore'
         return bndfTypes

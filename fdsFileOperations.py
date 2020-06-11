@@ -1160,14 +1160,22 @@ class fdsFileOperations(object):
                     ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')]
                     ar2 = [int(x) for x in tmp.groups()[1].replace(')','').split(':')]
                 else:
-                    (ar1, ar2) = ([1], [1])
+                    (ar1, ar2) = ([1, 1], [1, 1])
                 tmp = np.zeros((np.max(ar1), np.max(ar2)), dtype='object')
-                
                 counter = 0
-                for i in ar1:
-                    for j in ar2:
-                        tmp[i-1, j-1] = keyValues[counter]
-                        counter += 1
+                if ar1[0] == ar1[1]:
+                    ar1 = np.array(np.zeros((len(keyValues),)) + ar1[0], dtype=np.int32)
+                else:
+                    ar1 = list(range(ar1[0], ar1[1]+1))
+                if ar2[0] == ar2[1]:
+                    ar2 = np.array(np.zeros((len(keyValues),)) + ar2[0], dtype=np.int32)
+                else:
+                    ar2 = list(range(ar2[0], ar2[1]+1))                    
+                for counter in range(0, len(keyValues)):
+                    i = ar1[counter]
+                    j = ar2[counter]
+                    tmp[i-1, j-1] = keyValues[counter]
+                    counter += 1
                 keyValue = tmp
                 
             else:
@@ -1667,6 +1675,7 @@ class fdsFileOperations(object):
             while ',,' in line2: line2 = line2.replace(',,',',')
             while ' ,' in line2: line2 = line2.replace(' ,',',')
             while '  ' in line2: line2 = line2.replace("  ", " ")
+            while ',,' in line2: line2 = line2.replace(',,',',')
             line_tmp = list(line2)
             if line_tmp[4] == ',':
                 line_tmp[4] = ' '

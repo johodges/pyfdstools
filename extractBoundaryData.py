@@ -328,7 +328,6 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
     array(NXZ, NZA, NT)
         Array containing data in global coordinates for each timestamp
     """
-    
     if abs(axis) == 1:
         x_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dx)+1))
         z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
@@ -338,12 +337,15 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
     if abs(axis) == 3:
         x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
         z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
-    
+    NT = 0
+    for patch in patches:
+        NT = max([NT, patch.data.shape[2]])
     x_grid_abs, z_grid_abs = np.meshgrid(x_abs, z_abs)
     NXA, NZA = x_grid_abs.shape
-    NX, NZ, NT = patches[0].data.shape
+    NX, NZ, _ = patches[0].data.shape
     data_abs = np.zeros((NXA, NZA, NT))
     data_abs[:, :, :] = np.nan
+    #print(data_abs.shape)
     for patch in patches:
         lims = patch.lims
         if abs(axis) == 1:
@@ -1109,7 +1111,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                 (dx, dz) = (min([dx, dx1]), min([dz, dz1]))
                 for patch in ps:
                     allPatches.append(patch)
-        if len(allPatches) == 0:
+        if (len(allPatches) == 0) or (xmin == 999):
             for file in bndfFiles:
                 quantity, shortName, units, npatch = readBoundaryHeader(
                         file)
@@ -1117,20 +1119,20 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                     meshNumber = 0
                 else:
                     meshNumber = int(file.split('_')[-2]) - 1
-                if quantity == qty:
+                if True:#quantity == qty:
                     xoptions, yoptions, zoptions = getPatchOptions(
                             file, smvFile, meshNumber)
                     print("Queried axis and value not found.")
                     print("Options for IOR %0.0f in %s"%(axis, file))
                     for option in xoptions:
                         if option[1] == axis:
-                            print(option[0])
+                            print(option[0], quantity)
                     for option in yoptions:
                         if option[1] == axis:
-                            print(option[0])
+                            print(option[0], quantity)
                     for option in zoptions:
                         if option[1] == axis:
-                            print(option[0])
+                            print(option[0], quantity)
         x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
                 allPatches, xmin, xmax, ymin, ymax, zmin, zmax,
                 dx, dz, axis)

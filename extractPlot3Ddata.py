@@ -338,7 +338,7 @@ def plotSlice(x, z, data_slc, axis,
     if cmap == 'SMV':
         cmap = buildSMVcolormap(
                 percentile=percentile, width=highlightWidth)
-    if levels == None:
+    if levels is None:
         levels = 100
     if cbarticks is None:
         cbarticks = np.linspace(qnty_mn, qnty_mx, 10)

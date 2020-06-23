@@ -1672,6 +1672,7 @@ class fdsFileOperations(object):
             line2 = "%s,"%(line2) if line2[-1] != ',' else line2
             line2 = '%s /'%(line2)
             
+            while "' " in line2: line2 = line2.replace("' ","',")
             while ',,' in line2: line2 = line2.replace(',,',',')
             while ' ,' in line2: line2 = line2.replace(' ,',',')
             while '  ' in line2: line2 = line2.replace("  ", " ")

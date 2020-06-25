@@ -140,6 +140,7 @@ class fdsLineTypes(object):
     def getRADItypes(self, version="6.7.4"):
         radiTypes = defaultdict(bool)
         radiTypes['RADIATIVE_FRACTION'] = 'float'
+        radiTypes['NUMBER_RADIATION_ANGLES'] = 'int'
         radiTypes['newline'] = 'ignore'
         return radiTypes
 

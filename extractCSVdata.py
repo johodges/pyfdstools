@@ -22,26 +22,47 @@ import pandas as pd
 import os
 from .utilities import zopen, getFileList
 
+def findHeaderLength(lines):
+    counter = 0
+    headerCheck = True
+    while headerCheck and counter < 100:
+        line = (lines[counter].decode('utf-8')).replace('\r\n','')
+        while line[-1] == ',': line = line[:-1]
+        try:
+            [float(y) for y in line.split(',')]
+            counter = counter - 1
+            headerCheck = False
+        except:
+            counter = counter + 1
+    if counter < 100:
+        return counter
+    else:
+        print("Unable to find header length, returning 0")
+        return 0
+
+def cleanDataLines(lines2, headerLines):
+    lines = lines2[headerLines+1:]
+    for i in range(0, len(lines)):
+        line = (lines[i].decode('utf-8')).replace('\r\n','')
+        while line[-1] == ',': line = line[:-1]
+        lines[i] = [float(y) for y in line.split(',')]
+    return lines
+
 def load_csv(modeldir, chid, suffix='_devc'):
     if 'zip' in modeldir:
         csv_files = getFileList(modeldir, chid, 'csv')
         suff_files = [x for x in csv_files if suffix in x]
         print(modeldir, chid, suff_files)
         f = zopen(suff_files[0])
-        line = f.readline()
-        line = f.readline()
-        lines = f.readlines()
-        header = (line.decode('utf-8')).replace('\n','').split(',')
-        lines = [[float(y) for y in (x.decode('utf-8')).split(',')] for x in lines]
-        data = pd.DataFrame(lines, columns=header,)
-        f.close()
     else:
         file = "%s%s%s%s.csv"%(modeldir, os.sep, chid, suffix)
-        with open(file, 'r') as f:
-            line = f.readline()
-            line = f.readline()
-        header = line.replace('\n','').split(',')
-        data = pd.read_csv(file, delimiter=',', names=header, skiprows=2)
+        f = open(file, 'rb')
+    lines = f.readlines()
+    f.close()
+    header = (lines[0].decode('utf-8')).replace('\r\n','').replace('\n','').split(',')
+    headerLines = findHeaderLength(lines)
+    dataLines = cleanDataLines(lines, headerLines)
+    data = pd.DataFrame(dataLines, columns=header,)
     return data
 
 def load_hrr(file):

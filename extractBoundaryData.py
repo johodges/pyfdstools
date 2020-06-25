@@ -19,6 +19,7 @@ import os
 import numpy as np
 from collections import defaultdict
 import glob
+import cv2
 from .utilities import zopen, in_hull, getFileList, pts2polygons
 from .fdsFileOperations import fdsFileOperations
 from .smokeviewParser import parseSMVFile
@@ -192,6 +193,7 @@ def getPatchOptions(bndfFile, smvFile, meshNum):
 def getPatches(bndfFile, smvFile, axis, value, meshNum,
                xmin=999, xmax=-999, ymin=999, ymax=-999,
                zmin=999, zmax=-999, dx=999, dz=999,
+               decimals=4,
                showOptions=False):
     """Read patches from boundary file
     
@@ -223,6 +225,8 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
         Initialized x-delta of the patch (default 999)
     dz : float, optional
         Initialized z-delta of the patch (default 999)
+    decimals : int, optional
+        Number of decimals to use in rounding (default 4)
     
     Returns
     -------
@@ -281,21 +285,21 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
                 zmax = max([zmax, lims[5]])
                 NX, NZ, NT = patches[i].data.shape
                 if abs(axis) == 1:
-                    dx = np.round((lims[3]-lims[2])/NX, decimals=4)
-                    dz = np.round((lims[5]-lims[4])/NZ, decimals=4)
+                    dx = np.round((lims[3]-lims[2])/NX, decimals=decimals+2)
+                    dz = np.round((lims[5]-lims[4])/NZ, decimals=decimals+2)
                 elif abs(axis) == 2:
-                    dx = np.round((lims[1]-lims[0])/NX, decimals=4)
-                    dz = np.round((lims[5]-lims[4])/NZ, decimals=4)
+                    dx = np.round((lims[1]-lims[0])/NX, decimals=decimals+2)
+                    dz = np.round((lims[5]-lims[4])/NZ, decimals=decimals+2)
                 elif abs(axis) == 3:
-                    dx = np.round((lims[1]-lims[0])/NX, decimals=4)
-                    dz = np.round((lims[3]-lims[2])/NZ, decimals=4)
+                    dx = np.round((lims[1]-lims[0])/NX, decimals=decimals+2)
+                    dz = np.round((lims[3]-lims[2])/NZ, decimals=decimals+2)
                     
                 allPatches.append(patches[i])
     return times, allPatches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz
 
 
 def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
-                  dx, dz, axis):
+                  dx, dz, axis, decimals=4):
     """Converts local patches to absolute patches
     
     Parameters
@@ -318,6 +322,8 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         X-axis delta of the patches
     dz : float
         Z-axis delta of the patches
+    decimals : int, optional
+        Number of decimals to round (default 4)
     
     Returns
     -------
@@ -328,6 +334,7 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
     array(NXZ, NZA, NT)
         Array containing data in global coordinates for each timestamp
     """
+    
     if abs(axis) == 1:
         x_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dx)+1))
         z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
@@ -337,15 +344,14 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
     if abs(axis) == 3:
         x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
         z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
-    NT = 0
-    for patch in patches:
-        NT = max([NT, patch.data.shape[2]])
+    x_abs = np.round(x_abs, decimals=decimals)
+    z_abs = np.round(z_abs, decimals=decimals)
+    
     x_grid_abs, z_grid_abs = np.meshgrid(x_abs, z_abs)
     NXA, NZA = x_grid_abs.shape
-    NX, NZ, _ = patches[0].data.shape
+    NX, NZ, NT = patches[0].data.shape
     data_abs = np.zeros((NXA, NZA, NT))
     data_abs[:, :, :] = np.nan
-    #print(data_abs.shape)
     for patch in patches:
         lims = patch.lims
         if abs(axis) == 1:
@@ -360,19 +366,33 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         else:
             estr = "Axis %0.0f not in [-1, -2, -3, 1, 2, 3]."%(axis)
             assert False, estr
-        xInd1 = np.argwhere(np.isclose(x_grid_abs, xMin))[0][1]
-        xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax))[0][1]
-        zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin))[1][0]
-        zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax))[1][0]
+        #print(x_grid_abs[0, :])
+        #print(xMin, xMax)
+        #print(x_grid_abs.shape)
+        xInd1 = np.argwhere(np.isclose(x_grid_abs, xMin, atol=10**(-1*decimals)))[0][1]
+        xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
+        zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin, atol=10**(-1*decimals)))[1][0]
+        zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax, atol=10**(-1*decimals)))[1][0]
         #print("LIMS")
         #print(lims)
         #print("X_GRID")
         #print(x_grid_abs[zInd1:zInd2, xInd1:xInd2])
         #print("Z_GRID")
         #print(z_grid_abs[zInd1:zInd2, xInd1:xInd2])
-        for t in range(0, patch.data.shape[2]):
+        #print("Patch Shape: ", patch.data.shape)
+        #print("Abs Shape: ", data_abs[zInd1:zInd2, xInd1:xInd2, :].shape)
+        NT = min([patch.data.shape[2], data_abs[zInd1:zInd2, xInd1:xInd2, :].shape[2]])
+        for t in range(0, NT):
             pdata = patch.data[:, :, t].T
-            data_abs[zInd1:zInd2, xInd1:xInd2, t] = pdata
+            if pdata.shape[0] != data_abs[zInd1:zInd2, xInd1:xInd2, t].shape[0]:
+                #mult = pdata.shape[0]/data_abs[zInd1:zInd2, xInd1:xInd2, t].shape[0]
+                #print(pdata.shape, data_abs[zInd1:zInd2, xInd1:xInd2, t].shape)
+                tmp = data_abs[zInd1:zInd2, xInd1:xInd2, t].shape
+                tmp2 = (tmp[1], tmp[0])
+                pdata2 = cv2.resize(pdata, dsize=tmp2, interpolation=cv2.INTER_LINEAR)
+                data_abs[zInd1:zInd2, xInd1:xInd2, t] = pdata2
+            else:
+                data_abs[zInd1:zInd2, xInd1:xInd2, t] = pdata
     return x_grid_abs, z_grid_abs, data_abs
 
 
@@ -1049,7 +1069,7 @@ def getCoordinateMasks(coords, polygons):
 
 
 def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
-              axis, value):
+              axis, value, decimals=4):
     """Query boundary files
     
     Parameters
@@ -1068,6 +1088,8 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
         Integer specifying axis to query
     value : float
         Axis value to query
+    decimals : int
+        Number of decimals to include in rounding
     
     Returns
     -------
@@ -1103,7 +1125,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                 meshNumber = int(file.split('_')[-2]) - 1
             if quantity == qty:
                 ts, ps, x1, x2, y1, y2, z1, z2, dx1, dz1 = getPatches(
-                        file, smvFile, axis, value, meshNumber)
+                        file, smvFile, axis, value, meshNumber, decimals=decimals)
                 #print(x1, x2, y1, y2, z1, z2)
                 (xmin, xmax) = (min([xmin, x1]), max([xmax, x2]))
                 (ymin, ymax) = (min([ymin, y1]), max([ymax, y2]))
@@ -1111,7 +1133,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                 (dx, dz) = (min([dx, dx1]), min([dz, dz1]))
                 for patch in ps:
                     allPatches.append(patch)
-        if (len(allPatches) == 0) or (xmin == 999):
+        if len(allPatches) == 0:
             for file in bndfFiles:
                 quantity, shortName, units, npatch = readBoundaryHeader(
                         file)
@@ -1119,28 +1141,33 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                     meshNumber = 0
                 else:
                     meshNumber = int(file.split('_')[-2]) - 1
-                if True:#quantity == qty:
+                if quantity == qty:
                     xoptions, yoptions, zoptions = getPatchOptions(
                             file, smvFile, meshNumber)
                     print("Queried axis and value not found.")
                     print("Options for IOR %0.0f in %s"%(axis, file))
                     for option in xoptions:
                         if option[1] == axis:
-                            print(option[0], quantity)
+                            print(option[0])
                     for option in yoptions:
                         if option[1] == axis:
-                            print(option[0], quantity)
+                            print(option[0])
                     for option in zoptions:
                         if option[1] == axis:
-                            print(option[0], quantity)
+                            print(option[0])
+        #print("ABS INFO: ")
+        #print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
         x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
                 allPatches, xmin, xmax, ymin, ymax, zmin, zmax,
-                dx, dz, axis)
+                dx, dz, axis, decimals=decimals)
         datas[qty] = defaultdict(bool)
-        datas[qty]["MESH-%04.0f"%(meshNumber)] = defaultdict(bool)
-        datas[qty]["MESH-%04.0f"%(meshNumber)]['X'] = x_grid_abs
-        datas[qty]["MESH-%04.0f"%(meshNumber)]['Z'] = z_grid_abs
-        datas[qty]["MESH-%04.0f"%(meshNumber)]['DATA'] = data_abs
+        datas[qty]['X'] = x_grid_abs
+        datas[qty]['Z'] = z_grid_abs
+        datas[qty]['DATA'] = data_abs
+        #datas[qty]["MESH-%04.0f"%(meshNumber)] = defaultdict(bool)
+        #datas[qty]["MESH-%04.0f"%(meshNumber)]['X'] = x_grid_abs
+        #datas[qty]["MESH-%04.0f"%(meshNumber)]['Z'] = z_grid_abs
+        #datas[qty]["MESH-%04.0f"%(meshNumber)]['DATA'] = data_abs
     return datas, ts
 
 

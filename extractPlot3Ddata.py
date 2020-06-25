@@ -325,7 +325,8 @@ def plotSlice(x, z, data_slc, axis,
               levels=None, cbarticks=None, clabel=None,
               highlightValue=None, highlightWidth=None,
               reverseXY=False, percentile=None,
-              xmn=None, xmx=None, zmn=None, zmx=None):
+              xmn=None, xmx=None, zmn=None, zmx=None,
+              xlabel=None, zlabel=None):
     if highlightValue is not None:
         percentile = (highlightValue - qnty_mn) / (qnty_mx - qnty_mn)
     if (xmn == None): xmn = x.min()
@@ -338,7 +339,7 @@ def plotSlice(x, z, data_slc, axis,
     if cmap == 'SMV':
         cmap = buildSMVcolormap(
                 percentile=percentile, width=highlightWidth)
-    if levels is None:
+    if levels == None:
         levels = 100
     if cbarticks is None:
         cbarticks = np.linspace(qnty_mn, qnty_mx, 10)
@@ -367,14 +368,16 @@ def plotSlice(x, z, data_slc, axis,
     cbar.ax.tick_params(labelsize=fs)
     if clabel is not None:
         cbar.set_label(clabel, fontsize=fs)
-    if abs(axis) == 1:
-        ax.set_xlabel('y (m)', fontsize=fs)
-    if (abs(axis) == 2) or (abs(axis) == 3):
-        ax.set_xlabel('x (m)', fontsize=fs)
-    if (abs(axis) == 1) or (abs(axis) == 2):
-        ax.set_ylabel('z (m)', fontsize=fs)
-    if (abs(axis) == 3):
-        ax.set_ylabel('y (m)', fontsize=fs)
+    if xlabel is None:
+        if abs(axis) == 1: xlabel = 'y (m)'
+        if abs(axis) == 2: xlabel = 'x (m)'
+        if abs(axis) == 3: xlabel = 'x (m)'
+    if zlabel is None:
+        if abs(axis) == 1: zlabel = 'z (m)'
+        if abs(axis) == 2: zlabel = 'z (m)'
+        if abs(axis) == 3: zlabel = 'y (m)'
+    ax.set_xlabel(xlabel, fontsize=fs)
+    ax.set_ylabel(zlabel, fontsize=fs)
     ax.set_xlim(xmn, xmx)
     ax.set_ylim(zmn, zmx)
     ax.tick_params(labelsize=fs)

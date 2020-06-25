@@ -46,6 +46,16 @@ class fdsLineTypes(object):
         self.part = self.getPARTtypes(version)
         self.spec = self.getSPECtypes(version)
         self.prop = self.getPROPtypes(version)
+        self.prof = self.getPROFtypes(version)
+    
+    def getPROFtypes(self, version="6.7.4"):
+        profTypes = defaultdict(bool)
+        profTypes['ID'] = 'string'
+        profTypes['XYZ'] = 'listfloat'
+        profTypes['QUANTITY'] = 'string'
+        profTypes['IOR'] = 'int'
+        profTypes['FORMAT_INDEX'] = 'int'
+        return profTypes
         
     def getRAMPtypes(self, version="6.7.4"):
         rampTypes = defaultdict(bool)
@@ -151,6 +161,7 @@ class fdsLineTypes(object):
         surfTypes['CONVECTION_LENGTH_SCALE'] = 'float'
         surfTypes['DEFAULT'] = 'bool'
         surfTypes['EMISSIVITY'] = 'float'
+        surfTypes['EMISSIVITY_BACK'] = 'float'
         surfTypes['EXTERNAL_FLUX'] = 'float'
         surfTypes['EXTINCTION_TEMPERATURE'] = 'float'
         surfTypes['FYI'] = 'string'        
@@ -258,25 +269,26 @@ class fdsLineTypes(object):
 
     def getDEVCtypes(self, version="6.7.4"):
         devcTypes = defaultdict(bool)
+        devcTypes['CTRL_ID'] = 'string'
+        devcTypes['DEPTH'] = 'float'
+        devcTypes['DUCT_ID'] = 'string'
         devcTypes['ID'] = 'string'
-        devcTypes['XB'] = 'listfloat'
-        devcTypes['XYZ'] = 'listfloat'
-        devcTypes['QUANTITY'] = 'string'
         devcTypes['INITIAL_STATE'] = 'bool'
         devcTypes['INIT_ID'] = 'string'
-        devcTypes['SETPOINT'] = 'float'
         devcTypes['IOR'] = 'int'
-        devcTypes['TIME_AVERAGED'] = 'bool'
-        devcTypes['SPATIAL_STATISTIC'] = 'string'
-        devcTypes['STATISTICS'] = 'string'
-        devcTypes['DUCT_ID'] = 'string'
         devcTypes['MATL_ID'] = 'string'
-        devcTypes['PROP_ID'] = 'string'
-        devcTypes['SPEC_ID'] = 'string'
-        devcTypes['POINTS'] = 'int'
-        devcTypes['Z_ID'] = 'string'
         devcTypes['NO_UPDATE_DEVC_ID'] = 'string'
-        devcTypes['CTRL_ID'] = 'string'
+        devcTypes['POINTS'] = 'int'
+        devcTypes['PROP_ID'] = 'string'
+        devcTypes['QUANTITY'] = 'string'
+        devcTypes['SETPOINT'] = 'float'
+        devcTypes['SPATIAL_STATISTIC'] = 'string'
+        devcTypes['SPEC_ID'] = 'string'
+        devcTypes['STATISTICS'] = 'string'
+        devcTypes['TIME_AVERAGED'] = 'bool'
+        devcTypes['XB'] = 'listfloat'
+        devcTypes['XYZ'] = 'listfloat'
+        devcTypes['Z_ID'] = 'string'
         devcTypes['unknownCounter'] = 'ignore'
         return devcTypes
 
@@ -347,6 +359,7 @@ class fdsLineTypes(object):
         timeTypes['T_END'] = 'float'
         timeTypes['ID'] = 'ignore'
         timeTypes['WALL_INCREMENT'] = 'float'
+        timeTypes['DT'] = 'float'
         return timeTypes
     
     def getMISCtypes(self, version="6.7.4"):

@@ -238,6 +238,7 @@ class fdsFileOperations(object):
         self.radis = defaultdict(bool)
         self.pres = defaultdict(bool)
         self.parts = defaultdict(bool)
+        self.profs = defaultdict(bool)
         self.props = defaultdict(bool)
         self.specs = defaultdict(bool)
         self.customLines = []
@@ -249,6 +250,7 @@ class fdsFileOperations(object):
         self.meshes['unknownCounter'] = 0
         self.slcfs['unknownCounter'] = 0
         self.bndfs['unknownCounter'] = 0
+        self.profs['unknownCounter'] = 0
         
         self.meshOrder = False
         self.version = version
@@ -1170,7 +1172,7 @@ class fdsFileOperations(object):
                 if ar2[0] == ar2[1]:
                     ar2 = np.array(np.zeros((len(keyValues),)) + ar2[0], dtype=np.int32)
                 else:
-                    ar2 = list(range(ar2[0], ar2[1]+1))                    
+                    ar2 = list(range(ar2[0], ar2[1]+1))
                 for counter in range(0, len(keyValues)):
                     i = ar1[counter]
                     j = ar2[counter]
@@ -1303,7 +1305,7 @@ class fdsFileOperations(object):
         fields = ["HEAD", "TIME", "MISC", "INIT", "DUMP", "ZONE", 
                   "PRES", "MESH", "REAC", "RADI", "MATL", "SURF",
                   "RAMP", "OBST", "HOLE", "VENT", "PART", "DEVC",
-                  "CTRL", "BNDF", "SLCF", "PROP", "SPEC"]
+                  "CTRL", "BNDF", "SLCF", "PROP", "SPEC", "PROF"]
         return fields
     
     
@@ -1471,7 +1473,7 @@ class fdsFileOperations(object):
            raw keyValue containing all text right of = sign
         """
 
-        keyID = key.split('=')[0]
+        keyID = key.split('=')[0].upper()
         keyValue = '='.join(key.split('=')[1:])
         regex1 = r"\(\s*.*\)"
         regex2 = r""
@@ -1643,6 +1645,7 @@ class fdsFileOperations(object):
         if lineType == 'PART': key = 'parts'
         if lineType == 'PROP': key = 'props'
         if lineType == 'SPEC': key = 'specs'
+        if lineType == 'PROF': key = 'profs'
         return key
     
     
@@ -1672,7 +1675,6 @@ class fdsFileOperations(object):
             line2 = "%s,"%(line2) if line2[-1] != ',' else line2
             line2 = '%s /'%(line2)
             
-            while "' " in line2: line2 = line2.replace("' ","',")
             while ',,' in line2: line2 = line2.replace(',,',',')
             while ' ,' in line2: line2 = line2.replace(' ,',',')
             while '  ' in line2: line2 = line2.replace("  ", " ")
@@ -1821,6 +1823,7 @@ class fdsFileOperations(object):
         if lineType == 'PART': key = 'enumerate'
         if lineType == 'PROP': key = 'enumerate'
         if lineType == 'SPEC': key = 'enumerate'
+        if lineType == 'PROF': key = 'enumerate'
         return key
     
     

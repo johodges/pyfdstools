@@ -1151,6 +1151,7 @@ class fdsFileOperations(object):
                     vals.append(preprocess)
                 keyValue = vals
             elif ('matrix' in keyType):
+                #print(keyID, keyID2, keyType, keyValue)
                 regex1 = r"(\(.{0,3});(.{0,3}\))"
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
                     keyValue = keyValue[:-1]
@@ -1161,6 +1162,8 @@ class fdsFileOperations(object):
                 if tmp is not None:
                     ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')]
                     ar2 = [int(x) for x in tmp.groups()[1].replace(')','').split(':')]
+                    if len(ar1) == 1: ar1 = [ar1[0], ar1[0]]
+                    if len(ar2) == 1: ar2 = [ar2[0], ar2[0]]
                 else:
                     (ar1, ar2) = ([1, 1], [1, 1])
                 tmp = np.zeros((np.max(ar1), np.max(ar2)), dtype='object')
@@ -1283,7 +1286,9 @@ class fdsFileOperations(object):
             elif key == 'ramps':
                 txt = self.makeRAMP(keyD)
             else:
-                newline = newlines[key]
+                newline1 = newlines[key]
+                newline2 = keyD['newline']
+                newline = (newline1 or newline2)
                 txt = self.makeLinesFromDict(keyD, keyT, keyN, newline)
             text = "%s%s"%(text, txt)
         
@@ -1519,10 +1524,8 @@ class fdsFileOperations(object):
         str
             Updated text string
         """
-        
         keys = list(dic.keys())
         keys.sort()
-        #try:
         if 'ID' in keys:
             keys.insert(0, keys.pop(keys.index('ID')))
             if dic['ID'] is False: dic['ID'] = 'UNKNOWN'
@@ -1530,6 +1533,11 @@ class fdsFileOperations(object):
             if key in keys:
                 keys.remove(key)
         for key2 in keys:
+            #print(key2)
+            if 'THICKNESS' in key2:
+                decimals = 8
+            else:
+                decimals = 4
             if (types[key2] == 'ignore'):
                 pass
             elif (types[key2] == 'string'):
@@ -1537,7 +1545,7 @@ class fdsFileOperations(object):
                     text = "%s%s='%s', "%(text, key2, dic[key2])
             elif (types[key2] == 'float'):
                 if dic[key2] is not False:
-                    text = "%s%s=%0.4f, "%(text, key2, dic[key2])
+                    text = "%s%s=%s, "%(text, key2, '{:.{prec}f}'.format(dic[key2], prec=decimals))
             elif (types[key2] == 'int'):
                 if dic[key2] is not False:
                     text = "%s%s=%0.0f, "%(text, key2, dic[key2])
@@ -1556,12 +1564,13 @@ class fdsFileOperations(object):
                         key2, 1, temp.shape[0])
                 if type(temp[0]) == np.float64: temp = [temp]
                 for t in temp:
-                    if ('string' in types[key2]):
-                        tempTxt = "%s '%s',"%(tempTxt, t[0])
-                    if ('float' in types[key2]):
-                        tempTxt = "%s %0.4f,"%(tempTxt, t[0])
-                    if ('int' in types[key2]):
-                        tempTxt = "%s %0.0f,"%(tempTxt, t[0])
+                    for tt in t:
+                        if ('string' in types[key2]):
+                            tempTxt = "%s '%s',"%(tempTxt, tt)
+                        if ('float' in types[key2]):
+                            tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(tt, prec=decimals))
+                        if ('int' in types[key2]):
+                            tempTxt = "%s %0.0f,"%(tempTxt, tt)
                 text = "%s%s "%(text, tempTxt)
             elif ('list' in types[key2]):
                 temp = dic[key2]
@@ -1571,7 +1580,7 @@ class fdsFileOperations(object):
                         if ('string' in types[key2]):
                             tempTxt = "%s '%s',"%(tempTxt, t)
                         if ('float' in types[key2]):
-                            tempTxt = "%s %0.4f,"%(tempTxt, t)
+                            tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(t, prec=decimals))
                         if ('int' in types[key2]):
                             tempTxt = "%s %0.0f,"%(tempTxt, t)
                     text = "%s%s "%(text, tempTxt)
@@ -1582,13 +1591,13 @@ class fdsFileOperations(object):
                     temp = np.reshape(temp, (temp.shape[0], 1))
                     sz = temp.shape
                 ar1 = "(%0.0f:%0.0f,%0.0f:%0.0f)"%(
-                        1, sz[0], 1, sz[1])
+                        1, sz[1], 1, sz[0])
                 tempTxt = "%s%s="%(key2, ar1)
                 for t in temp.flatten():
                     if ('string' in types[key2]):
                         tempTxt = "%s '%s',"%(tempTxt, t)
                     if ('float' in types[key2]):
-                        tempTxt = "%s %0.4f,"%(tempTxt, t)
+                        tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(t, prec=decimals))
                     if ('int' in types[key2]):
                         tempTxt = "%s %0.0f,"%(tempTxt, t)
                 text = "%s%s "%(text, tempTxt)
@@ -1669,7 +1678,7 @@ class fdsFileOperations(object):
         linesFDS = [x for x in textFDS.split("&")[1:]]
         for i in range(0, len(linesFDS)):
             line2 = linesFDS[i]
-            line2 = '/'.join(line2.split('/')[:1])
+            line2 = '/'.join(line2.split('/')[:-1])
             line2 = line2.replace('\r', ',')
             line2 = line2.replace('\n', ',')
             line2 = "%s,"%(line2) if line2[-1] != ',' else line2
@@ -1720,6 +1729,7 @@ class fdsFileOperations(object):
         keys = list(items.keys())
         keys.sort()
         if 'unknownCounter' in keys: keys.remove('unknownCounter')
+        if 'newline' in keys: keys.remove('newline')
         for key in keys:
             text = "%s%s "%(text, prefix)
             text = self.keyAssist(text, types, items[key], newline=newline)
@@ -1867,41 +1877,44 @@ class fdsFileOperations(object):
             type
         """
         #print(line)
+        check = True
         try:
             lineDict = self.dictFromLine(line, lineType, types)
         except:
-            print(line)
-            assert False, "Unknown line in input file"
-        tmp = getattr(self, key)
-        mergeType = self.mergeTypeFromLineType(lineType)
-        if mergeType == 'merge':
-            if not tmp['ID']: tmp['ID'] = defaultdict(bool)
-            tmp['ID'] = self.dictMerge(tmp['ID'], lineDict)
-            setattr(self, key, tmp)
-        elif mergeType == 'append':
-            ID = lineDict['ID']
-            if tmp[ID]:
-                for keyID2 in list(lineDict.keys()):
-                    keyType = getattr(types, lineType.lower())[keyID2]
-                    keyValue = lineDict[keyID2]
-                    if (keyType == 'listrowfloat'):
-                        for v in keyValue:
-                            tmp[ID][keyID2].append(v)
+            print("WARNING: Unknown line in input file.\n")
+            print("%s\n"%(line))
+            check = False
+        if check:
+            tmp = getattr(self, key)
+            mergeType = self.mergeTypeFromLineType(lineType)
+            if mergeType == 'merge':
+                if not tmp['ID']: tmp['ID'] = defaultdict(bool)
+                tmp['ID'] = self.dictMerge(tmp['ID'], lineDict)
+                setattr(self, key, tmp)
+            elif mergeType == 'append':
+                ID = lineDict['ID']
+                if tmp[ID]:
+                    for keyID2 in list(lineDict.keys()):
+                        keyType = getattr(types, lineType.lower())[keyID2]
+                        keyValue = lineDict[keyID2]
+                        if (keyType == 'listrowfloat'):
+                            for v in keyValue:
+                                tmp[ID][keyID2].append(v)
+                else:
+                    tmp[ID] = lineDict
+            elif mergeType == 'enumerate':
+                ID = lineDict['ID']
+                if ID is False: ID = "ID"
+                if tmp[ID]:
+                    counter = tmp[ID]['counter']
+                    tmp["%s-%04.0f"%(ID, counter)] = lineDict
+                    tmp[ID]['counter'] += 1
+                    pass
+                else:
+                    tmp[ID] = lineDict
+                    tmp[ID]['counter'] = 0
             else:
-                tmp[ID] = lineDict
-        elif mergeType == 'enumerate':
-            ID = lineDict['ID']
-            if ID is False: ID = "ID"
-            if tmp[ID]:
-                counter = tmp[ID]['counter']
-                tmp["%s-%04.0f"%(ID, counter)] = lineDict
-                tmp[ID]['counter'] += 1
-                pass
-            else:
-                tmp[ID] = lineDict
-                tmp[ID]['counter'] = 0
-        else:
-            assert False, "Stopped"
+                assert False, "Stopped"
         
         
     def saveModel(self, mpiProcesses, location,

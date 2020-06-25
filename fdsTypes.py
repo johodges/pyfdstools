@@ -55,6 +55,7 @@ class fdsLineTypes(object):
         profTypes['QUANTITY'] = 'string'
         profTypes['IOR'] = 'int'
         profTypes['FORMAT_INDEX'] = 'int'
+        profTypes['newline'] = 'ignore'
         return profTypes
         
     def getRAMPtypes(self, version="6.7.4"):
@@ -63,6 +64,7 @@ class fdsLineTypes(object):
         rampTypes['F'] = 'listrowfloat'
         rampTypes['ID'] = 'string'
         rampTypes['CTRL_ID'] = 'string'
+        rampTypes['newline'] = 'ignore'
         return rampTypes
     
     def getPROPtypes(self, version="6.7.4"):
@@ -76,6 +78,7 @@ class fdsLineTypes(object):
         propTypes['PARTICLE_VELOCITY'] = 'float'
         propTypes['SPRAY_ANGLE'] = 'listfloat'
         propTypes['GAUGE_EMISSIVITY'] = 'float'
+        propTypes['newline'] = 'ignore'
         return propTypes
     
     def getSPECtypes(self, version="6.7.4"):
@@ -86,6 +89,7 @@ class fdsLineTypes(object):
         specTypes['VAPORIZATION_TEMPERATURE'] = 'float'
         specTypes['MELTING_TEMPERATURE'] = 'float'
         specTypes['HEAT_OF_VAPORIZATION'] = 'float'
+        specTypes['newline'] = 'ignore'
         return specTypes
         
     def getMATLtypes(self, version="6.7.4"):
@@ -111,6 +115,7 @@ class fdsLineTypes(object):
         matlTypes['REFERENCE_TEMPERATURE'] = 'float'
         matlTypes['HEAT_OF_REACTION'] = 'float'
         matlTypes['HEAT_OF_COMBUSTION'] = 'float'
+        matlTypes['newline'] = 'ignore'
         return matlTypes
     
     def getREACtypes(self, version="6.7.4"):
@@ -129,11 +134,13 @@ class fdsLineTypes(object):
         reacTypes['FYI'] = 'string'
         reacTypes['RADIATIVE_FRACTION'] = 'float'
         reacTypes['IDEAL'] = 'bool'
+        reacTypes['newline'] = 'ignore'
         return reacTypes
 
     def getRADItypes(self, version="6.7.4"):
         radiTypes = defaultdict(bool)
         radiTypes['RADIATIVE_FRACTION'] = 'float'
+        radiTypes['newline'] = 'ignore'
         return radiTypes
 
     def getMESHtypes(self, version="6.7.4"):
@@ -143,6 +150,7 @@ class fdsLineTypes(object):
         meshTypes['XB'] = 'listfloat'
         meshTypes['MPI_PROCESS'] = 'int'
         meshTypes['unknownCounter'] = 'ignore'
+        meshTypes['newline'] = 'ignore'
         return meshTypes
 
     def getSURFtypes(self, version="6.7.4"):
@@ -179,7 +187,7 @@ class fdsLineTypes(object):
         surfTypes['RADIUS'] = 'float'
         surfTypes['RAMP_Q'] = 'string'
         surfTypes['RGB'] = 'listfloat'
-        surfTypes['STRETCH_FACTOR'] = 'float'
+        surfTypes['STRETCH_FACTOR'] = 'listfloat'
         surfTypes['TAU_V'] = 'float'
         surfTypes['TMP_BACK'] = 'float'
         surfTypes['TMP_FRONT'] = 'float'
@@ -188,6 +196,7 @@ class fdsLineTypes(object):
         surfTypes['VEL_T'] = 'listfloat'
         surfTypes['VOLUME_FLOW'] = 'float'
         surfTypes['WIDTH'] = 'float'
+        surfTypes['newline'] = 'ignore'
         return surfTypes
 
     def getVENTtypes(self, version="6.7.4"):
@@ -201,6 +210,7 @@ class fdsLineTypes(object):
         surfTypes['DEVC_ID'] = 'string'
         surfTypes['number'] = 'ignore'
         surfTypes['unknownCounter'] = 'ignore'
+        surfTypes['newline'] = 'ignore'
         return surfTypes
 
     def getPREStypes(self, version="6.7.4"):
@@ -208,6 +218,7 @@ class fdsLineTypes(object):
         presTypes['SOLVER'] = 'string'
         presTypes['VELOCITY_TOLERANCE'] = 'float'
         presTypes['MAX_PRESSURE_ITERATIONS'] = 'int'
+        presTypes['newline'] = 'ignore'
         return presTypes
 
     def getOBSTtypes(self, version="6.7.4"):
@@ -227,6 +238,7 @@ class fdsLineTypes(object):
         obstTypes['BULK_DENSITY'] = 'float'
         obstTypes['number'] = 'ignore'
         obstTypes['unknownCounter'] = 'ignore'
+        obstTypes['newline'] = 'ignore'
         return obstTypes
     
     def getPARTtypes(self, version="6.7.4"):
@@ -242,6 +254,7 @@ class fdsLineTypes(object):
         partTypes['DISTRIBUTION'] = 'string'
         partTypes['COLOR'] = 'string'
         partTypes['AGE'] = 'float'
+        partTypes['newline'] = 'ignore'
         return partTypes
     
     def getHOLEtypes(self, version="6.7.4"):
@@ -251,6 +264,7 @@ class fdsLineTypes(object):
         holeTypes['CTRL_ID'] = 'string'
         holeTypes['number'] = 'ignore'
         holeTypes['unknownCounter'] = 'ignore'
+        holeTypes['newline'] = 'ignore'
         return holeTypes
 
     def getINITtypes(self, version="6.7.4"):
@@ -265,10 +279,12 @@ class fdsLineTypes(object):
         initTypes['N_PARTICLES_PER_CELL'] = 'int'
         initTypes['CELL_CENTERED'] = 'bool'
         initTypes['TEMPERATURE'] = 'float'
+        initTypes['newline'] = 'ignore'
         return initTypes
 
     def getDEVCtypes(self, version="6.7.4"):
         devcTypes = defaultdict(bool)
+        devcTypes['CONVERSION_FACTOR'] = 'float'
         devcTypes['CTRL_ID'] = 'string'
         devcTypes['DEPTH'] = 'float'
         devcTypes['DUCT_ID'] = 'string'
@@ -289,7 +305,9 @@ class fdsLineTypes(object):
         devcTypes['XB'] = 'listfloat'
         devcTypes['XYZ'] = 'listfloat'
         devcTypes['Z_ID'] = 'string'
+        devcTypes['UNITS'] = 'string'
         devcTypes['unknownCounter'] = 'ignore'
+        devcTypes['newline'] = 'ignore'
         return devcTypes
 
     def getBNDFtypes(self, version="6.7.4"):
@@ -300,6 +318,7 @@ class fdsLineTypes(object):
         bndfTypes['PROP_ID'] = 'string'
         bndfTypes['ID'] = 'ignore'
         bndfTypes['unknownCounter'] = 'ignore'
+        bndfTypes['newline'] = 'ignore'
         return bndfTypes
     
     def getSLCFtypes(self, version="6.7.4"):
@@ -315,6 +334,7 @@ class fdsLineTypes(object):
         slcfTypes['FYI'] = 'string'
         slcfTypes['ID'] = 'ignore'
         slcfTypes['unknownCounter'] = 'ignore'
+        slcfTypes['newline'] = 'ignore'
         return slcfTypes
 
     def getCTRLtypes(self, version="6.7.4"):
@@ -325,6 +345,7 @@ class fdsLineTypes(object):
         ctrlTypes['DELAY'] = 'float'
         ctrlTypes['CONSTANT'] = 'float'
         ctrlTypes['RAMP_ID'] = 'string'
+        ctrlTypes['newline'] = 'ignore'
         return ctrlTypes
     
     def getZONEtypes(self, version="6.7.4"):
@@ -332,6 +353,7 @@ class fdsLineTypes(object):
         zoneTypes['ID'] = 'string'
         zoneTypes['XB'] = 'listfloat'
         zoneTypes['LEAK_AREA'] = 'listindfloat'
+        zoneTypes['newline'] = 'ignore'
         return zoneTypes
     
     def getDUMPtypes(self, version="6.7.4"):
@@ -351,6 +373,8 @@ class fdsLineTypes(object):
         dumpTypes['NFRAMES'] = 'int'
         dumpTypes['PLOT3D_QUANTITY'] = 'liststring'
         dumpTypes['PLOT3D_SPEC_ID'] = 'liststring'
+        dumpTypes['SIG_FIGS'] = 'int'
+        dumpTypes['newline'] = 'ignore'
         return dumpTypes
     
     def getTIMEtypes(self, version="6.7.4"):
@@ -360,6 +384,7 @@ class fdsLineTypes(object):
         timeTypes['ID'] = 'ignore'
         timeTypes['WALL_INCREMENT'] = 'float'
         timeTypes['DT'] = 'float'
+        timeTypes['newline'] = 'ignore'
         return timeTypes
     
     def getMISCtypes(self, version="6.7.4"):
@@ -372,6 +397,7 @@ class fdsLineTypes(object):
         miscTypes['Y_O2_INFTY'] = 'float'
         miscTypes['RESTART'] = 'bool'
         miscTypes['SOLID_PHASE_ONLY'] = 'bool'
+        miscTypes['newline'] = 'ignore'
         return miscTypes
     
     def getHEADtypes(self, version="6.7.4"):
@@ -379,4 +405,5 @@ class fdsLineTypes(object):
         headTypes['CHID'] = 'string'
         headTypes['TITLE'] = 'string'
         headTypes['ID'] = 'ignore'
+        headTypes['newline'] = 'ignore'
         return headTypes

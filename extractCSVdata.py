@@ -48,7 +48,7 @@ def cleanDataLines(lines2, headerLines):
         lines[i] = [float(y) for y in line.split(',')]
     return lines
 
-def load_csv(modeldir, chid, suffix='_devc'):
+def load_csv(modeldir, chid, suffix='_devc', labelRow=-1):
     if 'zip' in modeldir:
         csv_files = getFileList(modeldir, chid, 'csv')
         suff_files = [x for x in csv_files if suffix in x]
@@ -59,8 +59,11 @@ def load_csv(modeldir, chid, suffix='_devc'):
         f = open(file, 'rb')
     lines = f.readlines()
     f.close()
-    header = (lines[0].decode('utf-8')).replace('\r\n','').replace('\n','').split(',')
     headerLines = findHeaderLength(lines)
+    if labelRow == -1:
+        header = (lines[headerLines].decode('utf-8')).replace('\r\n','').replace('\n','').split(',')
+    else:
+        header = (lines[labelRow].decode('utf-8')).replace('\r\n','').replace('\n','').split(',')
     dataLines = cleanDataLines(lines, headerLines)
     data = pd.DataFrame(dataLines, columns=header,)
     return data

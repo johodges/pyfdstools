@@ -20,6 +20,7 @@
 #=======================================================================
 
 import numpy as np
+import pandas as pd
 from collections import defaultdict
 import datetime
 import re
@@ -103,7 +104,7 @@ class fdsFileOperations(object):
     addDEVC(ID, QUANTITY, XYZ=None, XB=None, IOR=None, SPEC_ID=None,
             TIME_AVERAGED=None, SPATIAL_STATISTIC=None, STATISTICS=None,
             INITIAL_STATE=None, INIT_ID=None, SETPOINT=None,
-            DUCT_ID=None)
+            DUCT_ID=None, PROP_ID=None)
         Adds a devc key to the devcs namelist.
     addDUMP(RENDER_FILE=None, COLUMN_DUMP_LIMIT=False, WRITE_XYZ=False,
             DT_PL3D=None, DT_SL3D=None, DT_SLCF=None, DT_BNDF=None,
@@ -321,7 +322,8 @@ class fdsFileOperations(object):
                 SPEC_ID=None, TIME_AVERAGED=None,
                 SPATIAL_STATISTIC=None, STATISTICS=None,
                 INITIAL_STATE=None, INIT_ID=None, SETPOINT=None,
-                DUCT_ID=None, NO_UPDATE_DEVC_ID=None, CTRL_ID=None):
+                DUCT_ID=None, NO_UPDATE_DEVC_ID=None, CTRL_ID=None,
+                PROP_ID=None):
         """Adds a devc key to internal attribute devcs
         
         Adds a devc key to internal attribte devcs. Optional parameters
@@ -367,13 +369,19 @@ class fdsFileOperations(object):
             String identifier of device activation to stop updating
         CTRL_ID : str, optional
             String identifier of control for device
+        PROP_ID : str, optional
+            String identifier of properties for device
         """
         
         devc = defaultdict(bool)
         devc['ID'] = ID
         devc['QUANTITY'] = QUANTITY
-        if XYZ != None: devc['XYZ'] = XYZ
-        if XB != None: devc['XB'] = XB
+        if XYZ != None:
+            if type(XYZ) is list: XYZ = np.array(XYZ)
+            devc['XYZ'] = XYZ
+        if XB != None:
+            if type(XB) is list: XB = np.array(XB)
+            devc['XB'] = XB
         if INITIAL_STATE != None: devc['INITIAL_STATE'] = INITIAL_STATE
         if INIT_ID != None: devc['INIT_ID'] = INIT_ID
         if SETPOINT != None: devc['SETPOINT'] = SETPOINT
@@ -387,6 +395,7 @@ class fdsFileOperations(object):
         if NO_UPDATE_DEVC_ID != None: devc['NO_UPDATE_DEVC_ID'] = NO_UPDATE_DEVC_ID
         if CTRL_ID != None: devc['CTRL_ID'] = CTRL_ID
         if SETPOINT != None: devc['SETPOINT'] = SETPOINT
+        if PROP_ID != None: devc['PROP_ID'] = PROP_ID
         self.devcs[ID] = devc
     
     
@@ -549,6 +558,8 @@ class fdsFileOperations(object):
         """
         
         mesh = defaultdict(bool)
+        if type(IJK) is list: IJK = np.array(IJK)
+        if type(XB) is list: XB = np.array(XB)
         mesh['ID'] = ID
         mesh['IJK'] = IJK
         mesh['XB'] = XB
@@ -711,7 +722,7 @@ class fdsFileOperations(object):
         self.pres['ID'] = pres
         
         
-    def addRAMP(self, ID, T, F):
+    def addRAMP(self, ID, T, F, appendZero=False, appendTime=1.0):
         """Adds a ramp key to internal attribute ramps
         
         Adds a ramp key to internal attribute ramps.
@@ -725,7 +736,15 @@ class fdsFileOperations(object):
         F : float array(N)
             Array specifying the y-axis of the ramp
         """
-        
+        if type(T) == pd.core.frame.DataFrame: T = T.values
+        if type(T) == pd.core.series.Series: T = T.values
+        if type(T) == np.ndarray: T = list(T)
+        if type(F) == pd.core.frame.DataFrame: F = F.values
+        if type(F) == pd.core.series.Series: F = F.values
+        if type(F) == np.ndarray: F = list(F)
+        if appendZero: 
+            T.append(T[-1] + appendTime)
+            F.append(0)
         if self.ramps[ID]:
             Ts = self.ramps[ID]['T']
             Fs = self.ramps[ID]['F']
@@ -839,7 +858,9 @@ class fdsFileOperations(object):
         if PBZ != None: slcf['PBZ'] = PBZ
         if SPEC_ID != None: slcf['SPEC_ID'] = SPEC_ID
         if Vec: slcf['VECTOR'] = 'TRUE'
-        if XB != None: slcf['XB'] = XB
+        if XB != None:
+            if type(XB) is list: XB = np.array(XB)
+            slcf['XB'] = XB
         self.slcfs['unknownCounter'] += 1
         self.slcfs[slcf['ID']] = slcf
         
@@ -969,7 +990,9 @@ class fdsFileOperations(object):
         vent = defaultdict(bool)
         vent['ID'] = ID
         vent['SURF_ID'] = SURF_ID
-        if XB != None: vent['XB'] = XB
+        if XB is not None:
+            if type(XB) is list: XB = np.array(XB)
+            vent['XB'] = XB
         if CTRL_ID != None: vent['CTRL_ID'] = CTRL_ID
         if MB != None: vent['MB'] = MB
         if IOR != None: vent['IOR'] = IOR
@@ -1121,6 +1144,7 @@ class fdsFileOperations(object):
                     vals.append(preprocess)
                 keyValue = vals
             elif ('list' in keyType) and ('ind' in keyType) and ('row' not in keyType):
+                #print(keyID, keyID2, keyType, keyValue)
                 regex1 = r"(\(.{0,3}):(.{0,3}\))"
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
                     keyValue = keyValue[:-1]
@@ -1133,7 +1157,7 @@ class fdsFileOperations(object):
                     ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')]
                     ar2 = [int(x) for x in tmp.groups()[1].replace(')','').split(':')]
                 else:
-                    (ar1, ar2) = ([1], [1])
+                    (ar1, ar2) = ([1], [len(keyValues)])
                 tmp = np.zeros((np.max([ar1, ar2]), 1), dtype='object')
                 for i in range(0, tmp.shape[0]):
                     tmp[i-1, 0] = keyValues[i-1]
@@ -1165,7 +1189,7 @@ class fdsFileOperations(object):
                     if len(ar1) == 1: ar1 = [ar1[0], ar1[0]]
                     if len(ar2) == 1: ar2 = [ar2[0], ar2[0]]
                 else:
-                    (ar1, ar2) = ([1, 1], [1, 1])
+                    (ar1, ar2) = ([1, 1], [1, len(keyValues)])
                 tmp = np.zeros((np.max(ar1), np.max(ar2)), dtype='object')
                 counter = 0
                 if ar1[0] == ar1[1]:
@@ -1544,6 +1568,7 @@ class fdsFileOperations(object):
                 if dic[key2] is not False:
                     text = "%s%s='%s', "%(text, key2, dic[key2])
             elif (types[key2] == 'float'):
+                #print(key2, dic[key2])
                 if dic[key2] is not False:
                     text = "%s%s=%s, "%(text, key2, '{:.{prec}f}'.format(dic[key2], prec=decimals))
             elif (types[key2] == 'int'):
@@ -1904,9 +1929,12 @@ class fdsFileOperations(object):
                     tmp[ID] = lineDict
             elif mergeType == 'enumerate':
                 ID = lineDict['ID']
-                if ID is False: ID = "ID"
+                if ID is False:
+                    ID = "ID"
+                    lineDict["ID"] = ID
                 if tmp[ID]:
                     counter = tmp[ID]['counter']
+                    lineDict["ID"] = "%s-%04.0f"%(ID, counter)
                     tmp["%s-%04.0f"%(ID, counter)] = lineDict
                     tmp[ID]['counter'] += 1
                     pass

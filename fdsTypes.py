@@ -69,15 +69,16 @@ class fdsLineTypes(object):
     
     def getPROPtypes(self, version="6.7.4"):
         propTypes = defaultdict(bool)
-        propTypes['ID'] = 'string'
-        propTypes['QUANTITY'] = 'string'
         propTypes['ACTIVATION_TEMPERATURE'] = 'float'
-        propTypes['RTI'] = 'float'
-        propTypes['PART_ID'] = 'string'
         propTypes['FLOW_RATE'] = 'float'
-        propTypes['PARTICLE_VELOCITY'] = 'float'
-        propTypes['SPRAY_ANGLE'] = 'listfloat'
         propTypes['GAUGE_EMISSIVITY'] = 'float'
+        propTypes['GAUGE_TEMPERATURE'] = 'float'
+        propTypes['ID'] = 'string'
+        propTypes['PART_ID'] = 'string'
+        propTypes['PARTICLE_VELOCITY'] = 'float'
+        propTypes['QUANTITY'] = 'string'
+        propTypes['RTI'] = 'float'
+        propTypes['SPRAY_ANGLE'] = 'listfloat'
         propTypes['newline'] = 'ignore'
         return propTypes
     
@@ -120,20 +121,22 @@ class fdsLineTypes(object):
     
     def getREACtypes(self, version="6.7.4"):
         reacTypes = defaultdict(bool)
-        reacTypes['FUEL'] = 'string'
-        reacTypes['ID'] = 'string'
-        reacTypes['FORMULA'] = 'string'
         reacTypes['AUTO_IGNITION_TEMPERATURE'] = 'float'
-        reacTypes['SOOT_YIELD'] = 'float'
-        reacTypes['CO_YIELD'] = 'float'
-        reacTypes['HEAT_OF_COMBUSTION'] = 'float'
         reacTypes['C'] = 'float'
-        reacTypes['H'] = 'float'
-        reacTypes['O'] = 'float'
-        reacTypes['N'] = 'float'
+        reacTypes['CO_YIELD'] = 'float'
+        reacTypes['EPUMO2'] = 'float'
+        reacTypes['FORMULA'] = 'string'
+        reacTypes['FUEL'] = 'string'
         reacTypes['FYI'] = 'string'
-        reacTypes['RADIATIVE_FRACTION'] = 'float'
+        reacTypes['H'] = 'float'
+        reacTypes['HEAT_OF_COMBUSTION'] = 'float'
+        reacTypes['ID'] = 'string'
         reacTypes['IDEAL'] = 'bool'
+        reacTypes['N'] = 'float'
+        reacTypes['O'] = 'float'
+        reacTypes['RADIATIVE_FRACTION'] = 'float'
+        reacTypes['SOOT_YIELD'] = 'float'
+        reacTypes['SOOT_H_FRACTION'] = 'float'
         reacTypes['newline'] = 'ignore'
         return reacTypes
 
@@ -141,6 +144,8 @@ class fdsLineTypes(object):
         radiTypes = defaultdict(bool)
         radiTypes['RADIATIVE_FRACTION'] = 'float'
         radiTypes['NUMBER_RADIATION_ANGLES'] = 'int'
+        radiTypes['TIME_STEP_INCREMENT'] = 'int'
+        radiTypes['ANGLE_INCREMENT'] = 'int'
         radiTypes['newline'] = 'ignore'
         return radiTypes
 
@@ -167,11 +172,13 @@ class fdsLineTypes(object):
         surfTypes['C_VERTICAL'] = 'float'
         surfTypes['CELL_SIZE_FACTOR'] = 'float'
         surfTypes['COLOR'] = 'string'
+        surfTypes['CONE_HEAT_FLUX'] = 'float'
         surfTypes['CONVECTION_LENGTH_SCALE'] = 'float'
         surfTypes['DEFAULT'] = 'bool'
         surfTypes['EMISSIVITY'] = 'float'
         surfTypes['EMISSIVITY_BACK'] = 'float'
         surfTypes['EXTERNAL_FLUX'] = 'float'
+        surfTypes['EXTERNAL_FLUX_RAMP'] = 'string'
         surfTypes['EXTINCTION_TEMPERATURE'] = 'float'
         surfTypes['FYI'] = 'string'        
         surfTypes['GEOMETRY'] = 'string'
@@ -184,6 +191,7 @@ class fdsLineTypes(object):
         surfTypes['LENGTH'] = 'float'
         surfTypes['MATL_ID'] = 'matrixstring'
         surfTypes['MATL_MASS_FRACTION'] = 'matrixfloat'
+        surfTypes['MLRPUA'] = 'float'
         surfTypes['THICKNESS'] = 'listindfloat'
         surfTypes['RADIUS'] = 'float'
         surfTypes['RAMP_Q'] = 'string'
@@ -194,6 +202,7 @@ class fdsLineTypes(object):
         surfTypes['TMP_FRONT'] = 'float'
         surfTypes['TMP_INNER'] = 'float'
         surfTypes['TRANSPARENCY'] = 'float'
+        surfTypes['VEL'] = 'float'
         surfTypes['VEL_T'] = 'listfloat'
         surfTypes['VOLUME_FLOW'] = 'float'
         surfTypes['WIDTH'] = 'float'

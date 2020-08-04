@@ -242,6 +242,7 @@ class fdsFileOperations(object):
         self.profs = defaultdict(bool)
         self.props = defaultdict(bool)
         self.specs = defaultdict(bool)
+        self.winds = defaultdict(bool)
         self.customLines = []
         
         self.devcs['unknownCounter'] = 0
@@ -1331,7 +1332,7 @@ class fdsFileOperations(object):
             List of default field order
         """
         
-        fields = ["HEAD", "TIME", "MISC", "INIT", "DUMP", "ZONE", 
+        fields = ["HEAD", "TIME", "MISC", "WIND", "INIT", "DUMP", "ZONE", 
                   "PRES", "MESH", "REAC", "RADI", "MATL", "SURF",
                   "RAMP", "OBST", "HOLE", "VENT", "PART", "DEVC",
                   "CTRL", "BNDF", "SLCF", "PROP", "SPEC", "PROF"]
@@ -1680,6 +1681,7 @@ class fdsFileOperations(object):
         if lineType == 'PROP': key = 'props'
         if lineType == 'SPEC': key = 'specs'
         if lineType == 'PROF': key = 'profs'
+        if lineType == 'WIND': key = 'winds'
         return key
     
     
@@ -1859,6 +1861,7 @@ class fdsFileOperations(object):
         if lineType == 'PROP': key = 'enumerate'
         if lineType == 'SPEC': key = 'enumerate'
         if lineType == 'PROF': key = 'enumerate'
+        if lineType == 'WIND': key = 'merge'
         return key
     
     

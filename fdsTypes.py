@@ -47,6 +47,17 @@ class fdsLineTypes(object):
         self.spec = self.getSPECtypes(version)
         self.prop = self.getPROPtypes(version)
         self.prof = self.getPROFtypes(version)
+        self.wind = self.getWINDtypes(version)
+    
+    def getWINDtypes(self, version="6.7.4"):
+        windTypes = defaultdict(bool)
+        windTypes['GROUND_LEVEL'] = 'float'
+        windTypes['L'] = 'float'
+        windTypes['Z_0'] = 'float'
+        windTypes['Z_REF'] = 'float'
+        windTypes['SPEED'] = 'float'
+        windTypes['newline'] = 'ignore'
+        return windTypes
     
     def getPROFtypes(self, version="6.7.4"):
         profTypes = defaultdict(bool)
@@ -218,6 +229,7 @@ class fdsLineTypes(object):
         surfTypes['SURF_ID'] = 'string'
         surfTypes['IOR'] = 'int'
         surfTypes['DEVC_ID'] = 'string'
+        surfTypes['WIND'] = 'bool'
         surfTypes['number'] = 'ignore'
         surfTypes['unknownCounter'] = 'ignore'
         surfTypes['newline'] = 'ignore'

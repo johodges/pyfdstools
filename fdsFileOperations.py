@@ -590,6 +590,20 @@ class fdsFileOperations(object):
         self.misc['ID'] = misc
     
     
+    def calculateCellsPerProcess(self):
+        """Calculates the number of cells per mpi process based on
+        information stored in internal attributes
+        """
+        meshes, numCells = self.calculateMeshCells()
+        numProcesses = self.mpiProcesses
+        IdealCellsPerProcess = np.sum(numCells)/numProcesses
+        
+        cellsPerProcess = np.zeros((numProcesses,))
+        for i, mesh in enumerate(meshes):
+            process = int(self.meshes[mesh]['MPI_PROCESS'])
+            cellsPerProcess[process] += numCells[i]
+        return IdealCellsPerProcess, cellsPerProcess
+    
     def addMPIprocesses(self, numberOfProcesses, allowMeshSplitting=True, splitMultiplier=1.20):
         """Adds mpi processes to meshes stored in internal attributes
         
@@ -611,7 +625,8 @@ class fdsFileOperations(object):
         cellsPerProcess = np.sum(numCells)/numberOfProcesses
         mpiConverged = False
         splitConverged = False
-        while not mpiConverged:
+        assumedConverged = False
+        while not mpiConverged and not assumedConverged:
             mpiConverged = True
             while not splitConverged and allowMeshSplitting:
                 splitConverged = True
@@ -622,6 +637,11 @@ class fdsFileOperations(object):
                         splitConverged = False
             
             meshes, numCells = self.calculateMeshCells()
+            #print(len(meshes), numberOfProcesses)
+            if len(meshes) / 10 > numberOfProcesses:
+                print("Warning: Number of meshes 10x greater than number of requested processes (%0.0f, %0.0f)"%(len(meshes), numberOfProcesses))
+                print("AssumingConvergence")
+                assumedConverged = True
             mpiProcessInds = np.zeros((len(numCells),))-1
             mpiProcess = np.zeros((numberOfProcesses,))
             while np.argwhere(mpiProcessInds == -1).shape[0] > 0:
@@ -1968,7 +1988,6 @@ class fdsFileOperations(object):
         splitMultiplier : float, optional
             Tolerance used in mesh splitting (default is 1.2)
         """
-        
         self.addMPIprocesses(
                 mpiProcesses, allowMeshSplitting=allowMeshSplitting, 
                 splitMultiplier=splitMultiplier)

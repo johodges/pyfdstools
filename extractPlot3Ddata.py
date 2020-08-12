@@ -319,14 +319,15 @@ def findSliceLocation(grid, data, axis, value, plot3d=False):
     else:
         return x, z, data2
 
-def plotSlice(x, z, data_slc, axis,
+def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
               cmap=None, figsize=None, fs=16, figsizeMult=12,
               qnty_mn=None, qnty_mx=None,
               levels=None, cbarticks=None, clabel=None,
               highlightValue=None, highlightWidth=None,
               reverseXY=False, percentile=None,
               xmn=None, xmx=None, zmn=None, zmx=None,
-              xlabel=None, zlabel=None):
+              xlabel=None, zlabel=None,
+              addCbar=True, fixXLims=True, fixZLims=True):
     if highlightValue is not None:
         percentile = (highlightValue - qnty_mn) / (qnty_mx - qnty_mn)
     if (xmn == None): xmn = x.min()
@@ -356,7 +357,8 @@ def plotSlice(x, z, data_slc, axis,
             figsize = (figsizeMult * xrange / zrange, figsizeMult)
         else:
             figsize = (figsizeMult, figsizeMult * zrange / xrange)
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    if fig == None or ax == None:
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
     if qnty_mn == None:
         qnty_mn = np.nanmin(data_slc)
     if qnty_mx == None:
@@ -364,10 +366,11 @@ def plotSlice(x, z, data_slc, axis,
     im = ax.contourf(
             x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
             levels=np.linspace(qnty_mn, qnty_mx, levels), extend='both')
-    cbar = fig.colorbar(im, cmap=cmap, extend='both', ticks=cbarticks)
-    cbar.ax.tick_params(labelsize=fs)
-    if clabel is not None:
-        cbar.set_label(clabel, fontsize=fs)
+    if addCbar:
+        cbar = fig.colorbar(im, cmap=cmap, extend='both', ticks=cbarticks)
+        cbar.ax.tick_params(labelsize=fs)
+        if clabel is not None:
+            cbar.set_label(clabel, fontsize=fs)
     if xlabel is None:
         if abs(axis) == 1: xlabel = 'y (m)'
         if abs(axis) == 2: xlabel = 'x (m)'
@@ -378,8 +381,10 @@ def plotSlice(x, z, data_slc, axis,
         if abs(axis) == 3: zlabel = 'y (m)'
     ax.set_xlabel(xlabel, fontsize=fs)
     ax.set_ylabel(zlabel, fontsize=fs)
-    ax.set_xlim(xmn, xmx)
-    ax.set_ylim(zmn, zmx)
+    if fixXLims:
+        ax.set_xlim(xmn, xmx)
+    if fixZLims:
+        ax.set_ylim(zmn, zmx)
     ax.tick_params(labelsize=fs)
     return fig, ax
 

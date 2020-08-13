@@ -138,9 +138,9 @@ def exampleImportBndf(resultDir=None, chid=None, fdsFile=None,
     
     for qty, unit in zip(fdsQuantities, fdsUnits):
         for mesh in list(datas[qty].keys()):
-            data = datas[qty][mesh]['DATA']
-            x = datas[qty][mesh]['X']
-            z = datas[qty][mesh]['Z']
+            data = datas[qty]['DATA']
+            x = datas[qty]['X']
+            z = datas[qty]['Z']
         meanData = np.mean(data[:, :, tStartInd:tEndInd], axis=2)
         fig = fds.plotSlice(x, z, meanData, axis,
                             qnty_mn=qnty_mn, qnty_mx=qnty_mx,

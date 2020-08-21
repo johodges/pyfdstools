@@ -1,0 +1,36 @@
+Quantity,Datasets,Points,sigmaE,sigmaM,Bias
+"HGL Temperature, Forced Ventilation",6,158,0.07,0.13,1.11
+"HGL Temperature, Natural Ventilation",16,307,0.07,0.11,1.03
+"HGL Temperature, No Ventilation",3,32,0.07,0.08,1.05
+HGL Depth,13,246,0.05,0.08,1.06
+Ceiling Jet Temperature,22,1060,0.07,0.12,1.03
+Plume Temperature,13,243,0.07,0.21,1.06
+Oxygen Concentration,13,274,0.08,0.18,0.97
+Carbon Dioxide Concentration,13,266,0.08,0.15,1
+Smoke Concentration,2,22,0.19,1.27,3.41
+Compartment Over-Pressure,5,191,0.21,0.21,0.91
+Target Temperature,11,1416,0.07,0.18,1
+Surface Temperature,7,1097,0.07,0.16,1.05
+Liquid Pool Surface Temperature,6,6,0.07,0.39,0.66
+Target Heat Flux,7,366,0.11,0.39,0.88
+Surface Heat Flux,7,633,0.11,0.27,1.04
+Velocity,9,268,0.08,0.28,1
+Sprinkler Activation Time,6,273,0.06,0.16,1.02
+Smoke Detector Activation Time,1,142,0.27,0.27,0.61
+"Smoke Detector Activation Time, Temp. Rise",1,142,0.33,0.33,1.2
+Cable Failure Time,1,35,0.12,0.15,1.14
+Sprinkler Actuations,3,38,0.15,0.4,1.14
+Heat Release Rate,3,20,0.08,0.34,1.02
+Burning Rate,2,35,0.08,0.34,0.92
+Liquid Pool Burning Rate,10,15,0.08,0.19,1.25
+Carbon Monoxide Concentration,7,96,0.19,0.61,1
+Entrainment,2,87,0.05,0.05,1.12
+Extinction Time,2,45,0.1,0.43,1.13
+Species Concentration,1,126,0.08,0.15,0.98
+Smoke Obscuration,1,18,0.19,0.19,1.01
+Mass Flow Rate,1,40,0.08,0.08,0.83
+Atmospheric Dispersion,13,48,0.5,0.79,2.22
+Minimum Extinguishing Concentration,46,46,0.03,0.03,1.04
+Rate of Spread,6,341,0.1,0.61,1.13
+Condensation,6,101,0.12,0.29,0.9
+Aerosol Deposition,2,88,0.12,0.5,1.07

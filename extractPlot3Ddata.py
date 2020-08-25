@@ -327,7 +327,8 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
               reverseXY=False, percentile=None,
               xmn=None, xmx=None, zmn=None, zmx=None,
               xlabel=None, zlabel=None,
-              addCbar=True, fixXLims=True, fixZLims=True):
+              addCbar=True, fixXLims=True, fixZLims=True,
+              title=None):
     if highlightValue is not None:
         percentile = (highlightValue - qnty_mn) / (qnty_mx - qnty_mn)
     if (xmn == None): xmn = x.min()
@@ -385,6 +386,8 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
         ax.set_xlim(xmn, xmx)
     if fixZLims:
         ax.set_ylim(zmn, zmx)
+    if title is not None:
+        ax.set_title(title, fontsize=fs)
     ax.tick_params(labelsize=fs)
     return fig, ax
 

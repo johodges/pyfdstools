@@ -438,7 +438,7 @@ def readPlot3Ddata(chid, resultDir, time):
     return grid_abs, data_abs
 
 def readSLCF3Ddata(chid, resultDir, quantityToExport,
-                   time=None, dt=None):
+                   time=None, dt=None, saveTimesFile=False):
     if '.zip' in resultDir:
         xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
     else:
@@ -466,7 +466,11 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
         datas3D = []
         lims3D = []
         for slcfFile in slcfFiles:
-            timesSLCF = readSLCFtimes(slcfFile)
+            if saveTimesFile:
+                timesFile = slcfFile.replace('.sf','_times.csv')
+            else:
+                timesFile = None
+            timesSLCF = readSLCFtimes(slcfFile, timesFile)
             times = []
             f = zopen(slcfFile)
 
@@ -598,15 +602,30 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
                     data2 = interpolator(tmpGrid)
                     data2 = np.reshape(
                             data2, (ANX, ANY, ANZ), order='C')
+                    try:
+                        data_abs[xloc_mn:xloc_mx+1,
+                                 yloc_mn:yloc_mx+1,
+                                 zloc_mn:zloc_mx+1,
+                                 i] = data2
+                    except:
+                        print("Error loading mesh %s at time %0.0f"%(key, i))
+            else:
+                try:
                     data_abs[xloc_mn:xloc_mx+1,
                              yloc_mn:yloc_mx+1,
                              zloc_mn:zloc_mx+1,
-                             i] = data2
-            else:
-                data_abs[xloc_mn:xloc_mx+1,
-                         yloc_mn:yloc_mx+1,
-                         zloc_mn:zloc_mx+1,
-                         :] = data
+                             :] = data
+                except:
+                    try:
+                        NTT = min([data_abs.shape[3], data.shape[3]])
+                        data_abs[xloc_mn:xloc_mx+1,
+                                 yloc_mn:yloc_mx+1,
+                                 zloc_mn:zloc_mx+1,
+                                 :NTT] = data[:, :, :, :NTT]
+                        print("Error loading mesh %s at time %0.0f"%(key, i))
+                    except:
+                        print("Error loading mesh %s at all times"%(key))
+                        print(data.shape, data_abs[xloc_mn:xloc_mx+1, yloc_mn:yloc_mx+1, zloc_mn:zloc_mx+1, :].shape, NTT)
         
     return grid_abs, data_abs, times3D[0]
 
@@ -773,7 +792,12 @@ def readSLCFheader(f):
     
     return quantity, shortName, units, iX, eX, iY, eY, iZ, eZ
 
-def readSLCFtimes(file):
+def readSLCFtimes(file, timesFile=None):
+    if timesFile != None:
+        if os.path.exists(timesFile) == True:
+            times = np.loadtxt(timesFile, delimiter=',')
+            return times
+        
     f = zopen(file)
     qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
     (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
@@ -787,6 +811,8 @@ def readSLCFtimes(file):
         print(len(data[:remainder]))
         fullFile = np.frombuffer(data[:remainder], dtype=np.float32)
     times = fullFile[2::(NX+1)*(NY+1)*(NZ+1)+5]
+    if timesFile != None:
+        np.savetxt(timesFile, times)
     return times
 
 def readSLCFquantities(chid, resultDir):
@@ -797,6 +823,7 @@ def readSLCFquantities(chid, resultDir):
         slcfFiles = glob.glob("%s%s_*.sf"%(resultDir, chid))
     quantities = []
     dimensions = []
+    meshes = []
     for file in slcfFiles:
         if '.zip' in resultDir:
             f = zip.open(file.split("%s%s"%('.zip',os.sep))[1])
@@ -805,10 +832,15 @@ def readSLCFquantities(chid, resultDir):
         qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
         quantities.append(qty)
         dimensions.append([iX, eX, iY, eY, iZ, eZ])
+        try:
+            mesh = int(file.split('_')[-2])
+        except:
+            mesh = int(file.split('_')[-1])
+        meshes.append(mesh)
         f.close()
     if '.zip' in resultDir:
         zip.close()
-    return quantities, slcfFiles, dimensions
+    return quantities, slcfFiles, dimensions, meshes
 
 def buildQTYstring(chid, resultDir, qty):
     quantities, slcfFiles = readSLCFquantities(chid, resultDir)

@@ -75,6 +75,7 @@ class fdsLineTypes(object):
         rampTypes['F'] = 'listrowfloat'
         rampTypes['ID'] = 'string'
         rampTypes['CTRL_ID'] = 'string'
+        rampTypes['DEVC_ID'] = 'string'
         rampTypes['newline'] = 'ignore'
         return rampTypes
     
@@ -208,6 +209,7 @@ class fdsLineTypes(object):
         surfTypes['HRRPUA'] = 'float'
         surfTypes['ID'] = 'string'
         surfTypes['IGNITION_TEMPERATURE'] = 'float'
+        surfTypes['INNER_RADIUS'] = 'float'
         surfTypes['LEAK_PATH'] = 'listint'
         surfTypes['LENGTH'] = 'float'
         surfTypes['MASS_FLUX'] = 'float'
@@ -216,6 +218,7 @@ class fdsLineTypes(object):
         surfTypes['MLRPUA'] = 'float'
         surfTypes['RAMP_MF'] = 'string'
         surfTypes['RAMP_V'] = 'string'
+        surfTypes['TAU_Q'] = 'float'
         surfTypes['TEXTURE_MAP'] = 'string'
         surfTypes['TEXTURE_WIDTH'] = 'float'
         surfTypes['TEXTURE_HEIGHT'] = 'float'
@@ -344,6 +347,7 @@ class fdsLineTypes(object):
         devcTypes['IOR'] = 'int'
         devcTypes['MATL_ID'] = 'string'
         devcTypes['NO_UPDATE_DEVC_ID'] = 'string'
+        devcTypes['NO_UPDATE_CTRL_ID'] = 'string'
         devcTypes['ORIENTATION'] = 'listfloat'
         devcTypes['POINTS'] = 'int'
         devcTypes['PROP_ID'] = 'string'
@@ -405,6 +409,7 @@ class fdsLineTypes(object):
         zoneTypes = defaultdict(bool)
         zoneTypes['ID'] = 'string'
         zoneTypes['XB'] = 'listfloat'
+        zoneTypes['XYZ'] = 'listfloat'
         zoneTypes['LEAK_AREA'] = 'listindfloat'
         zoneTypes['newline'] = 'ignore'
         return zoneTypes

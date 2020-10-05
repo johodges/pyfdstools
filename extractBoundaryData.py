@@ -20,6 +20,7 @@ import numpy as np
 from collections import defaultdict
 import glob
 import cv2
+import pandas as pd
 from .utilities import zopen, in_hull, getFileList, pts2polygons
 from .fdsFileOperations import fdsFileOperations
 from .smokeviewParser import parseSMVFile
@@ -666,6 +667,7 @@ def getLimsFromGrid(data, grid):
         print(grid[0][:,0])
         print(grid[1][:,0])
         print(grid[2][:,0])
+        print(data)
         print("Failed to make lims, returning null")
         lims = [0,0,0,0,0,0]
         assert False, "Stopped"
@@ -704,9 +706,11 @@ def parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0]):
     polygons = []
     for name in names:
         linkedPolygons = []
-        for key in list(fdsObsts.keys()):
-            if key == name:
-                coord = fdsObsts[name]['XB']
+        obstNames = list(fdsObsts.keys())
+        if 'unknownCounter' in obstNames: obstNames.remove('unknownCounter')
+        for key in obstNames:
+            if fdsObsts[key]['ID'] == name:
+                coord = fdsObsts[key]['XB']
                 obstdif = abs(smvObsts[:,:6]-coord)
                 obstsum = np.sum((obstdif)**2, axis=1)**0.5
                 snapInd = np.argmin(obstsum)
@@ -765,6 +769,12 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts,
     
     coords2, pts2, times, orients2 = getPointsFromFiles(
             bndfs, smvGrids, smvObsts, tStart, tEnd, tBand, tInt)
+    #import pandas as pd
+    #pd.DataFrame(coords2).to_csv('E:\\projects\\kansas_city_fire_modeling\\fromcluster\\coords.csv')
+    #pd.DataFrame(pts2).to_csv('E:\\projects\\kansas_city_fire_modeling\\fromcluster\\pts.csv')
+    #pd.DataFrame(times).to_csv('E:\\projects\\kansas_city_fire_modeling\\fromcluster\\times.csv')
+    #pd.DataFrame(orients2).to_csv('E:\\projects\\kansas_city_fire_modeling\\fromcluster\\orients.csv')
+    #print(coords2.shape, pts2.shape, times.shape, orients2.shape)
     if orientations[0] == 0:
         orientations = [-3, -2, -1, 1, 2, 3]
     mask = [True if x in orientations else False for x in orients2]
@@ -776,6 +786,11 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts,
     
     # Generate point mask for polygons
     masks = getCoordinateMasks(coords, polygons)
+    
+    #pd.DataFrame(coords).to_csv('test_points.csv')
+    #pd.DataFrame(orients).to_csv('test_orients.csv')
+    #pd.DataFrame(masks).to_csv('test_masks.csv')
+    pd.DataFrame(pts).to_csv('test_pts.csv')
     
     mPts = np.zeros((pts.shape[1],masks.shape[1]))
     for i in range(0,masks.shape[1]):
@@ -1210,7 +1225,8 @@ def linkBndfFileToMesh(meshes, bndfs, fdsQuantities):
 
 def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
                          tStart=0, tEnd=120, tInt=1, tBand=3,
-                         orientations=[0]):
+                         orientations=[0], extend=[0, 0, 0],
+                         names=None):
     """Extract maximum value from boundary file
     
     Parameters
@@ -1235,6 +1251,8 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
         Time averaging window to include in extracted data
     orientations : list
         List of integers specifying which orientations to consider
+    names : list
+        List of names specifiynig which obstructions to extract
     
     Returns
     -------
@@ -1244,16 +1262,20 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     fdsFile = fdsFileOperations()
     fdsFile.importFile(fdsF)
     meshes = list(fdsFile.meshes.keys())
-    names = fdsFile.getPolygonNamesFromFdsFile()
+    if names == None:
+        names = fdsFile.getPolygonNamesFromFdsFile()
+    
+    #names = ['CE212319', 'CE210006', 'CE212298']
+
     smvGrids, smvObsts, smvBndfs, smvSurfs = parseSMVFile(smvF)
     
     fdsObsts = fdsFile.obsts
-    points = parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0])
+    points = parseFDSforPts(fdsObsts, smvObsts, names, extend=extend)
     polygons, numberOfGroups = pts2polygons(points)
     
     bndfs = getFileList(resultDir, chid, 'bf')
     bndf_dic = linkBndfFileToMesh(meshes, bndfs, quantities)
-    
+    pd.DataFrame(names).to_csv('test_names.csv')
     datas = defaultdict(bool)
     for qty in quantities:
         datas[qty] = defaultdict(bool)

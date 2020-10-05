@@ -1309,8 +1309,6 @@ class fdsFileOperations(object):
         (year, month, day) = (date.year, date.month, date.day)
         dateStr = "%04.0f-%02.0f-%02.0f"%(year, month, day)
         intro = "Input file generated with python-fds-tools v1"
-        state = "Copyright Jonathan Hodges %04.0f All right reserved."%(
-                year)
         types = fdsLineTypes(version=self.version)
         if newlines is None: newlines = self.getNewlineFromTypes()
         if fields is None: fields = self.getDefaultFields()
@@ -1318,7 +1316,6 @@ class fdsFileOperations(object):
         text = "%s\n"%("!"*72)
         text = "%s%s %s on %s%s%s\n"%(
                 text, "!"*5, intro, dateStr, " "*2, "!"*5)
-        text = "%s%s %s%s%s\n"%(text, "!"*5, state, " "*11, "!"*5)
         text = "%s%s\n"%(text, "!"*72)
         
         for field in fields:
@@ -1645,7 +1642,7 @@ class fdsFileOperations(object):
                     if ('float' in types[key2]):
                         tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(t, prec=decimals))
                     if ('int' in types[key2]):
-                        tempTxt = "%s %0.0f,"%(tempTxt, t)
+                        tempTxt = "%s %0.0f,"%(tempTxt, float(t))
                 text = "%s%s "%(text, tempTxt)
                 
             else:
@@ -1728,6 +1725,7 @@ class fdsFileOperations(object):
             line2 = '/'.join(line2.split('/')[:-1])
             line2 = line2.replace('\r', ',')
             line2 = line2.replace('\n', ',')
+            
             line2 = "%s,"%(line2) if line2[-1] != ',' else line2
             line2 = '%s /'%(line2)
             
@@ -1957,7 +1955,7 @@ class fdsFileOperations(object):
                     lineDict["ID"] = ID
                 if tmp[ID]:
                     counter = tmp[ID]['counter']
-                    lineDict["ID"] = "%s-%04.0f"%(ID, counter)
+                    if lineDict['ID'] == False: lineDict["ID"] = "%s-%04.0f"%(ID, counter)
                     tmp["%s-%04.0f"%(ID, counter)] = lineDict
                     tmp[ID]['counter'] += 1
                     pass

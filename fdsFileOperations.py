@@ -122,7 +122,8 @@ class fdsFileOperations(object):
     addMISC(BNDF_DEFAULT=None, TMPA=None)
         Adds a misc key to the misc namelist.
     addMPIprocesses(numberOfProcesses, allowMeshSplitting=True,
-                    splitMultiplier=1.20)
+                    splitMultiplier=1.20,
+                    meshSplitAxes=[True, True, False])
         Adds mpi processes to meshes. Can be used to automatically
         split meshes to balance load on mpi processes.
     addOBST(ID, XB, SURF_IDS=None, SURF_ID=None, SURF_ID6=None,
@@ -604,7 +605,9 @@ class fdsFileOperations(object):
             cellsPerProcess[process] += numCells[i]
         return IdealCellsPerProcess, cellsPerProcess
     
-    def addMPIprocesses(self, numberOfProcesses, allowMeshSplitting=True, splitMultiplier=1.20):
+    def addMPIprocesses(self, numberOfProcesses,
+                        allowMeshSplitting=True, splitMultiplier=1.20,
+                        meshSplitAxes=[True, True, False]):
         """Adds mpi processes to meshes stored in internal attributes
         
         Adds mpi processes to meshes stored in internal attributes.
@@ -619,6 +622,9 @@ class fdsFileOperations(object):
             Flag specifying whether meshes can be split
         splitMultiplier : float
             Threshold used in splitting meshes
+        meshSplitAxes : list of booleans
+            Specifies along which axes the software is allowed to split
+            meshes.
         """
         
         meshes, numCells = self.calculateMeshCells()
@@ -633,7 +639,7 @@ class fdsFileOperations(object):
                 meshes, numCells = self.calculateMeshCells()
                 for mesh, numCell in zip(meshes, numCells):
                     if numCell > cellsPerProcess*splitMultiplier:
-                        self.splitMESHonce(self.meshes[mesh])
+                        self.splitMESHonce(self.meshes[mesh], meshSplitAxes)
                         splitConverged = False
             
             meshes, numCells = self.calculateMeshCells()
@@ -1967,7 +1973,8 @@ class fdsFileOperations(object):
         
         
     def saveModel(self, mpiProcesses, location,
-                  allowMeshSplitting=True, splitMultiplier=1.2):
+                  allowMeshSplitting=True, splitMultiplier=1.2,
+                  meshSplitAxes=[True, True, False]):
         """Saves an fds input file
         
         Input file is generated based on internal attribute namelist
@@ -1985,10 +1992,14 @@ class fdsFileOperations(object):
             (default is True)
         splitMultiplier : float, optional
             Tolerance used in mesh splitting (default is 1.2)
+        meshSplitAxes : list of booleans, optional
+            Specifies along which axes the software is allowed to split
+            meshes
         """
         self.addMPIprocesses(
                 mpiProcesses, allowMeshSplitting=allowMeshSplitting, 
-                splitMultiplier=splitMultiplier)
+                splitMultiplier=splitMultiplier,
+                meshSplitAxes=meshSplitAxes)
         text = self.generateFDStext()
         with open(location, 'w') as f:
             f.write(text)
@@ -2043,23 +2054,30 @@ class fdsFileOperations(object):
         return updatedKeys
     
     
-    def splitMESHonce(self, mesh):
+    def splitMESHonce(self, mesh, meshSplitAxes):
         """Splits a mesh along its largest axis.
         
         Parameters
         ----------
         mesh : dict
             Dictionary containing information for a single mesh
+        meshSplitAxes : list of booleans
+            Specifies along which axes the software is allowed to split
+            the mesh.
         """
         
         IJK = np.round(mesh['IJK'])
         XB = mesh['XB']
         dxs = [(XB[1]-XB[0])/float(IJK[0]), (XB[3]-XB[2])/float(IJK[1]), (XB[5]-XB[4])/float(IJK[2])]
         ind = np.argmax(IJK)
-        if ind == 2:
-            IJK_temp = list(IJK)
-            IJK_temp[2] = 0
+        IJK_temp = list(IJK)
+        while meshSplitAxes[ind] is False:
+            IJK_temp = list(IJK_temp)
+            IJK_temp[ind] = 0
             ind = np.argmax(IJK_temp)
+            if np.sum(IJK_temp) == 0:
+                print("Failed to split mesh.")
+                break
         
         IJK2 = list(IJK)
         XB2 = list(XB)

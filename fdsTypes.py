@@ -263,6 +263,7 @@ class fdsLineTypes(object):
         presTypes['SOLVER'] = 'string'
         presTypes['VELOCITY_TOLERANCE'] = 'float'
         presTypes['MAX_PRESSURE_ITERATIONS'] = 'int'
+        presTypes['PRESSURE_TOLERANCE'] = 'float'
         presTypes['newline'] = 'ignore'
         return presTypes
 

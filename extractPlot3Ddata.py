@@ -1135,6 +1135,7 @@ def renderSliceCsvs(data, chid, outdir):
     zs = data['z'][0, :]
     for i in range(0, len(times)):
         time = times[i]
-        print(data['datas'][:, :, i].shape)
+        outFile = os.path.join(outdir, '%s_%0.4f.csv'%(chid, time))
+        print("Rendering time %0.4f to file %s"%(time, outFile))
         d = pd.DataFrame(data['datas'][:, :, i].T, index=zs, columns=xs)
-        d.to_csv(os.path.join(outdir, '%s_%0.4f.csv'%(chid, time)))
+        d.to_csv(outFile)

@@ -277,3 +277,31 @@ def zopen(file, readtype='rb'):
     else:
         f = open(file, readtype)
     return f
+
+def getTwoZone(z, val, lowtohigh=True):
+    if lowtohigh:
+        z = z[::-1]
+        val = val[::-1]
+        val_low = val[-1]
+    else:
+        val_low = val[0]
+    H = z.max()
+    H0 = z.min()
+    tmpZ = np.linspace(0, H, 101)
+    tmpV = np.interp(tmpZ, z, val)
+    
+    I1 = np.trapz(tmpV, tmpZ)
+    I2 = np.trapz(1/tmpV, tmpZ)
+    zInt = val_low*(I1*I2-H**2)/(I1+I2*val_low**2-2*val_low*H)
+    
+    zU = np.linspace(zInt, H, num=50)
+    
+    val_high_tmp = np.interp(zU, z, val)
+    val_high = np.trapz(val_high_tmp, zU)/(H-zInt)
+    
+    zL = np.linspace(0, zInt, num=50)
+    
+    val_low_tmp = np.interp(zL, z, val)
+    val_low = np.trapz(val_low_tmp, zL)/(zInt-H0)
+    
+    return val_low, val_high, zInt

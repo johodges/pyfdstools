@@ -569,7 +569,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
     
     (patchPts,patchDs,patchIors) = patchInfo
     if (grid is None) and (smvFile is not None):
-        grid, obst, bndfs, surfs = parseSMVFile(smvFile)
+        grid, obst, bndfs, surfs, files = parseSMVFile(smvFile)
     elif (grid is None) and (smvFile is None):
         print("Either smokeview file or grid must be provided.")
         return None, None
@@ -790,7 +790,7 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts,
     #pd.DataFrame(coords).to_csv('test_points.csv')
     #pd.DataFrame(orients).to_csv('test_orients.csv')
     #pd.DataFrame(masks).to_csv('test_masks.csv')
-    pd.DataFrame(pts).to_csv('test_pts.csv')
+    #pd.DataFrame(pts).to_csv('test_pts.csv')
     
     mPts = np.zeros((pts.shape[1],masks.shape[1]))
     for i in range(0,masks.shape[1]):
@@ -1267,7 +1267,7 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     
     #names = ['CE212319', 'CE210006', 'CE212298']
 
-    smvGrids, smvObsts, smvBndfs, smvSurfs = parseSMVFile(smvF)
+    smvGrids, smvObsts, smvBndfs, smvSurfs, smvFiles = parseSMVFile(smvF)
     
     fdsObsts = fdsFile.obsts
     points = parseFDSforPts(fdsObsts, smvObsts, names, extend=extend)
@@ -1275,7 +1275,7 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     
     bndfs = getFileList(resultDir, chid, 'bf')
     bndf_dic = linkBndfFileToMesh(meshes, bndfs, quantities)
-    pd.DataFrame(names).to_csv('test_names.csv')
+    #pd.DataFrame(names).to_csv('test_names.csv')
     datas = defaultdict(bool)
     for qty in quantities:
         datas[qty] = defaultdict(bool)

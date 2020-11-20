@@ -247,7 +247,8 @@ def getFileList(resultDir, chid, extension):
     if '.zip' in resultDir:
         files = getFileListFromZip(resultDir, chid, extension)
     else:
-        files = glob.glob("%s%s*.%s"%(resultDir, chid, extension))
+        path = os.path.join(resultDir, '%s*.%s'%(chid, extension))
+        files = glob.glob(path)
     return files
 
 def getFileListFromZip(filename, chid, extension):

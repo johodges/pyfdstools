@@ -23,6 +23,9 @@ import pyfdstools as fds
 import os
 from collections import defaultdict
 import numpy as np
+import glob
+
+
 
 def exampleImportFile():
     fdsPath = os.path.abspath("examples%s%s.fds"%(os.sep, "case001"))
@@ -182,6 +185,31 @@ def exampleExtractBndfMax(resultDir=None, chid=None, fdsFile=None, smvFile=None,
         figs.append(fig)
     return datas, figs
 
+
+def example2dSliceToCsv(resultDir=None, outDir=None, chid=None,
+                        quantity=None, unit=None, axis=None, value=None,
+                        time=None, dt=None):
+    if chid is None: chid = "case001"
+    if resultDir is None: resultDir = os.path.abspath("examples%s%s.zip"%(os.sep, chid))
+    if outDir is None: outDir = os.path.abspath("generated")
+    try:
+        os.mkdir(outDir)
+    except:
+        pass
+    if quantity is None: quantity = 'TEMPERATURE'
+    if unit is None: unit = 'C'
+    if axis is None: axis = 1
+    if value is None: value = 2.45
+    if time is None: time = 30
+    if dt is None: dt = 60
+    data = fds.query2dAxisValue(resultDir, chid, quantity, axis, value, time=time, dt=dt)
+    fds.renderSliceCsvs(data, chid, outDir)
+    fig, ax = fds.plotSlice(data['x'], data['z'], data['datas'][:, :, -1], axis,
+                        clabel="%s (%s)"%(quantity, unit))
+    fig.savefig(os.path.join(outDir, '%s_%s_%0.0f_%0.4f_final_frame.png'%(chid, quantity, axis, value)))
+    return data, fig
+
+
 if __name__ == '__main__':
     
     print("Importing model example")
@@ -201,4 +229,7 @@ if __name__ == '__main__':
     print("Importing BNDF results example")
     datas, fig = exampleImportBndf()
     print("Extracting max value from BNDF results example")
-    #datas, figs = exampleExtractBndfMax()
+    datas, figs = exampleExtractBndfMax()
+    print("Rendering 2d slice to csv example.")
+    datas = example2dSliceToCsv()
+    

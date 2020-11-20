@@ -82,6 +82,10 @@ class fdsLineTypes(object):
     def getPROPtypes(self, version="6.7.4"):
         propTypes = defaultdict(bool)
         propTypes['ACTIVATION_TEMPERATURE'] = 'float'
+        propTypes['ALPHA_C'] = 'float'
+        propTypes['ALPHA_E'] = 'float'
+        propTypes['BETA_C'] = 'float'
+        propTypes['BETA_E'] = 'float'
         propTypes['FLOW_RATE'] = 'float'
         propTypes['GAUGE_EMISSIVITY'] = 'float'
         propTypes['GAUGE_TEMPERATURE'] = 'float'

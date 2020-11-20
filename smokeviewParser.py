@@ -19,6 +19,7 @@
 #=======================================================================
 import numpy as np
 from .utilities import zreadlines
+from collections import defaultdict
 
 
 def parseGRID(lines, i):
@@ -194,6 +195,8 @@ def parseSMVFile(smvFile):
     obsts = []
     bndfs = []
     surfs = []
+    files = defaultdict(bool)
+    files['SLICES'] = defaultdict(bool)
     for i in range(0, len(linesSMV)):
         line2 = linesSMV[i]
         if ("GRID" in line2):
@@ -226,5 +229,19 @@ def parseSMVFile(smvFile):
             c4 = linesSMV[i+3].split()[6]
             surfs.append([sname, Tign, eps, stype, t_width, t_height, 
                           c1, c2, c3, c4])
-    return grids, obsts, bndfs, surfs
+        if 'SLCF' in linesSMV[i]:
+            file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
+            files['SLICES'][file] = defaultdict(bool)
+            files['SLICES'][file]['CELL_CENTERED'] = False
+            files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
+            files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
+            files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
+        if 'SLCC' in linesSMV[i]:
+            file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
+            files['SLICES'][file] = defaultdict(bool)
+            files['SLICES'][file]['CELL_CENTERED'] = True
+            files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
+            files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
+            files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
+    return grids, obsts, bndfs, surfs, files
 

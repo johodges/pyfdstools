@@ -31,3 +31,9 @@ conda develop .
 ```
 python pyfdstools/examples.py
 ```
+
+# Citation
+
+If you use this software in your research, please consider citing this project as:
+
+Hodges, J. L., pyFDStools: A Python Package to Assist in Developing and Post-Processing Data Produced Through the Computational Fluid Dynamics Software Fire Dynamics Simulator, (2020), GitHub repository, https://github.com/johodges/pyfdstools.

@@ -325,7 +325,7 @@ class fdsFileOperations(object):
                 SPATIAL_STATISTIC=None, STATISTICS=None,
                 INITIAL_STATE=None, INIT_ID=None, SETPOINT=None,
                 DUCT_ID=None, NO_UPDATE_DEVC_ID=None, CTRL_ID=None,
-                PROP_ID=None):
+                PROP_ID=None, MATL_ID=None):
         """Adds a devc key to internal attribute devcs
         
         Adds a devc key to internal attribte devcs. Optional parameters
@@ -373,6 +373,8 @@ class fdsFileOperations(object):
             String identifier of control for device
         PROP_ID : str, optional
             String identifier of properties for device
+        MATL_ID : str, optional
+            String identifier for material properties for device
         """
         
         devc = defaultdict(bool)
@@ -398,6 +400,7 @@ class fdsFileOperations(object):
         if CTRL_ID != None: devc['CTRL_ID'] = CTRL_ID
         if SETPOINT != None: devc['SETPOINT'] = SETPOINT
         if PROP_ID != None: devc['PROP_ID'] = PROP_ID
+        if MATL_ID != None: devc['MATL_ID'] = MATL_ID
         self.devcs[ID] = devc
     
     
@@ -849,7 +852,8 @@ class fdsFileOperations(object):
         self.reacs[ID] = reac
         
         
-    def addSLCF(self, QUANTITY, PBX=None, PBY=None, PBZ=None, Vec=False, XB=None, SPEC_ID=None):
+    def addSLCF(self, QUANTITY, PBX=None, PBY=None, PBZ=None,
+                Vec=False, XB=None, SPEC_ID=None, CELL_CENTERED=None):
         """Adds a slcf key to internal attribute slcfs
         
         Adds a slcf key to internal attribute slcfs. Optional parameters
@@ -875,6 +879,8 @@ class fdsFileOperations(object):
             Z_min, Z_max coordinates
         SPEC_ID : str, optional
             String specifying the species of the slice
+        CELL_CENTERED : bool, optional
+            Boolean specifying whether the quantity is cell centered
         """
         
         slcf = defaultdict(bool)
@@ -888,6 +894,7 @@ class fdsFileOperations(object):
         if XB != None:
             if type(XB) is list: XB = np.array(XB)
             slcf['XB'] = XB
+        if CELL_CENTERED != None: slcf['CELL_CENTERED'] = CELL_CENTERED
         self.slcfs['unknownCounter'] += 1
         self.slcfs[slcf['ID']] = slcf
         

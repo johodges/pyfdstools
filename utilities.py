@@ -198,7 +198,10 @@ def maxValuePlot(times, mPts, names, namespace, fs=16, lw=3, pcs=None, vName='',
 def getPlotColors(numberOfGroups):
     pcs = []
     for i in range(0,numberOfGroups):
-        pcs.append(pltc.rgb2hex(np.random.rand(3)))
+        tmp = pltc.rgb2hex(np.random.rand(3))
+        while (np.sum(tmp) > 2.7) or (np.sum(tmp) < 0.3):
+            tmp = pltc.rgb2hex(np.random.rand(3))
+        pcs.append(tmp)
     return pcs
 
 def pointsFromXB(XB,extend=[0,0,0]):

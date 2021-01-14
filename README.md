@@ -80,6 +80,11 @@ ln -s $CONDA_PREFIX "$BLENDER_INSTALLATION_DIRECTORY/python"
 ln -s /c/ProgramData/Anaconda3/envs/blenderfds /c/Program\ Files/Blender\ Foundation/Blender\ 2.91/2.91/python
 ```
 
+* Add blender to the path
+* Restart command line
+* Activate the blenderfds environment
+* Start blender from the command line
+
 # Citation
 
 If you use this software in your research, please consider citing this project as:

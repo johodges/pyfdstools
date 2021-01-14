@@ -70,12 +70,14 @@ export BLENDER_INSTALLATION_DIRECTORY="/c/Program\ Files/Blender\ Foundation/Ble
 
 ```
 mv "$BLENDER_INSTALLATION_DIRECTORY/python/" "$BLENDER_INSTALLATION_DIRECTION/_python/"
+mv /c/Program\ Files/Blender\ Foundation/Blender\ 2.91/2.91/python/ /c/Program\ Files/Blender\ Foundation/Blender\ 2.91/2.91/_python/
 ```
 
 * Create symbolic link to anaconda environment
 
 ```
 ln -s $CONDA_PREFIX "$BLENDER_INSTALLATION_DIRECTORY/python"
+ln -s /c/ProgramData/Anaconda3/envs/blenderfds /c/Program\ Files/Blender\ Foundation/Blender\ 2.91/2.91/python
 ```
 
 # Citation

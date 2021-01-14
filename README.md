@@ -54,6 +54,12 @@ conda activate blenderfds
 conda env update --file pyfdstools/blenderfds_env.yaml
 ```
 
+* Add the new repository to the python path. This can be done by updating the user path, or adding environmental variables. Note, if this is done through anaconda, the command below needs to be run from the directory from which the repository was cloned, not inside the pyfdstools directory.
+
+```
+conda develop .
+```
+
 * Set environmental variable for QT
 
 ```

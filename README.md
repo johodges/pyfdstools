@@ -32,6 +32,52 @@ conda develop .
 python pyfdstools/examples.py
 ```
 
+# Integration with BlenderFDS
+
+This module was developed for use in an anaconda virtual environment. The installation steps listed below use this approach.
+
+* Create the anaconda environment
+
+```
+conda create -n blenderfds python=3.7.0
+```
+
+* Activate the anaconda environment
+
+```
+conda activate blenderfds
+```
+
+* Update the anaconda environment
+
+```
+conda env update --file pyfdstools/blenderfds_env.yaml
+```
+
+* Set environmental variable for QT
+
+```
+conda env config vars set QT_PLUGIN_PATH="$CONDA_PREFIX/Library/plugins"
+```
+
+* Set environmental variable for Blender installation
+
+```
+export BLENDER_INSTALLATION_DIRECTORY="/c/Program\ Files/Blender\ Foundation/Blender\ 2.91/2.91"
+```
+
+* Remove pre-installed blender python
+
+```
+mv "$BLENDER_INSTALLATION_DIRECTORY/python/" "$BLENDER_INSTALLATION_DIRECTION/_python/"
+```
+
+* Create symbolic link to anaconda environment
+
+```
+ln -s $CONDA_PREFIX "$BLENDER_INSTALLATION_DIRECTORY/python"
+```
+
 # Citation
 
 If you use this software in your research, please consider citing this project as:

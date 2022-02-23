@@ -1,4 +1,4 @@
-#-----------------------------------------------------------------------
+.5#-----------------------------------------------------------------------
 # Copyright (C) 2020, All rights reserved
 #
 # Jonathan L. Hodges
@@ -844,6 +844,7 @@ def readSLCFquantities(chid, resultDir):
         n = file.split(chid)[-1].split('_')
         meshStr = n[-2]
         meshes.append(meshStr)
+        #print(files['SLICES'].keys(), file.split(os.sep)[-1])
         centers.append(files['SLICES'][file.split(os.sep)[-1]]['CELL_CENTERED'])
         f.close()
     if '.zip' in resultDir:
@@ -938,6 +939,7 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
     f = zopen(slcfFile)
     
     qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+    headerSize = 142
     
     (NX, NY, NZ) = (eX - iX, eY - iY, eZ - iZ)
     if (NX == 0):
@@ -952,15 +954,37 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
     if slcf_axis < 0:
         print("Not a 2-D slice.")
         return None
-    
     shape = (NX+1, NY+1, NZ+1)
-    if time == None:
+    if (time == None) and (dt == None):
         NT = len(timesSLCF)
-        datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
+        datas2 = np.zeros((NX+1, NY+1, NZ+1, NT), dtype=np.float32)
         for i in range(0, NT):
             t, data = readNextTime(f, NX, NY, NZ)
             data = np.reshape(data, shape, order='F')
             datas2[:, :, :, i] = data
+        times = timesSLCF
+    elif (time == None) and (dt != None):
+        NT = len(timesSLCF)
+        datas3 = np.zeros((NX+1, NY+1, NZ+1, NT))
+        for i in range(0, NT):
+            t, data = readNextTime(f, NX, NY, NZ)
+            data = np.reshape(data, shape, order='F')
+            datas3[:, :, :, i] = data
+        datas2 = datas3.copy()
+        slcfDt = np.median(timesSLCF[1:] - timesSLCF[:-1])
+        print(slcfDt, dt)
+        for i in range(0, NT):
+            t1 = max([0, timesSLCF[i]-dt/2])
+            t2 = min([timesSLCF[-1], timesSLCF[i]+dt/2])
+            inds = np.where(np.logical_and(timesSLCF >= t1, timesSLCF <= t2))[0]
+            datas2[:, :, :, i] = np.nanmean(datas3[:, :, :, inds], axis=3)
+            #ind1 = max([0, int(i-(dt/2)/slcfDt)])
+            #ind2 = min([NT, int(i+(dt/2)/slcfDt)])
+            if i > 55 and i < 130:#(timesSLCF[i] > 55) and (timesSLCF[i] < 65):
+                #print(i, timesSLCF[i], dt, slcfDt, ind1, ind2)
+                pass
+                
+            #datas2[:, :, :, i] = np.nanmean(datas3[:, :, :, ind1:ind2], axis=3)
         times = timesSLCF
     elif (time != None) and (dt == None):
         datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
@@ -973,6 +997,20 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
         NT = 1
     elif (time != None) and (dt != None):
         datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+        
+        t1 = max([0, time-dt/2])
+        t2 = min([timesSLCF[-1], time+dt/2])
+        inds = np.where(np.logical_and(timesSLCF >= t1, timesSLCF <= t2))[0]
+        ts = []
+        for ind in inds:
+            f.seek(ind * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)) + headerSize, 0)
+            t, data = readNextTime(f, NX, NY, NZ)
+            data = np.reshape(data, shape, order='F')
+            datas2[:, :, :, 0] += data
+            ts.append(t)
+        datas2[:, :, :, 0] = datas2[:, :, :, 0] / float(len(inds))
+        times = [(np.min(ts) + np.max(ts))/2]
+        '''
         i = np.argmin(abs(timesSLCF - (time - dt/2)))
         j = np.argmin(abs(timesSLCF - (time + dt/2)))
         f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
@@ -982,7 +1020,10 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
             datas2[:, :, :, 0] += data
         if j - i > 0:
             datas2[:, :, :, 0] = datas2[:, :, :, 0] / (j-i)
-        times = [timesSLCF[i]]
+        times = [(timesSLCF[i] + timesSLCF[j])/2]
+        
+        print(i, timesSLCF[i], j, timesSLCF[j])
+        '''
         NT = 1
     coords = [xGrid[iX, iY, iZ], xGrid[eX, eY, eZ],
               yGrid[iX, iY, iZ], yGrid[eX, eY, eZ],
@@ -1057,7 +1098,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None)
             #mesh = slcfFile.split(chid)[-1].split('.sf')[0].split('_')[-2]
             #meshStr = "%s"%(chid) if mesh == '' else "%s_%s"%(chid, mesh)
             slcf_axis, slcf_value = getAxisAndValueFromXB(dim, grids[meshStr], cen)
-            if (abs(axis) == slcf_axis) and (slcf_value == value):
+            if np.isclose(abs(axis), slcf_axis) and np.isclose(slcf_value, value):
                 print("Reading %s"%(slcfFile))
                 x, z, d, times, coords = read2dSliceFile(slcfFile, chid, time=time, dt=dt)
                 slcfName = '%s_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f'%(qty, coords[0], coords[1], coords[2], coords[3], coords[4], coords[5])
@@ -1068,7 +1109,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None)
                 datas[slcfName]['x'] = x.copy()
                 datas[slcfName]['z'] = z.copy()
                 
-    data_abs = np.zeros((xAbs.shape[0], xAbs.shape[1], len(times)))
+    data_abs = np.zeros((xAbs.shape[0], xAbs.shape[1], len(times)), dtype=np.float32)
     for slcfName in list(datas.keys()):
         x = datas[slcfName]['x']
         z = datas[slcfName]['z']

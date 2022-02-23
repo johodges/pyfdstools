@@ -1,4 +1,4 @@
-#-----------------------------------------------------------------------
+7#-----------------------------------------------------------------------
 # Copyright (C) 2020, All rights reserved
 #
 # Jonathan L. Hodges
@@ -166,6 +166,7 @@ class fdsLineTypes(object):
 
     def getRADItypes(self, version="6.7.4"):
         radiTypes = defaultdict(bool)
+        radiTypes['RADIATION'] = 'bool'
         radiTypes['RADIATIVE_FRACTION'] = 'float'
         radiTypes['NMIEANG'] = 'int'
         radiTypes['PATH_LENGTH'] = 'float'
@@ -221,6 +222,7 @@ class fdsLineTypes(object):
         surfTypes['MATL_MASS_FRACTION'] = 'matrixfloat'
         surfTypes['MLRPUA'] = 'float'
         surfTypes['RAMP_EF'] = 'string'
+        surfTypes['PART_ID'] = 'string'
         surfTypes['RAMP_MF'] = 'string'
         surfTypes['RAMP_V'] = 'string'
         surfTypes['RAMP_Q'] = 'string'
@@ -231,6 +233,7 @@ class fdsLineTypes(object):
         surfTypes['THICKNESS'] = 'listindfloat'
         surfTypes['RADIUS'] = 'float'
         surfTypes['RAMP_Q'] = 'string'
+        surfTypes['RAMP_MF'] = 'string'
         surfTypes['RGB'] = 'listfloat'
         surfTypes['SPEC_ID'] = 'string'
         surfTypes['STRETCH_FACTOR'] = 'listfloat'
@@ -269,6 +272,7 @@ class fdsLineTypes(object):
         presTypes['SOLVER'] = 'string'
         presTypes['VELOCITY_TOLERANCE'] = 'float'
         presTypes['MAX_PRESSURE_ITERATIONS'] = 'int'
+        presTypes['PRESSURE_RELAX_TIME'] = 'float'
         presTypes['PRESSURE_TOLERANCE'] = 'float'
         presTypes['newline'] = 'ignore'
         return presTypes
@@ -308,6 +312,7 @@ class fdsLineTypes(object):
         partTypes['DISTRIBUTION'] = 'string'
         partTypes['COLOR'] = 'string'
         partTypes['AGE'] = 'float'
+        partTypes['MASSLESS'] = 'bool'
         partTypes['MONODISPERSE'] = 'bool'
         partTypes['SAMPLING_FACTOR'] = 'float'
         partTypes['newline'] = 'ignore'
@@ -439,6 +444,7 @@ class fdsLineTypes(object):
         dumpTypes['PLOT3D_QUANTITY'] = 'liststring'
         dumpTypes['PLOT3D_SPEC_ID'] = 'liststring'
         dumpTypes['SIG_FIGS'] = 'int'
+        dumpTypes['SMOKE3D'] = 'bool'
         dumpTypes['newline'] = 'ignore'
         return dumpTypes
     
@@ -463,6 +469,7 @@ class fdsLineTypes(object):
         miscTypes['Y_O2_INFTY'] = 'float'
         miscTypes['RESTART'] = 'bool'
         miscTypes['SOLID_PHASE_ONLY'] = 'bool'
+        miscTypes['VISIBILITY_FACTOR'] = 'float'
         miscTypes['newline'] = 'ignore'
         return miscTypes
     

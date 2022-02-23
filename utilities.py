@@ -292,6 +292,9 @@ def getTwoZone(z, val, lowtohigh=True):
     H0 = z.min()
     tmpZ = np.linspace(0, H, 101)
     tmpV = np.interp(tmpZ, z, val)
+    if np.isclose(np.nanmin(tmpV), np.nanmax(tmpV), atol=1e-1):
+        zInt = H
+        return val_low, val_low, zInt
     
     I1 = np.trapz(tmpV, tmpZ)
     I2 = np.trapz(1/tmpV, tmpZ)

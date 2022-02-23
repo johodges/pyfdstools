@@ -15,6 +15,9 @@
 #=======================================================================
 # # IMPORTS
 #=======================================================================
+import sys
+print(sys.version_info, flush=True)
+
 import pyfdstools as fds
 import os
 from collections import defaultdict
@@ -414,7 +417,12 @@ def create_custom_mesh2(objname, x0, x1, y0, y1, z0, z1, data):
     tex.image = image
     
     mat = bpy.data.materials.new('%s-DATA'%(objname))
-    mat.texture_paint_images = [image]
+    
+    #bpy.ops.mesh.primitive_plane_add(size=2, enter_editmode=False, align='WORLD', location=(x0, y0, z0), scale=(1, 1, 1))
+    #bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    print('%s-DATA'%(objname), flush=True)
+    #bpy.ops.object.active_material.name = '%s-DATA'%(objname)
+    #mat.texture_paint_images = [image]
     #mat.texture_slots.add()
     #ts = mat.texture_slots[0]
     #ts.texture = tex
@@ -446,6 +454,8 @@ if __name__ == '__main__':
     #datas, fig = exampleImportBndf(resultDir=resultDir, chid=chid)
     #print(datas['WALL TEMPERATURE'].keys(), flush=True)
     #print(datas.keys(), flush=True)
+    
+    '''
     datas, figs = exampleExtractBndfMax(resultDir=resultDir, chid=chid, outDir=exampleOutputDir, plot=False)
     times = datas['WALL TEMPERATURE']['TIMES']
     names = datas['WALL TEMPERATURE']['NAMES']
@@ -462,15 +472,19 @@ if __name__ == '__main__':
     for key in names:
         bpy.context.scene.collection.objects[key]['%s TIME'%(qty)] = tmp.index
         bpy.context.scene.collection.objects[key]['%s MAX'%(qty)] = tmp[key]
+    '''
     
-    systemPath, exampleInputFdsFile, exampleOutputDir, chid, resultDir = runExamples()
-    
-    
-    
-    print(bpy.context.scene.collection.objects['COUCH-BACK-XPOS']['WALL TEMPERATURE MAX'][:])
-    print(bpy.context.scene.collection.objects['COUCH-BACK-XPOS']['WALL TEMPERATURE TIME'][:])
     
     '''
+    systemPath, exampleInputFdsFile, exampleOutputDir, chid, resultDir = runExamples()
+    '''
+    
+    '''
+    print(bpy.context.scene.collection.objects['COUCH-BACK-XPOS']['WALL TEMPERATURE MAX'][:])
+    print(bpy.context.scene.collection.objects['COUCH-BACK-XPOS']['WALL TEMPERATURE TIME'][:])
+    '''
+    
+    
     qty = 'TEMPERATURE'
     axis = 2
     value = 4.4
@@ -493,11 +507,52 @@ if __name__ == '__main__':
     #create_custom_mesh("Awesome_object", curloc[0], curloc[1], 0)
     objname = "%s_%s"%(obst, qty)
     print(objname)
-    print(x0, x1, y0, y1, z0, z1)
+    print(x0, x1, y0, y1, z0, z1, flush=True)
+    print(TEMPERATURE.shape, flush=True)
+    
+    #from PIL import Image
+    #import PIL
+    from matplotlib import cm
+    import matplotlib
+    
+    smv = fds.buildSMVcolormap()
+    
+    colors = smv.colors
+    
+    numColors = colors.shape[0]
+    
+    cmin = 20
+    cmax = 200
+    
+    T2 = (TEMPERATURE - cmin)/(cmax - cmin)
+    T2[T2 < 0] = 0
+    T2[T2 > 1] = 1
+    
+    T3 = np.uint8(smv(T2)*255)
+    print(T3)
+    
+    TEMPERATURE2 = np.zeros((TEMPERATURE.shape[0], TEMPERATURE.shape[1], 3))
+    print(smv, flush=True)
+    print(smv.colors, flush=True)
+    matplotlib.image.imsave("E:\\projects\\customPythonModules\\pyfdstools\\temp.png", T3)
+    #img = Image.fromarray(data)
+    inputImages = [{"name":objname, "image":TEMPERATURE}]
+    files = [{"name":"E:\\projects\\customPythonModules\\pyfdstools\\temp.png"}]
+    
+    bpy.ops.import_image.to_plane(files=files, location=(0,0,0), rotation=(0, 0, 0), force_reload=True, offset=False, shader='SHADELESS', relative=False)
+#    (-0.537504, 0.853194, 0.784878)
+    '''
+    bpy.ops.transform.translate(value=(-0.537504, 0.853194, 0.784878), orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', mirror=True, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False)
+    '''
+
+    
+    #bpy.ops.mesh.primitive_plane_add(size=2, enter_editmode=False, align='WORLD', location=(x0, y0, z0), scale=(1, 1, 1))
+    #bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
     #myobj = create_custom_mesh2(objname, x0, x1, y0, y1, z0, z1, TEMPERATURE)
     #print(myobj.__dict__)
     #x, z, data_slc = fds.findSliceLocation(datas['GRID'], datas[qty], axis, value)
-    '''
+    
     
     
     

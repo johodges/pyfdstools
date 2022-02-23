@@ -335,6 +335,9 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
         qnty_mn = np.nanmin(data_slc)
     if qnty_mx == None:
         qnty_mx = np.nanmax(data_slc)
+    if qnty_mn == qnty_mx:
+        qnty_mn = 0
+        qnty_mx = 1
     if highlightValue is not None:
         percentile = (highlightValue - qnty_mn) / (qnty_mx - qnty_mn)
     if (xmn == None): xmn = x.min()

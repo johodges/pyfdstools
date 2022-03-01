@@ -654,11 +654,17 @@ def getLimsFromGrid(data, grid):
     
     try:
         ind1 = np.argwhere(grid[0][:,0] == data[0])[0][0]
+        #print("ind1 " + str(ind1))
         ind2 = np.argwhere(grid[0][:,0] == data[1])[0][0]
+        #print("ind2 " + str(ind2))
         ind3 = np.argwhere(grid[1][:,0] == data[2])[0][0]
+        #print("ind3 " + str(ind3))
         ind4 = np.argwhere(grid[1][:,0] == data[3])[0][0]
+        #print("ind4 " + str(ind4))
         ind5 = np.argwhere(grid[2][:,0] == data[4])[0][0]
+        #print("ind5 " + str(ind5))
         ind6 = np.argwhere(grid[2][:,0] == data[5])[0][0]
+        #print("ind6 " + str(ind6))
         
         lims = [grid[0][ind1,1], grid[0][ind2,1],
                 grid[1][ind3,1], grid[1][ind4,1],
@@ -1124,6 +1130,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
     meshes = list(fdsFile.meshes.keys())
     if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
     numberOfMeshes = len(meshes)
+    print(numberOfMeshes)
     
     for qty, unit in zip(fdsQuantities, fdsUnits):
         allPatches = []
@@ -1138,6 +1145,8 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                 meshNumber = 0
             else:
                 meshNumber = int(file.split('_')[-2]) - 1
+            #print(quantity, qty, shortName, units, npatch)
+            #print(file, meshNumber)
             if quantity == qty:
                 ts, ps, x1, x2, y1, y2, z1, z2, dx1, dz1 = getPatches(
                         file, smvFile, axis, value, meshNumber, decimals=decimals)

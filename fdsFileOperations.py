@@ -99,7 +99,8 @@ class fdsFileOperations(object):
     -------
     addBNDF(Qty, CELL_CENTERED=None)
         Adds a bndf key to the bndfs namelist.
-    addCTRL(ID, FUNCTION_TYPE, INPUT_ID, DELAY=None)
+    addCTRL(ID, FUNCTION_TYPE, INPUT_ID, DELAY=None, INITIAL_STATE=None, 
+            LATCH=None)
         Adds a ctrl key to the ctrls namelist.
     addDEVC(ID, QUANTITY, XYZ=None, XB=None, IOR=None, SPEC_ID=None,
             TIME_AVERAGED=None, SPATIAL_STATISTIC=None, STATISTICS=None,
@@ -131,7 +132,7 @@ class fdsFileOperations(object):
         Adds obst key to the obsts namelist.
     addPRES(VELOCITY_TOLERANCE=None, MAX_PRESSURE_ITERATIONS=None)
         Adds pres keys to the pres namelist.
-    addRAMP(ID, T, F)
+    addRAMP(ID, T, F, DEVC_ID=None)
         Adds ramp keys to the ramps namelist.
     addREAC(ID, FUEL=None, FORMULA=None, AIT=None, SY=None, COY=None,
             HOC=None, C=None, H=None, O=None, N=None, FYI=None, RF=None)
@@ -285,7 +286,7 @@ class fdsFileOperations(object):
     
     
     def addCTRL(self, ID, FUNCTION_TYPE, INPUT_ID, DELAY=None,
-                CONSTANT=None, RAMP_ID=None):
+                CONSTANT=None, RAMP_ID=None, INITIAL_STATE=None, LATCH=None):
         """Adds a ctrl key to internal attribute ctrls
         
         Adds a bndf key to internal attribte ctrls. Optional parameters
@@ -308,6 +309,11 @@ class fdsFileOperations(object):
             Value for constant defined in input id
         RAMP_ID : str, optional
             Name of ramp to be used to map control output
+        INITIAL_STATE : bool, optional
+            Flag specifying if control is initially active (defualt None)
+        LATCH : bool, optional
+            Flag specifiying if control is latched after state change 
+            (default None)
         """
         
         ctrl = defaultdict(bool)
@@ -752,7 +758,8 @@ class fdsFileOperations(object):
         self.pres['ID'] = pres
         
         
-    def addRAMP(self, ID, T, F, appendZero=False, appendTime=1.0):
+    def addRAMP(self, ID, T, F, appendZero=False, appendTime=1.0, 
+                DEVC_ID=None):
         """Adds a ramp key to internal attribute ramps
         
         Adds a ramp key to internal attribute ramps.
@@ -765,6 +772,8 @@ class fdsFileOperations(object):
             Array specifying the x-axis of the ramp
         F : float array(N)
             Array specifying the y-axis of the ramp
+        DEVC_ID : str
+            String identifier for the device to use as the x-axis in the ramp
         """
         if type(T) == pd.core.frame.DataFrame: T = T.values
         if type(T) == pd.core.series.Series: T = T.values
@@ -789,6 +798,8 @@ class fdsFileOperations(object):
             self.ramps[ID]['F'] = F
             self.ramps[ID]['ID'] = ID
         
+        if DEVC_ID is not None:
+            self.ramps[ID]['DEVC_ID'] = DEVC_ID
         
     def addREAC(self, ID, FUEL=None, FORMULA=None, AIT=None, SY=None, 
                 COY=None, HOC=None,
@@ -1341,7 +1352,7 @@ class fdsFileOperations(object):
             elif key == 'ramps':
                 txt = self.makeRAMP(keyD)
             else:
-                newline1 = newlines[key]
+                newline1 = newlines[field]
                 newline2 = keyD['newline']
                 newline = (newline1 or newline2)
                 txt = self.makeLinesFromDict(keyD, keyT, keyN, newline)
@@ -1858,6 +1869,9 @@ class fdsFileOperations(object):
                 if makeControl and ramps[key]['CTRL_ID']:
                     text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, CTRL_ID='%s'/\n"%(text, ID, T, F, ramps[key]['CTRL_ID'])
                     makeControl = False
+                elif makeControl and ramps[key]['DEVC_ID']:
+                    text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, DEVC_ID='%s'/\n"%(text, ID, T, F, ramps[key]['DEVC_ID'])
+                    makeControl = False
                 else:
                     text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, /\n"%(text, ID, T, F)
         return text
@@ -1992,7 +2006,7 @@ class fdsFileOperations(object):
     def saveModel(self, mpiProcesses, location,
                   fields=None, newlines=None,
                   allowMeshSplitting=True, splitMultiplier=1.2,
-                  meshSplitAxes=[True, True, False]):
+                  meshSplitAxes=[True, True, False], newlines=None):
         """Saves an fds input file
         
         Input file is generated based on internal attribute namelist
@@ -2018,6 +2032,7 @@ class fdsFileOperations(object):
                 mpiProcesses, allowMeshSplitting=allowMeshSplitting, 
                 splitMultiplier=splitMultiplier,
                 meshSplitAxes=meshSplitAxes)
+        
         text = self.generateFDStext(newlines=newlines, fields=fields)
         with open(location, 'w') as f:
             f.write(text)

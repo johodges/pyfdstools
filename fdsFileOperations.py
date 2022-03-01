@@ -2006,7 +2006,7 @@ class fdsFileOperations(object):
     def saveModel(self, mpiProcesses, location,
                   fields=None, newlines=None,
                   allowMeshSplitting=True, splitMultiplier=1.2,
-                  meshSplitAxes=[True, True, False], newlines=None):
+                  meshSplitAxes=[True, True, False]):
         """Saves an fds input file
         
         Input file is generated based on internal attribute namelist

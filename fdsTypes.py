@@ -286,6 +286,7 @@ class fdsLineTypes(object):
         obstTypes['SURF_IDS'] = 'liststring'
         obstTypes['BNDF_OBST'] = 'bool'
         obstTypes['PERMIT_HOLE'] = 'bool'
+        obstTypes['TEXTURE_ORIGIN'] = 'listfloat'
         obstTypes['THICKEN'] = 'bool'
         obstTypes['TRANSPARENCY'] = 'float'
         obstTypes['COLOR'] = 'string'

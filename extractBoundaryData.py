@@ -1123,6 +1123,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
     datas = defaultdict(bool)
     
     bndfFiles = getFileList(resultDir, chid, 'bf')
+    # print('bndfFiles',bndfFiles)
     smvFile = getFileList(resultDir, chid, 'smv')[0]
     
     fdsFile = fdsFileOperations()
@@ -1138,6 +1139,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
         (ymin, ymax) = (999, -999)
         (zmin, zmax) = (999, -999)
         (dx, dz) = (999, 999)
+        qtyFound = False
         for file in bndfFiles:
             quantity, shortName, units, npatch = readBoundaryHeader(
                     file)
@@ -1157,6 +1159,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                 (dx, dz) = (min([dx, dx1]), min([dz, dz1]))
                 for patch in ps:
                     allPatches.append(patch)
+                    qtyFound = True
         if len(allPatches) == 0:
             for file in bndfFiles:
                 quantity, shortName, units, npatch = readBoundaryHeader(
@@ -1181,13 +1184,16 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                             print(option[0])
         #print("ABS INFO: ")
         #print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
-        x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
-                allPatches, xmin, xmax, ymin, ymax, zmin, zmax,
-                dx, dz, axis, decimals=decimals)
-        datas[qty] = defaultdict(bool)
-        datas[qty]['X'] = x_grid_abs
-        datas[qty]['Z'] = z_grid_abs
-        datas[qty]['DATA'] = data_abs
+        if qtyFound:
+            x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
+                    allPatches, xmin, xmax, ymin, ymax, zmin, zmax,
+                    dx, dz, axis, decimals=decimals)
+            datas[qty] = defaultdict(bool)
+            datas[qty]['X'] = x_grid_abs
+            datas[qty]['Z'] = z_grid_abs
+            datas[qty]['DATA'] = data_abs
+        else:
+            print("Quantity %s not found in boundary data"%(qty))
         #datas[qty]["MESH-%04.0f"%(meshNumber)] = defaultdict(bool)
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['X'] = x_grid_abs
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['Z'] = z_grid_abs

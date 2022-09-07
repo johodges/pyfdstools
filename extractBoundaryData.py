@@ -1278,7 +1278,10 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     fdsFile.importFile(fdsF)
     meshes = list(fdsFile.meshes.keys())
     if names == None:
+        #print(fdsFile.obsts)
         names = fdsFile.getPolygonNamesFromFdsFile()
+    
+    print(names)
     
     #names = ['CE212319', 'CE210006', 'CE212298']
 

@@ -123,10 +123,43 @@ def readP3Dfile(file):
     with open(file,'rb') as f:
         header = np.fromfile(f, dtype=np.int32, count=5)
         _ = np.fromfile(f, dtype=np.float32, count=7)
+        print(header)
         (nx, ny, nz) = (header[1], header[2], header[3])
         data = np.fromfile(f, dtype=np.float32, count=nx*ny*nz*5)
         data = np.reshape(data, (int(data.shape[0]/5),5), order='F')
     return data, header[1:-1]
+
+def writeP3Dfile(file, data):
+    """Writes data to plot3D file
+    
+    This subroutine writes data to a plot3D file.
+    
+    Parameters
+    ----------
+    file : str
+        String containing the path to a plot3D file
+    
+    Returns
+    -------
+    array(NX, NY, NZ, NT)
+        Array containing float data in local coordinates for each time
+    array()
+        Array containing header information from plot3D file
+    """
+    
+    with open(file,'wb') as f:
+        f.write(b'\x0c\x00\x00\x00')
+        nx, ny, nz, v = data.shape
+        (nx, ny, nz, v) = (int(nx), int(ny), int(nz), int(v))
+        f.write(nx.to_bytes(4, 'little'))
+        f.write(ny.to_bytes(4, 'little'))
+        f.write(nz.to_bytes(4, 'little'))
+        f.write(b'\x0c\x00\x00\x00')
+        empty = np.array([0, 1, 2, 3, 4, 5, 6], dtype=np.float32)
+        empty.tofile(f)
+        d1 = data.flatten(order='F')
+        d = d1.tobytes()
+        f.write(d)
 
 def rearrangeGrid(grid):
     """Builds a meshgrid based on grid array
@@ -401,18 +434,34 @@ def readPlot3Ddata(chid, resultDir, time):
     xyzFiles = glob.glob("%s%s*.xyz"%(resultDir, chid))
     tFiles = glob.glob(xyzFiles[0].replace('.xyz','*.q'))
     
-    times = [x.split(chid)[1].split('.q')[0].split('_') for x in tFiles]
-    times = [float(x[2])+float(x[3])/100 for x in times]
+    tNames = [x.split(chid)[-1] for x in tFiles]
+    timeNameLength = len(tNames[0].split('_')[-2])
+    
+    if timeNameLength == 8:
+        times = [x.split('.q')[0].split('_') for x in tNames]
+        times = [float(x[2])+float(x[3])/100 for x in times]
+    elif timeNameLength == 2:
+        times = [x.split('.q')[0].split('_') for x in tNames]
+        times = [round(float(x[2])+float(x[3])/100,2) for x in times]
+        print(times)
     
     grids = []
     datas = []
     
+    ind = np.argmin(abs(np.array(times) - time))
+    dataFile = tFiles[ind]
+    print(dataFile)
+    
     for xyzFile in xyzFiles:
-        dataFile = buildDataFile(xyzFile, time)
+        #dataFile = buildDataFile(xyzFile, time)
         
         grid, gridHeader = readXYZfile(xyzFile)
         data, dataHeader = readP3Dfile(dataFile)
         (nx, ny, nz) = (dataHeader[0], dataHeader[1], dataHeader[2])
+        
+        
+        print(dataHeader)
+        
         
         printExtents(grid, data)
         
@@ -420,7 +469,7 @@ def readPlot3Ddata(chid, resultDir, time):
         data = np.reshape(data, (nx, ny, nz, 5), order='F')
         grids.append([xGrid, yGrid, zGrid])
         datas.append(data)
-
+        
     grid_abs = getAbsoluteGrid(grids)
     xGrid_abs = grid_abs[:, :, :, 0]
     yGrid_abs = grid_abs[:, :, :, 1]

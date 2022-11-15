@@ -225,6 +225,7 @@ class fdsFileOperations(object):
         self.inits = defaultdict(bool)
         self.obsts = defaultdict(bool)
         self.holes = defaultdict(bool)
+        self.hvac = defaultdict(bool)
         self.vents = defaultdict(bool)
         self.surfs = defaultdict(bool)
         self.ramps = defaultdict(bool)
@@ -1723,6 +1724,7 @@ class fdsFileOperations(object):
         if lineType == 'SPEC': key = 'specs'
         if lineType == 'PROF': key = 'profs'
         if lineType == 'WIND': key = 'winds'
+        if lineType == 'HVAC': key = 'hvac'
         return key
     
     
@@ -1912,6 +1914,7 @@ class fdsFileOperations(object):
         if lineType == 'RADI': key = 'merge'
         if lineType == 'PRES': key = 'merge'
         if lineType == 'HOLE': key = 'enumerate'
+        if lineType == 'HVAC': key = 'enumerate'
         if lineType == 'PART': key = 'enumerate'
         if lineType == 'PROP': key = 'enumerate'
         if lineType == 'SPEC': key = 'enumerate'

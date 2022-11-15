@@ -32,6 +32,7 @@ class fdsLineTypes(object):
         self.pres = self.getPREStypes(version)
         self.obst = self.getOBSTtypes(version)
         self.hole = self.getHOLEtypes(version)
+        self.hvac = self.getHVACtypes(version)
         self.init = self.getINITtypes(version)
         self.devc = self.getDEVCtypes(version)
         self.bndf = self.getBNDFtypes(version)
@@ -269,6 +270,7 @@ class fdsLineTypes(object):
 
     def getPREStypes(self, version="6.7.4"):
         presTypes = defaultdict(bool)
+        presTypes['CHECK_POISSON'] = 'bool'
         presTypes['SOLVER'] = 'string'
         presTypes['VELOCITY_TOLERANCE'] = 'float'
         presTypes['MAX_PRESSURE_ITERATIONS'] = 'int'
@@ -324,6 +326,19 @@ class fdsLineTypes(object):
         holeTypes['ID'] = 'string'
         holeTypes['XB'] = 'listfloat'
         holeTypes['CTRL_ID'] = 'string'
+        holeTypes['DEVC_ID'] = 'string'
+        holeTypes['number'] = 'ignore'
+        holeTypes['unknownCounter'] = 'ignore'
+        holeTypes['newline'] = 'ignore'
+        return holeTypes
+    
+    def getHVACtypes(self, version="6.7.4"):
+        holeTypes = defaultdict(bool)
+        holeTypes['AREA'] = 'float'
+        holeTypes['ID'] = 'string'
+        holeTypes['TYPE_ID'] = 'string'
+        holeTypes['VENT_ID'] = 'string'
+        holeTypes['VENT2_ID'] = 'string'
         holeTypes['number'] = 'ignore'
         holeTypes['unknownCounter'] = 'ignore'
         holeTypes['newline'] = 'ignore'

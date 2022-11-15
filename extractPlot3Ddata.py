@@ -93,7 +93,13 @@ def readXYZfile(file):
         Array containing header information from xyz file
     """
     
-    f = zopen(file)
+    try:
+        f = zopen(file)
+    except FileNotFoundError:
+        tmp = file[:-4].split('_')
+        meshStr = str(int(tmp[-1]))
+        file2 = '%s_%s.xyz'%('_'.join(tmp[:-1]), meshStr)
+        f = zopen(file2)
     header = struct.unpack('<iiiiif', f.read(24))
     (nx, ny, nz) = (header[1], header[2], header[3])
     data = np.frombuffer(f.read(nx*ny*nz*4*4), dtype=np.float32)
@@ -968,8 +974,10 @@ def getGridsFromXyzFiles(xyzFiles, chid):
     return grids
 
 def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
+    
     timesSLCF = readSLCFtimes(slcfFile)
     times = []
+    
     xyzFile = '%s%s'%('_'.join(slcfFile.split('_')[:-1]), '.xyz')
     grids = getGridsFromXyzFiles([xyzFile], chid)
     grid = grids[list(grids.keys())[0]]
@@ -1050,6 +1058,8 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
         t1 = max([0, time-dt/2])
         t2 = min([timesSLCF[-1], time+dt/2])
         inds = np.where(np.logical_and(timesSLCF >= t1, timesSLCF <= t2))[0]
+        
+        print(timesSLCF, t1, t2, timesSLCF[inds])
         ts = []
         for ind in inds:
             f.seek(ind * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)) + headerSize, 0)
@@ -1124,7 +1134,7 @@ def getAxisAndValueFromXB(XB, grid, cen):
         value = -1
     return axis, value
 
-def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None):
+def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None, atol=1e-8):
     xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
     grids = getGridsFromXyzFiles(xyzFiles, chid)
     grids_abs = getAbsoluteGrid(grids)
@@ -1144,11 +1154,14 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None)
             n = slcfFile.split(chid)[-1].split('_')
             meshStr = n[-2]
             if meshStr == '': meshStr = chid
+            tmp = [len(x) for x in list(grids.keys())]
+            if np.max(tmp) < 4:
+                meshStr = str(int(meshStr))
             #mesh = slcfFile.split(chid)[-1].split('.sf')[0].split('_')[-2]
             #meshStr = "%s"%(chid) if mesh == '' else "%s_%s"%(chid, mesh)
             slcf_axis, slcf_value = getAxisAndValueFromXB(dim, grids[meshStr], cen)
-            if np.isclose(abs(axis), slcf_axis) and np.isclose(slcf_value, value):
-                print("Reading %s"%(slcfFile))
+            if np.isclose(abs(axis), slcf_axis) and np.isclose(slcf_value, value, atol=atol):
+                print("Reading %s"%(slcfFile), time, dt)
                 x, z, d, times, coords = read2dSliceFile(slcfFile, chid, time=time, dt=dt)
                 slcfName = '%s_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f'%(qty, coords[0], coords[1], coords[2], coords[3], coords[4], coords[5])
                 datas[slcfName] = defaultdict(bool)
@@ -1172,10 +1185,10 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None)
         (NX, NZ, NT) = np.shape(d)
         ANX = xloc_mx-xloc_mn + 1
         ANZ = zloc_mx-zloc_mn + 1
+        
         if (NX != ANX) or (NZ != ANZ):
-            
-            xi = xAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1, :].flatten()
-            zi = zAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1, :].flatten()
+            xi = xAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
+            zi = zAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
             
             x = np.round(x, decimals=4)
             z = np.round(z, decimals=4)
@@ -1190,7 +1203,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None)
             
             tmpGrid = np.array([xi, zi]).T
             for i in range(0, NT):
-                interpolator = scpi.RegularGridInterpolator((x, z), d[:, :, i])
+                interpolator = scpi.RegularGridInterpolator((x[:, 0], z[0, :]), d[:, :, i])
                 data2 = interpolator(tmpGrid)
                 data2 = np.reshape(data2, (ANX, ANZ), order='C')
                 try:

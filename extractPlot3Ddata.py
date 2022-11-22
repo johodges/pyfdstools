@@ -129,7 +129,6 @@ def readP3Dfile(file):
     with open(file,'rb') as f:
         header = np.fromfile(f, dtype=np.int32, count=5)
         _ = np.fromfile(f, dtype=np.float32, count=7)
-        print(header)
         (nx, ny, nz) = (header[1], header[2], header[3])
         data = np.fromfile(f, dtype=np.float32, count=nx*ny*nz*5)
         data = np.reshape(data, (int(data.shape[0]/5),5), order='F')
@@ -449,14 +448,12 @@ def readPlot3Ddata(chid, resultDir, time):
     elif timeNameLength == 2:
         times = [x.split('.q')[0].split('_') for x in tNames]
         times = [round(float(x[2])+float(x[3])/100,2) for x in times]
-        print(times)
     
     grids = []
     datas = []
     
     ind = np.argmin(abs(np.array(times) - time))
     dataFile = tFiles[ind]
-    print(dataFile)
     
     for xyzFile in xyzFiles:
         #dataFile = buildDataFile(xyzFile, time)
@@ -465,8 +462,6 @@ def readPlot3Ddata(chid, resultDir, time):
         data, dataHeader = readP3Dfile(dataFile)
         (nx, ny, nz) = (dataHeader[0], dataHeader[1], dataHeader[2])
         
-        
-        print(dataHeader)
         
         
         printExtents(grid, data)
@@ -544,7 +539,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
             if correctQuantity and threeDimSlice:
                 (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
                 # Check if slice is 3-D
-                print(slcfFile, qty, sName, uts, iX, eX, iY, eY, iZ, eZ)
+                #print(slcfFile, qty, sName, uts, iX, eX, iY, eY, iZ, eZ)
                 shape = (NX+1, NY+1, NZ+1)
                 if time == None:
                     NT = len(timesSLCF)
@@ -867,9 +862,9 @@ def readSLCFtimes(file, timesFile=None):
     if len(data) % 4 == 0:
         fullFile = np.frombuffer(data, dtype=np.float32)
     else:
-        print(len(data))
+        #print(len(data))
         remainder = -1*int(len(data) % 4)
-        print(len(data[:remainder]))
+        #print(len(data[:remainder]))
         fullFile = np.frombuffer(data[:remainder], dtype=np.float32)
     times = fullFile[2::(NX+1)*(NY+1)*(NZ+1)+5]
     if timesFile != None:
@@ -1029,7 +1024,7 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
             datas3[:, :, :, i] = data
         datas2 = datas3.copy()
         slcfDt = np.median(timesSLCF[1:] - timesSLCF[:-1])
-        print(slcfDt, dt)
+        #print(slcfDt, dt)
         for i in range(0, NT):
             t1 = max([0, timesSLCF[i]-dt/2])
             t2 = min([timesSLCF[-1], timesSLCF[i]+dt/2])
@@ -1059,7 +1054,7 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
         t2 = min([timesSLCF[-1], time+dt/2])
         inds = np.where(np.logical_and(timesSLCF >= t1, timesSLCF <= t2))[0]
         
-        print(timesSLCF, t1, t2, timesSLCF[inds])
+        #print(timesSLCF, t1, t2, timesSLCF[inds])
         ts = []
         for ind in inds:
             f.seek(ind * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)) + headerSize, 0)

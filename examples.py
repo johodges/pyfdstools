@@ -216,6 +216,22 @@ def example2dSliceToCsv(resultDir=None, outDir=None, chid=None,
     return data, fig
 
 
+def exampleBndfTimeAverage(resultDir=None, outDir=None, chid=None,
+                           quantity=None, dt=None):
+    if (resultDir is None) and (chid is None) and (outDir is None):
+        systemPath = os.path.dirname(os.path.abspath(__file__))
+        chid = "case001"        
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
+        outDir = os.path.join(systemPath, "generated")
+    try:
+        os.mkdir(outDir)
+    except:
+        pass
+    
+    outFiles, outQty, refFiles, newSmvFile = fds.bndfsTimeAverage(
+        resultDir, chid, quantity, dt, outDir=outDir)
+    
+
 def runExamples():
     systemPath = os.path.dirname(os.path.abspath(__file__))
     exampleInputFdsFile = os.path.join(systemPath, "examples", "case001.fds")
@@ -254,7 +270,10 @@ def runExamples():
     datas = example2dSliceToCsv(resultDir=resultDir, chid=chid, outDir=exampleOutputDir,
                                 axis=1, value=2.45, time=30, dt=60, quantity='TEMPERATURE', unit='C')
     
+    print("Time-averaging a boundary file example.", flush=True)
+    exampleBndfTimeAverage(dt=30, quantity='WALL TEMPERATURE')
+    
+
 if __name__ == '__main__':
     runExamples()
-    
     

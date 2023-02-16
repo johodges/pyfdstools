@@ -232,6 +232,40 @@ def exampleBndfTimeAverage(resultDir=None, outDir=None, chid=None,
         resultDir, chid, quantity, dt, outDir=outDir)
     
 
+def exampleWriteToNetCDF4():
+    import netCDF4
+    
+    # Get case information from examples
+    systemPath = os.path.dirname(os.path.abspath(__file__))
+    chid = "case001"
+    resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
+    qty = 'TEMPERATURE'
+    
+    # Read data
+    grid, data, times = fds.readSLCF3Ddata(chid, resultDir, qty)
+    
+    # Convert axes to netcdf4 ordering
+    data2 = np.moveaxis(data, [3,2,1,0], [0,1,2,3])
+    grid2 = np.moveaxis(grid, [2,1,0,3], [0,1,2,3])
+    
+    # Open netcdf4 file
+    rootgrp = netCDF4.Dataset('output.nc','w')
+    
+    # Establish basic dimension information for netcdf file
+    time = rootgrp.createDimension('time', None)
+    lon = rootgrp.createDimension('lon', grid.shape[0])
+    lat = rootgrp.createDimension('lat', grid.shape[1])
+    level = rootgrp.createDimension('level', grid.shape[2])
+    
+    # Establish netcdf variable
+    temp = rootgrp.createVariable("temp","f4",("time","level","lat","lon"))
+    temp.units = "K"
+    temp[:] = data2 + 273 # Fill temperature variable with values from FDS in K
+    
+    # Close file
+    rootgrp.close()
+    
+
 def runExamples():
     systemPath = os.path.dirname(os.path.abspath(__file__))
     exampleInputFdsFile = os.path.join(systemPath, "examples", "case001.fds")
@@ -275,5 +309,5 @@ def runExamples():
     
 
 if __name__ == '__main__':
-    runExamples()
     
+    runExamples()

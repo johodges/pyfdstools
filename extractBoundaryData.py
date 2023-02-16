@@ -1404,6 +1404,7 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
     linesSMV.extend(bndfLines)
     smvText = '\n'.join(linesSMV)
     smvText = smvText + '\n'
+    smvText = smvText.replace('\n\n','\n')
     with open(newSmvFile, 'w') as f:
         f.write(smvText)
     print("wrote to %s"%(newSmvFile))

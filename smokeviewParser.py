@@ -236,6 +236,7 @@ def parseSMVFile(smvFile):
             files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
             files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
             files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
+            files['SLICES'][file]['LINETEXT'] = linesSMV[i]
         if 'SLCC' in linesSMV[i]:
             file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
             files['SLICES'][file] = defaultdict(bool)
@@ -243,5 +244,6 @@ def parseSMVFile(smvFile):
             files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
             files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
             files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
+            files['SLICES'][file]['LINETEXT'] = linesSMV[i]
     return grids, obsts, bndfs, surfs, files
 

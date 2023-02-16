@@ -24,7 +24,7 @@ import struct
 import scipy.interpolate as scpi
 import pandas as pd
 from collections import defaultdict
-from .utilities import getFileListFromZip, zopen
+from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
 from .colorSchemes import buildSMVcolormap
 from .smokeviewParser import parseSMVFile
 
@@ -166,7 +166,7 @@ def writeP3Dfile(file, data):
         d = d1.tobytes()
         f.write(d)
 
-def rearrangeGrid(grid):
+def rearrangeGrid(grid, iblock=False):
     """Builds a meshgrid based on grid array
     
     Parameters
@@ -191,7 +191,18 @@ def rearrangeGrid(grid):
     xGrid = np.swapaxes(xGrid, 0, 1)
     yGrid = np.swapaxes(yGrid, 0, 1)
     zGrid = np.swapaxes(zGrid, 0, 1)
-    return xGrid, yGrid, zGrid
+    
+    if iblock:
+        iGrid = np.zeros_like(xGrid)
+        for i in range(0, xGrid.shape[0]):
+            for j in range(0, xGrid.shape[1]):
+                for k in range(0, xGrid.shape[2]):
+                    dist = abs(xs-xGrid[i, j, k]) + abs(ys-yGrid[i, j, k]) + abs(zs-zGrid[i, j, k])
+                    ind = np.argmin(dist)
+                    iGrid[i, j, k] = grid[ind, 3]
+        return xGrid, yGrid, zGrid, iGrid
+    else:
+        return xGrid, yGrid, zGrid
 
 def buildDataFile(meshStr, time):
     """Builds a plot3D datafile name
@@ -368,7 +379,7 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
               xmn=None, xmx=None, zmn=None, zmx=None,
               xlabel=None, zlabel=None,
               addCbar=True, fixXLims=True, fixZLims=True,
-              title=None):
+              title=None, contour=True):
     if qnty_mn == None:
         qnty_mn = np.nanmin(data_slc)
     if qnty_mx == None:
@@ -407,9 +418,12 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
             figsize = (figsizeMult * xrange / zrange, figsizeMult)
     if fig == None or ax == None:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
-    im = ax.contourf(
+    if contour:
+        im = ax.contourf(
             x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
             levels=np.linspace(qnty_mn, qnty_mx, levels), extend='both')
+    else:
+        im = ax.imshow(d1[::-1, :], cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, extent=[x1.min(), x1.max(),z1.min(), z1.max()])
     if addCbar:
         cbar = fig.colorbar(im, cmap=cmap, extend='both', ticks=cbarticks)
         cbar.ax.tick_params(labelsize=fs)
@@ -521,6 +535,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
         times3D = []
         datas3D = []
         lims3D = []
+        print("%s%s_*.sf"%(resultDir, meshStr))
         for slcfFile in slcfFiles:
             if saveTimesFile:
                 timesFile = slcfFile.replace('.sf','_times.csv')
@@ -577,7 +592,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
             f.close()
         grids[meshStr]['datas3D'] = datas3D
         grids[meshStr]['lims3D'] = lims3D
-        
+    
     grid_abs = getAbsoluteGrid(grids)
     xGrid_abs = grid_abs[:, :, :, 0]
     yGrid_abs = grid_abs[:, :, :, 1]
@@ -835,7 +850,7 @@ def readNextTime(f, NX, NY, NZ):
         data = False
     return time, data
 
-def readSLCFheader(f):
+def readSLCFheader(f, byteSize=False):
     data = f.read(142)
     header = data[:110]
     size = struct.unpack('>iiiiii', data[115:139])
@@ -844,9 +859,11 @@ def readSLCFheader(f):
     shortName = tmp[3].decode('utf-8').replace('\x00','').strip(' ')
     units = tmp[5].decode('utf-8').replace('\x00','').strip(' ')
     
-    iX, eX, iY, eY, iZ, eZ = size
-    
-    return quantity, shortName, units, iX, eX, iY, eY, iZ, eZ
+    if byteSize:
+        return quantity, shortName, units, size
+    else:
+        iX, eX, iY, eY, iZ, eZ = size
+        return quantity, shortName, units, iX, eX, iY, eY, iZ, eZ
 
 def readSLCFtimes(file, timesFile=None):
     if timesFile != None:
@@ -1240,3 +1257,148 @@ def renderSliceCsvs(data, chid, outdir):
         print("Rendering time %0.4f to file %s"%(time, outFile))
         d = pd.DataFrame(data['datas'][:, :, i].T, index=zs, columns=xs)
         d.to_csv(outFile)
+
+
+def writeSLCFheader(f, quantity, shortName, units, size):
+    sz = struct.pack('>%0.0fi'%(len(size)), *size)
+    qty = str.encode("{:<30}".format(quantity))
+    sn = str.encode("{:<30}".format(shortName))
+    un = str.encode("{:<30}".format(units))
+    f.write(b'\x1e\x00\x00\x00')
+    f.write(qty)
+    f.write(b'\x1e\x00\x00\x00\x1e\x00\x00\x00')
+    f.write(sn)
+    f.write(b'\x1e\x00\x00\x00\x1e\x00\x00\x00')
+    f.write(un)
+    f.write(b'\x1e\x00\x00\x00\x18')
+    f.write(sz)
+    f.write(b'\x00\x00\x00')
+
+def writeSLCFTime(f, time, data):
+    f.write(b'\x00\x00\x00\x00\x00\x00\x00\x00')
+    t = time.tobytes()
+    f.write(t)
+    f.write(b'\x00\x00\x00\x00\x00\x00\x00\x00')
+    d = data.tobytes()
+    f.write(d)
+
+def slcfTimeAverage(slcfFile, dt, outFile=None, outQty=None, outdt=None):
+    
+    # Read the data
+    timesSLCF = readSLCFtimes(slcfFile, None)
+    f = zopen(slcfFile)
+    qty, sName, uts, size = readSLCFheader(f, byteSize=True)
+    iX, eX, iY, eY, iZ, eZ = size
+    (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
+    NT = len(timesSLCF)
+    datas2 = np.zeros((NX+1, NY+1, NZ+1, NT), dtype=np.float32)
+    shape = (NX+1, NY+1, NZ+1)
+    for i in range(0, NT):
+        t, data = readNextTime(f, NX, NY, NZ)
+        if data is not False:
+            data2 = np.reshape(data, shape, order='F')
+            datas2[:, :, :, i] = data2
+    f.close()
+    
+    # Average the data
+    if outdt is not None:
+        outTimes = np.linspace(0, timesSLCF[-1], int((timesSLCF[-1]/outdt)+1), dtype=np.float32)
+        
+    else:
+        outTimes = timesSLCF
+    
+    NT2 = outTimes.shape[0]
+    data_avg = np.zeros((NX+1, NY+1, NZ+1, NT2), dtype=np.float32)
+    
+    for i in range(0, NT2):
+        t = outTimes[i]
+        j1 = np.argmin(abs(timesSLCF - t - dt/2))
+        j0 = np.argmin(abs(timesSLCF - t + dt/2))
+        #i0 = max([int(j - dt/dt2), 0])
+        #i1 = min([int(j + dt/dt2), NT])
+        #print(i, j0, j1, timesSLCF[j0], timesSLCF[j1])
+        data_avg[:, :, :, i] = np.nanmean(datas2[:, :, :, j0:j1], axis=3)
+    
+    # Write the data
+    if outFile is None:
+        outFile = slcfFile.replace('.sf', '_avg.sf')
+    if outQty is None:
+        outQty = sName + ' (%0.0ds Avg)'%(dt)
+    f = zopen(outFile, 'wb')
+    writeSLCFheader(f, outQty, sName, uts, size)
+    shape2 = ((NX+1)*(NY+1)*(NZ+1),)
+    for i in range(0, NT2):
+        data = np.reshape(data_avg[:,:,:,i], shape2, order='F')
+        writeSLCFTime(f, outTimes[i], data)
+    f.close()
+    if outdt is None:
+        print("Wrote %s with %0.1f average window"%(outFile, dt))
+    else:
+        print("Wrote %s with %0.1f average window at interval %0.1f"%(outFile, dt, outdt))
+    header = qty, sName, uts, iX, eX, iY, eY, iZ, eZ
+    return outFile, header
+    
+
+def slcfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None, outdt=None):
+    slcfFiles = getFileList(resultDir, chid, 'sf')
+    filesWithQueriedQuantity = []
+    for sliceFile in slcfFiles:
+        f = zopen(sliceFile)
+        qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+        f.close()
+        # Check if slice is correct quantity
+        correctQuantity = (qty == fdsQuantity)
+        if correctQuantity:
+            filesWithQueriedQuantity.append(sliceFile)
+    
+    outFiles = []
+    meshInfo = []
+    for sliceFile in slcfFiles:
+        print("Starting to avg file %s"%(sliceFile))
+        outFile, header = slcfTimeAverage(sliceFile, dt, outFile=None, outQty=outQty, outdt=outdt)
+        outFiles.append(outFile)
+        print("wrote %s"%(outFile))
+        qty, sName, uts, iX, eX, iY, eY, iZ, eZ = header
+        (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
+        meshNum = int(sliceFile.split('_')[-2])
+        meshInfo.append([meshNum, NX, NY, NZ])
+    
+    # Add new slices to smokeview file
+    smvFile = getFileList(resultDir, chid, 'smv')[0]
+    linesSMV = zreadlines(smvFile)
+    grid, obst, bndfs, surfs, files = parseSMVFile(smvFile)
+    slices = files['SLICES']
+    if outQty is None:
+        outQty = sName + ' (%0.0ds Avg)'%(dt)
+    
+    for outFile, info in zip(outFiles, meshInfo):
+        fname = outFile.replace('_avg.sf','.sf').split(os.sep)[-1]
+        lineText = slices[fname]['LINETEXT']
+        lineText = lineText.replace('.sf', '_avg.sf')
+        lineText = lineText[:-4] + ('%s'%(int(lineText.replace('\n','').split()[-1])+1000)).ljust(4) + '\n'
+        linesSMV.append(lineText.replace('.sf', '_avg.sf'))
+        meshNum, NX, NY, NZ = info
+        #linesSMV.append('SLCF     %0.0f # STRUCTURED &     0    %0.0f     0    %0.0f     0    %0.0f !      %0.0f\n'%(meshNum, NX, NY, NZ, meshNum))
+        linesSMV.append(' %s\n'%(outFile.split(os.sep)[-1]))
+        linesSMV.append(' %s\n'%(outQty))
+        linesSMV.append(' %s\n'%(sName))
+        linesSMV.append(' %s\n'%(uts))
+    
+    smvText = '\n'.join(linesSMV)
+    smvText = smvText + '\n'
+    smvText = smvText.replace('\n\n','\n')
+    
+    if outDir is None:
+        newSmvFile = outFile.split(os.sep)[:-1]
+        newSmvFile.append(smvFile.split(os.sep)[-1].replace('.smv','_avg.smv'))
+        newSmvFile = os.sep.join(newSmvFile)
+    else:
+        newSmvFile = outDir.split(os.sep)
+        newSmvFile.append(smvFile.split(os.sep)[-1].replace('.smv','_avg.smv'))
+        newSmvFile = os.sep.join(newSmvFile)
+        
+    with open(newSmvFile, 'w') as f:
+        f.write(smvText)
+    print("wrote to %s"%(newSmvFile))
+    
+    return outFiles, outQty, filesWithQueriedQuantity, newSmvFile

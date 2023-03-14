@@ -2,7 +2,6 @@ libopencv
 matplotlib
 numpy
 pandas
-py-opencv
 python
 scipy
 opencv-contrib-python

@@ -1,0 +1,10 @@
+libopencv
+matplotlib
+numpy
+numpy-base
+opencv
+pandas
+py-opencv
+python
+scipy
+opencv-contrib-python

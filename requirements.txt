@@ -1,7 +1,6 @@
 libopencv
 matplotlib
 numpy
-opencv
 pandas
 py-opencv
 python

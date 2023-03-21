@@ -1,0 +1,3 @@
+recursive-include pyfdstools/examples *
+recursive-include pyfdstools/fdsErrorTables *
+recursive-include pyfdstools/generated *.gitignore

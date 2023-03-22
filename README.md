@@ -5,33 +5,38 @@ This software is part of a python library to assist in developing and analyzing 
 
 # Installation
 
-This module was developed for use in an anaconda virtual environment. The installation steps listed below use this approach.
+This module was developed for use in a virtual environment. 
+The package can be installed through pip or source.
 
-* The first step is to clone this repository to your local machine:
-
-```
-git clone https://github.com/johodges/pyfdstools
-```
-
-* The next step is to set up the anaconda virtual environment:
-
-```
-conda env update --file pyfdstools/env.yaml
-conda activate fdsTools
-```
-
-* Add the new repository to the python path. This can be done by updating the user path, or adding environmental variables. Note, if this is done through anaconda, the command below needs to be run from the directory from which the repository was cloned, not inside the pyfdstools directory.
-
-```
-conda develop .
-```
-
+* Configuring the virtual environment
+  ```
+  python -m venv c:\path\to\myenv
+  ```
+* Activate the virtual environment
+  ```
+  source c:\path\to\myenv\Scripts\activate
+  ```
+* (Option 1) Installing via pip
+  ```
+  python -m pip install pyfdstools
+  ```
+* (Option 2) Installing from source
+  - Navigate to desired installation location
+  - Clone the repository
+    ```
+    git clone https://github.com/johodges/pyfdstools
+    ```
+  - Install with pip
+    ```
+    pip install pyfdstools/
+    ```
 * Run the example cases
-
 ```
 python pyfdstools/examples.py
 ```
 
+
+<!---
 # Integration with BlenderFDS
 
 This module was developed for use in an anaconda virtual environment. The installation steps listed below use this approach.
@@ -90,6 +95,7 @@ ln -s /c/ProgramData/Anaconda3/envs/blenderfds /c/Program\ Files/Blender\ Founda
 * Restart command line
 * Activate the blenderfds environment
 * Start blender from the command line
+--->
 
 # Citation
 

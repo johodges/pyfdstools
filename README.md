@@ -17,9 +17,14 @@ The package can be installed through pip or source.
   source c:\path\to\myenv\Scripts\activate
   ```
 * (Option 1) Installing via pip
-  ```
-  python -m pip install pyfdstools
-  ```
+  - Install
+    ```
+    python -m pip install pyfdstools
+    ```
+  - Run the example cases
+    ```
+    python -c 'import pyfdstools as fds; fds.runExamples()'
+    ```
 * (Option 2) Installing from source
   - Navigate to desired installation location
   - Clone the repository
@@ -30,10 +35,10 @@ The package can be installed through pip or source.
     ```
     pip install pyfdstools/
     ```
-* Run the example cases
-```
-python pyfdstools/examples.py
-```
+  - Run the example cases
+    ```
+    python pyfdstools/examples.py
+    ```
 
 
 <!---

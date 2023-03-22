@@ -661,9 +661,10 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
         ys = grids[key]['yGrid'][0, :, 0]
         zs = grids[key]['zGrid'][0, 0, :]        
         for t in range(0, tInd):
-            d2 = scpi.interpn((xs, ys, zs), grids[key]['datas3D'][0][:, :, :, t], p, method='nearest')
-            d2r = np.reshape(d2, xg.shape)
-            data_abs[xi[0]:xi[1]+1, yi[0]:yi[1]+1, zi[0]:zi[1]+1, t] = d2r
+            if t < grids[key]['datas3D'][0].shape[3]:
+                d2 = scpi.interpn((xs, ys, zs), grids[key]['datas3D'][0][:, :, :, t], p, method='linear', fill_value=None, bounds_error=False)
+                d2r = np.reshape(d2, xg.shape)
+                data_abs[xi[0]:xi[1]+1, yi[0]:yi[1]+1, zi[0]:zi[1]+1, t] = d2r
     
     
     

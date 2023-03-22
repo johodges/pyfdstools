@@ -24,7 +24,7 @@ import numpy as np
 def exampleImportFile(fdsPath=None):
     if fdsPath is None:
         systemPath = os.path.dirname(os.path.abspath(__file__))
-        fdsPath = os.path.join(systemPath, "pyfdstools", "examples", "case001.fds")
+        fdsPath = os.path.join(systemPath, "examples", "case001.fds")
     fdsFile = fds.fdsFileOperations()
     print("\tStarting to import file from %s"%(fdsPath))
     fdsFile.importFile(fdsPath)
@@ -37,7 +37,7 @@ def exampleSaveFile(file=None, outdir=None, outname=None):
         file = exampleImportFile()
     if outdir is None:
         systemPath = os.path.dirname(os.path.abspath(__file__))
-        outdir = os.path.join(systemPath, "pyfdstools", "generated")
+        outdir = os.path.join(systemPath, "generated")
     if outname is None:
         location = os.path.join(outdir, '%s.fds'%(file.head['ID']['CHID']))
     print("\tStarting to save model.")
@@ -60,7 +60,7 @@ def exampleReadSlcf2dResults(resultDir=None, chid=None,
     if (resultDir is None) and (chid is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "case001"        
-        resultDir = os.path.join(systemPath, "pyfdstools", "examples", "%s.zip"%(chid))
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
     
     datas = defaultdict(bool)
     
@@ -100,7 +100,7 @@ def exampleReadSlcf3dResults(resultDir=None, chid=None,
     if (resultDir is None) and (chid is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "case001"        
-        resultDir = os.path.join(systemPath, "pyfdstools", "examples", "%s.zip"%(chid))
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
     
     datas = defaultdict(bool)
     
@@ -142,7 +142,7 @@ def exampleImportBndf(resultDir=None, chid=None, fdsFile=None,
     if (resultDir is None) and (chid is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "case001"        
-        resultDir = os.path.join(systemPath, "pyfdstools", "examples", "%s.zip"%(chid))
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
     
     if fdsFile is None: fdsFilePath = fds.getFileList(resultDir, chid, 'fds')[0]
     
@@ -172,8 +172,8 @@ def exampleExtractBndfMax(resultDir=None, chid=None, outDir=None,
     if (resultDir is None) and (chid is None) and (outDir is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "case001"        
-        resultDir = os.path.join(systemPath, "pyfdstools", "examples", "%s.zip"%(chid))
-        outDir = os.path.join(systemPath, "pyfdstools", "generated")
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
+        outDir = os.path.join(systemPath, "generated")
     
     if fdsFile is None: fdsFilePath = fds.getFileList(resultDir, chid, 'fds')[0]
     if smvFile is None: smvFilePath = fds.getFileList(resultDir, chid, 'smv')[0]
@@ -202,8 +202,8 @@ def example2dSliceToCsv(resultDir=None, outDir=None, chid=None,
     if (resultDir is None) and (chid is None) and (outDir is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "case001"        
-        resultDir = os.path.join(systemPath, "pyfdstools", "examples", "%s.zip"%(chid))
-        outDir = os.path.join(systemPath, "pyfdstools", "generated")
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
+        outDir = os.path.join(systemPath, "generated")
     try:
         os.mkdir(outDir)
     except:
@@ -221,8 +221,8 @@ def exampleBndfTimeAverage(resultDir=None, outDir=None, chid=None,
     if (resultDir is None) and (chid is None) and (outDir is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "case001"        
-        resultDir = os.path.join(systemPath, "pyfdstools", "examples", "%s.zip"%(chid))
-        outDir = os.path.join(systemPath, "pyfdstools", "generated")
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
+        outDir = os.path.join(systemPath, "generated")
     try:
         os.mkdir(outDir)
     except:
@@ -238,7 +238,7 @@ def exampleWriteToNetCDF4():
     # Get case information from examples
     systemPath = os.path.dirname(os.path.abspath(__file__))
     chid = "case001"
-    resultDir = os.path.join(systemPath, "pyfdstools", "examples", "%s.zip"%(chid))
+    resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
     qty = 'TEMPERATURE'
     
     # Read data
@@ -270,8 +270,8 @@ def stretchedMeshExample(resultDir=None, outDir=None, chid=None,
     if (resultDir is None) and (chid is None) and (outDir is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "stretched_mesh_example"        
-        resultDir = os.path.join(systemPath, "pyfdstools", "examples", "%s.zip"%(chid))
-        outDir = os.path.join(systemPath, "pyfdstools", "generated")
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
+        outDir = os.path.join(systemPath, "generated")
     try:
         os.mkdir(outDir)
     except:
@@ -288,10 +288,10 @@ def stretchedMeshExample(resultDir=None, outDir=None, chid=None,
 
 def runExamples():
     systemPath = os.path.dirname(os.path.abspath(__file__))
-    exampleInputFdsFile = os.path.join(systemPath, "pyfdstools", "examples", "case001.fds")
-    exampleOutputDir = os.path.join(systemPath, "pyfdstools", "generated")
+    exampleInputFdsFile = os.path.join(systemPath, "examples", "case001.fds")
+    exampleOutputDir = os.path.join(systemPath, "generated")
     chid = "case001"
-    resultDir = os.path.join(systemPath, "pyfdstools", "examples", "%s.zip"%(chid))
+    resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
     
     print("Importing model example", flush=True)
     file = exampleImportFile(exampleInputFdsFile)

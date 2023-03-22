@@ -11,8 +11,10 @@ setup(
     packages=['pyfdstools'],
     
     include_package_data=True,
-    install_requires=[  'matplotlib>=3.0',
+    install_requires=[  'libopencv>=0.0.1'
+                        'matplotlib>=3.0',
                         'numpy>=1.17',
+                        'opencv-contrib-python>=4.7.0',
                         'pandas>=0.25',
                         'scipy>=1.3.1',                   
                       ],

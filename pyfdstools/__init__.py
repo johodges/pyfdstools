@@ -29,3 +29,4 @@ from .extractCSVdata import *
 from .inputFileVerification import *
 from .utilities import *
 from .colorSchemes import *
+from .examples import *

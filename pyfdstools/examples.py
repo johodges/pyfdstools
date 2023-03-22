@@ -265,6 +265,26 @@ def exampleWriteToNetCDF4():
     # Close file
     rootgrp.close()
     
+def stretchedMeshExample(resultDir=None, outDir=None, chid=None,
+                           quantity="TEMPERATURE", dt=None, time=None):
+    if (resultDir is None) and (chid is None) and (outDir is None):
+        systemPath = os.path.dirname(os.path.abspath(__file__))
+        chid = "stretched_mesh_example"        
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
+        outDir = os.path.join(systemPath, "generated")
+    try:
+        os.mkdir(outDir)
+    except:
+        pass
+    
+    grid, data, times = fds.readSLCF3Ddata(chid, resultDir, quantity, time=time, dt=dt)
+    
+    x, z, data_slc = fds.findSliceLocation(grid, data[:, :, :, -1], 1, 0)
+    fds.plotSlice(x, z, data_slc, 1, figsize=(10, 4))
+    
+    x, z, data_slc = fds.findSliceLocation(grid, data[:, :, :, -1], 3, 885)
+    fds.plotSlice(x, z, data_slc, 3, figsize=(10, 10))
+
 
 def runExamples():
     systemPath = os.path.dirname(os.path.abspath(__file__))
@@ -307,6 +327,8 @@ def runExamples():
     print("Time-averaging a boundary file example.", flush=True)
     exampleBndfTimeAverage(dt=30, quantity='WALL TEMPERATURE')
     
+    print("Read SL3D with stretched mesh example", flush=True)
+    stretchedMeshExample()
 
 if __name__ == '__main__':
     

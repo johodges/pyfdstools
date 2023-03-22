@@ -246,58 +246,88 @@ def printExtents(grid, data):
     print("%0.4f < HRRPUV < %0.4f"%(
             np.min(data[:,4]),np.max(data[:,4])))
         
-def getAbsoluteGrid(grids):
+def getAbsoluteGrid(grids, makeUniform=False):
     """Builds absolute grid from defaultdict of local grids
     
     Parameters
     ----------
     grids : defaultdict
         Dictionary containing arrays(NX, NY, NZ) for each grid
-    
+    makeUniform : bool
+        Boolean flag indicating whether the absolute grid should be
+        interpolated to be rectangular at the most resolved mesh.
     Returns
     -------
     array(NX, NY, NZ, 3)
         Array containing the absolute grid coordinates
     """
     
-    mins = []
-    maxs = []
-    deltas = []
-    for key in list(grids.keys()):
-        xGrid = grids[key]['xGrid']
-        yGrid = grids[key]['yGrid']
-        zGrid = grids[key]['zGrid']
-        mins.append([xGrid.min(), yGrid.min(), zGrid.min()])
-        maxs.append([xGrid.max(), yGrid.max(), zGrid.max()])
-        dx = np.round(xGrid[1, 0, 0] - xGrid[0, 0, 0], decimals=4)
-        dy = np.round(yGrid[0, 1, 0] - yGrid[0, 0, 0], decimals=4)
-        dz = np.round(zGrid[0, 0, 1] - zGrid[0, 0, 0], decimals=4)
-        deltas.append([dx, dy, dz])
-    absMins = np.min(mins, axis=0)
-    absMaxs = np.max(maxs, axis=0)
-    absDeltas = np.min(deltas, axis=0)
-    
-    Nx = int(np.round((absMaxs[0] - absMins[0]) / absDeltas[0]) + 1)
-    Ny = int(np.round((absMaxs[1] - absMins[1]) / absDeltas[1]) + 1)
-    Nz = int(np.round((absMaxs[2] - absMins[2]) / absDeltas[2]) + 1)
-    
-    xs = np.linspace(absMins[0], absMaxs[0], Nx)
-    ys = np.linspace(absMins[1], absMaxs[1], Ny)
-    zs = np.linspace(absMins[2], absMaxs[2], Nz)
-    
-    xGrid_abs, yGrid_abs, zGrid_abs = np.meshgrid(xs, ys, zs)
-    xGrid_abs = np.swapaxes(xGrid_abs, 0, 1)
-    yGrid_abs = np.swapaxes(yGrid_abs, 0, 1)
-    zGrid_abs = np.swapaxes(zGrid_abs, 0, 1)
-    
-    grid_abs = np.zeros((xGrid_abs.shape[0],
-                         xGrid_abs.shape[1],
-                         xGrid_abs.shape[2],
-                         3))
-    grid_abs[:, :, :, 0] = xGrid_abs
-    grid_abs[:, :, :, 1] = yGrid_abs
-    grid_abs[:, :, :, 2] = zGrid_abs
-    
+    if makeUniform:
+        mins = []
+        maxs = []
+        deltas = []
+        for key in list(grids.keys()):
+            xGrid = grids[key]['xGrid']
+            yGrid = grids[key]['yGrid']
+            zGrid = grids[key]['zGrid']
+            mins.append([xGrid.min(), yGrid.min(), zGrid.min()])
+            maxs.append([xGrid.max(), yGrid.max(), zGrid.max()])
+            dx = np.round(xGrid[1, 0, 0] - xGrid[0, 0, 0], decimals=4)
+            dy = np.round(yGrid[0, 1, 0] - yGrid[0, 0, 0], decimals=4)
+            dz = np.round(zGrid[0, 0, 1] - zGrid[0, 0, 0], decimals=4)
+            deltas.append([dx, dy, dz])
+        absMins = np.min(mins, axis=0)
+        absMaxs = np.max(maxs, axis=0)
+        absDeltas = np.min(deltas, axis=0)
+        
+        Nx = int(np.round((absMaxs[0] - absMins[0]) / absDeltas[0]) + 1)
+        Ny = int(np.round((absMaxs[1] - absMins[1]) / absDeltas[1]) + 1)
+        Nz = int(np.round((absMaxs[2] - absMins[2]) / absDeltas[2]) + 1)
+        
+        xs = np.linspace(absMins[0], absMaxs[0], Nx)
+        ys = np.linspace(absMins[1], absMaxs[1], Ny)
+        zs = np.linspace(absMins[2], absMaxs[2], Nz)
+        
+        xGrid_abs, yGrid_abs, zGrid_abs = np.meshgrid(xs, ys, zs)
+        xGrid_abs = np.swapaxes(xGrid_abs, 0, 1)
+        yGrid_abs = np.swapaxes(yGrid_abs, 0, 1)
+        zGrid_abs = np.swapaxes(zGrid_abs, 0, 1)
+        
+        grid_abs = np.zeros((xGrid_abs.shape[0],
+                             xGrid_abs.shape[1],
+                             xGrid_abs.shape[2],
+                             3))
+        grid_abs[:, :, :, 0] = xGrid_abs
+        grid_abs[:, :, :, 1] = yGrid_abs
+        grid_abs[:, :, :, 2] = zGrid_abs
+    else:
+        all_xs = []
+        all_ys = []
+        all_zs = []
+        for key in list(grids.keys()):
+            xs = grids[key]['xGrid'][:, 0, 0]
+            ys = grids[key]['yGrid'][0, :, 0]
+            zs = grids[key]['zGrid'][0, 0, :]
+            all_xs.extend(xs)
+            all_ys.extend(ys)
+            all_zs.extend(zs)
+        
+        abs_xs = np.unique(all_xs)
+        abs_ys = np.unique(all_ys)
+        abs_zs = np.unique(all_zs)
+        xGrid_abs, yGrid_abs, zGrid_abs = np.meshgrid(abs_xs, abs_ys, abs_zs)
+        
+        xGrid_abs = np.swapaxes(xGrid_abs, 0, 1)
+        yGrid_abs = np.swapaxes(yGrid_abs, 0, 1)
+        zGrid_abs = np.swapaxes(zGrid_abs, 0, 1)
+        
+        grid_abs = np.zeros((xGrid_abs.shape[0],
+                             xGrid_abs.shape[1],
+                             xGrid_abs.shape[2],
+                             3))
+        grid_abs[:, :, :, 0] = xGrid_abs
+        grid_abs[:, :, :, 1] = yGrid_abs
+        grid_abs[:, :, :, 2] = zGrid_abs
     return grid_abs
 
 def findSliceLocation(grid, data, axis, value, plot3d=False):
@@ -520,12 +550,12 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
         xGrid, yGrid, zGrid = rearrangeGrid(grid)
         
         mesh = xyzFile.split(chid)[-1].split('.xyz')[0].replace('_','')
-        meshStr = "%s"%(chid) if mesh == '' else "%s_%s"%(chid, mesh)
+        meshStr = "%s"%(chid) if mesh == '' else "%s_%s_"%(chid, mesh)
         if '.zip' in resultDir:
             slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
             slcfFiles = [x for x in slcfFiles if '%s'%(meshStr) in x]
         else:
-            slcfFiles = glob.glob("%s%s_*.sf"%(resultDir, meshStr))
+            slcfFiles = glob.glob("%s%s*.sf"%(resultDir, meshStr))
         
         grids[meshStr] = defaultdict(bool)
         grids[meshStr]['xGrid'] = xGrid
@@ -603,6 +633,43 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
                          xGrid_abs.shape[2],
                          tInd))
     data_abs[:, :, :, :] = np.nan
+    
+    abs_xs = xGrid_abs[:, 0, 0]
+    abs_ys = yGrid_abs[0, :, 0]
+    abs_zs = zGrid_abs[0, 0, :]
+    
+    for key in list(grids.keys()):
+        x1 = grids[key]['xGrid'].flatten()
+        y1 = grids[key]['yGrid'].flatten()
+        z1 = grids[key]['zGrid'].flatten()
+        
+        xi = np.where(np.logical_or(np.isclose(abs_xs, x1.min()), np.isclose(abs_xs,x1.max())))[0]
+        yi = np.where(np.logical_or(np.isclose(abs_ys, y1.min()), np.isclose(abs_ys,y1.max())))[0]
+        zi = np.where(np.logical_or(np.isclose(abs_zs, z1.min()), np.isclose(abs_zs,z1.max())))[0]
+        
+        xg, yg, zg = np.meshgrid(abs_xs[xi[0]:xi[1]+1], abs_ys[yi[0]:yi[1]+1], abs_zs[zi[0]:zi[1]+1])
+        xg = np.swapaxes(xg, 0, 1)
+        yg = np.swapaxes(yg, 0, 1)
+        zg = np.swapaxes(zg, 0, 1)
+        
+        p = np.zeros((xg.flatten().shape[0],3))
+        p[:, 0] = xg.flatten()
+        p[:, 1] = yg.flatten()
+        p[:, 2] = zg.flatten()
+        
+        xs = grids[key]['xGrid'][:, 0, 0]
+        ys = grids[key]['yGrid'][0, :, 0]
+        zs = grids[key]['zGrid'][0, 0, :]        
+        for t in range(0, tInd):
+            if t < grids[key]['datas3D'][0].shape[3]:
+                d2 = scpi.interpn((xs, ys, zs), grids[key]['datas3D'][0][:, :, :, t], p, method='linear', fill_value=None, bounds_error=False)
+                d2r = np.reshape(d2, xg.shape)
+                data_abs[xi[0]:xi[1]+1, yi[0]:yi[1]+1, zi[0]:zi[1]+1, t] = d2r
+    
+    
+    
+    
+    '''
     for key in list(grids.keys()):
         xGrid = grids[key]['xGrid']
         yGrid = grids[key]['yGrid']
@@ -697,7 +764,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
                     except:
                         print("Error loading mesh %s at all times"%(key))
                         print(data.shape, data_abs[xloc_mn:xloc_mx+1, yloc_mn:yloc_mx+1, zloc_mn:zloc_mx+1, :].shape, NTT)
-        
+    '''
     return grid_abs, data_abs, times3D[0]
 
 

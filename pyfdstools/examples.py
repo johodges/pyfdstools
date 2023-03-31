@@ -19,7 +19,7 @@ import pyfdstools as fds
 import os
 from collections import defaultdict
 import numpy as np
-
+import pandas as pd
 
 def exampleImportFile(fdsPath=None):
     if fdsPath is None:
@@ -286,6 +286,21 @@ def stretchedMeshExample(resultDir=None, outDir=None, chid=None,
     fds.plotSlice(x, z, data_slc, 3, figsize=(10, 10))
 
 
+def exampleAddOccupantFedDevices():
+    name = 3
+    height_above_floor = 1.8
+    occupants = pd.read_csv('examples//fed_example_occupants.csv', header=[0], skiprows=[1])
+    t = occupants.loc[occupants['name'] == name,'t'].values
+    x = occupants.loc[occupants['name'] == name,'x'].values
+    y = occupants.loc[occupants['name'] == name,'y'].values
+    z = occupants.loc[occupants['name'] == name,'z'].values + height_above_floor
+    
+    fdsFile = fds.fdsFileOperations()
+    fdsFile.importFile("examples//fed_example.fds")
+    fdsFile.addOccupant('Occupant %d'%(name), x, y, z, t, output=True)
+    fdsFile.saveModel(1, "generated//fed_example_out.fds", allowMeshSplitting=False)
+    
+
 def runExamples():
     systemPath = os.path.dirname(os.path.abspath(__file__))
     exampleInputFdsFile = os.path.join(systemPath, "examples", "case001.fds")
@@ -329,7 +344,9 @@ def runExamples():
     
     print("Read SL3D with stretched mesh example", flush=True)
     stretchedMeshExample()
+    
+    print("Add Occupant FED calculation example", flush=True)
+    exampleAddOccupantFedDevices()
 
 if __name__ == '__main__':
-    
     runExamples()

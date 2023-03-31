@@ -261,6 +261,116 @@ class fdsFileOperations(object):
         self.version = version
     
     
+    def _downsampleOccupantRamp(self, x, t):
+        """Downsamples an array of occupant positions
+        """
+        x2 = [x[0]]
+        t2 = [t[0]]
+        for i in range(1, len(x)-1):
+            #print(i, x[i-1], x[i], x[i+1], (x[i] == x[i-1]) and (x[i] == x[i+1]))
+            if (x[i] == x[i-1]) and (x[i] == x[i+1]):
+                pass
+            else:
+                x2.append(x[i])
+                t2.append(t[i])
+        x2.append(x[-1])
+        t2.append(t[-1])
+        return x2, t2
+    
+    
+    def addOccupant(self, name, x, y, z, t, output=False):
+        """Adds an occupant to the fds input file
+        
+        This subroutine adds an occupant with a specified path for
+        FED calculations to the input file. This includes a definition of the
+        particle, its path, and all control functions and devices needed to
+        calculate the FED of the occupant.
+        
+        Parameters
+        ----------
+        name : str
+            Descriptive name of the occupant
+        x : list of floats
+            x-coordinate position of the occupant
+        y : list of floats
+            y-coordinate position of the occupant
+        z : list of floats
+            z-coordinate position of the occupant
+        t : list of floats
+            time corresponding to each entry of the list
+        output : bool, optional
+            flag indicating if all devices and controls should be output to
+            the CSV file by FDS
+        """
+        x2, xt2 = self._downsampleOccupantRamp(x, t)
+        y2, yt2 = self._downsampleOccupantRamp(y, t)
+        z2, zt2 = self._downsampleOccupantRamp(z, t)
+        
+        self.addRAMP(name+"-X", xt2, x2)
+        self.addRAMP(name+"-Y", yt2, y2)
+        self.addRAMP(name+"-Z", zt2, z2)
+        
+        self.addDEVC(name+"-CO2", INIT_ID=name, QUANTITY='VOLUME FRACTION', SPEC_ID='CARBON DIOXIDE', OUTPUT=output)
+        self.addCTRL(name+"-CO2-Stage1", FUNCTION_TYPE='MULTIPLY', INPUT_ID=[name+"-CO2",'CONSTANT'], CONSTANT=19.03)
+        self.addCTRL(name+'-CO2-Stage2', FUNCTION_TYPE='SUM', INPUT_ID=[name+'-CO2-Stage1','CONSTANT'], CONSTANT=2.0004)
+        self.addCTRL(name+'-CO2-Stage3', FUNCTION_TYPE='EXP', INPUT_ID=[name+'-CO2-Stage2'])
+        self.addCTRL(name+'-CO2-Stage4', FUNCTION_TYPE='DIVIDE', INPUT_ID=[name+'-CO2-Stage3','CONSTANT'], CONSTANT=7.1)
+        
+        self.addDEVC(name+'-CO', INIT_ID=name, QUANTITY='VOLUME FRACTION', SPEC_ID='CARBON MONOXIDE', OUTPUT=output)
+        self.addCTRL(name+'-CO-PPM', FUNCTION_TYPE='MULTIPLY', INPUT_ID=[name+'-CO','CONSTANT'], CONSTANT=1e6)
+        self.addCTRL(name+'-CO-Stage1', FUNCTION_TYPE='POWER', INPUT_ID=[name+'-CO-PPM','CONSTANT'], CONSTANT=1.036)
+        self.addCTRL(name+'-CO-Stage2', FUNCTION_TYPE='MULTIPLY', INPUT_ID=[name+'-CO-Stage1','CONSTANT'], CONSTANT=2.764e-5)
+        self.addCTRL(name+'-CO-Stage3', FUNCTION_TYPE='MULTIPLY', INPUT_ID=[name+'-CO-Stage2','CONSTANT'], CONSTANT=0.01666666666667)
+        self.addCTRL(name+'-CO-Stage4', FUNCTION_TYPE='MULTIPLY', INPUT_ID=[name+'-CO-Stage3',name+'-CO2-Stage4'])
+
+        self.addDEVC(name+'-O2', INIT_ID=name, QUANTITY='VOLUME FRACTION', SPEC_ID='OXYGEN', OUTPUT=output)
+        self.addCTRL(name+'-O2-Stage1', FUNCTION_TYPE='MULTIPLY', INPUT_ID=[name+'-O2','CONSTANT'], CONSTANT=100)
+        self.addCTRL(name+'-O2-Stage2', FUNCTION_TYPE='SUBTRACT', INPUT_ID=['CONSTANT',name+'-O2-Stage1'], CONSTANT=20.9)
+        self.addCTRL(name+'-O2-Stage3', FUNCTION_TYPE='MULTIPLY', INPUT_ID=[name+'-O2-Stage2','CONSTANT'], CONSTANT=0.54)
+        self.addCTRL(name+'-O2-Stage4', FUNCTION_TYPE='SUBTRACT', INPUT_ID=['CONSTANT',name+'-O2-Stage3'], CONSTANT=8.13)
+        self.addCTRL(name+'-O2-Stage5', FUNCTION_TYPE='EXP', INPUT_ID=[name+'-O2-Stage4'])
+        self.addCTRL(name+'-O2-Stage6', FUNCTION_TYPE='DIVIDE', INPUT_ID=['CONSTANT',name+'-O2-Stage5'], CONSTANT=1.)
+        self.addCTRL(name+'-O2-Stage7', FUNCTION_TYPE='DIVIDE', INPUT_ID=[name+'-O2-Stage6','CONSTANT'], CONSTANT=60.)
+        
+        self.addCTRL(name+'-Instantaneous-FED', FUNCTION_TYPE='SUM', INPUT_ID=[name+'-CO-Stage4',name+'-O2-Stage7'])
+        self.addDEVC(name+'-Instantaneous-FED-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-Instantaneous-FED', OUTPUT=output)
+        self.addDEVC(name+'-FED', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-Instantaneous-FED')
+        self.devcs[name+'-FED']['TEMPORAL_STATISTIC']='TIME INTEGRAL'
+        
+        self.inits[name] = defaultdict(bool)
+        self.inits[name]['ID'] = name
+        self.inits[name]['PATH_RAMP'] = [name+'-X',name+'-Y',name+'-Z']
+        self.inits[name]['N_PARTICLES'] = 1
+        self.inits[name]['PART_ID'] = name
+        
+        self.parts[name] = defaultdict(bool)
+        self.parts[name]['ID'] = name
+        self.parts[name]['SAMPLING_FACTOR'] = 1
+        self.parts[name]['SURF_ID'] = 'OCCUPANT'
+        
+        self.addSURF('OCCUPANT',adiabatic=True,Thi=[0.01],Len=1,Wid=1)
+        
+        if output:
+            self.addDEVC(name+'-CO-PPM-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-CO-PPM')
+            self.addDEVC(name+'-CO-Stage1-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-CO-Stage1')
+            self.addDEVC(name+'-CO-Stage2-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-CO-Stage2')
+            self.addDEVC(name+'-CO-Stage3-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-CO-Stage3')
+            self.addDEVC(name+'-CO-Stage4-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-CO-Stage4')
+            
+            self.addDEVC(name+'-CO2-Stage1-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-CO2-Stage1')
+            self.addDEVC(name+'-CO2-Stage2-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-CO2-Stage2')
+            self.addDEVC(name+'-CO2-Stage3-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-CO2-Stage3')
+            self.addDEVC(name+'-CO2-Stage4-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-CO2-Stage4')
+            
+            self.addDEVC(name+'-O2-Stage1-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-O2-Stage1')
+            self.addDEVC(name+'-O2-Stage2-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-O2-Stage2')
+            self.addDEVC(name+'-O2-Stage3-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-O2-Stage3')
+            self.addDEVC(name+'-O2-Stage4-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-O2-Stage4')
+            self.addDEVC(name+'-O2-Stage5-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-O2-Stage5')
+            self.addDEVC(name+'-O2-Stage6-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-O2-Stage6')
+            self.addDEVC(name+'-O2-Stage7-DEVC', QUANTITY='CONTROL VALUE', CTRL_ID=name+'-O2-Stage7')
+
+    
     def addBNDF(self, QUANTITY, CELL_CENTERED=None):
         """Adds a bndf key to internal attribute bndfs
         
@@ -332,7 +442,7 @@ class fdsFileOperations(object):
                 SPATIAL_STATISTIC=None, STATISTICS=None,
                 INITIAL_STATE=None, INIT_ID=None, SETPOINT=None,
                 DUCT_ID=None, NO_UPDATE_DEVC_ID=None, CTRL_ID=None,
-                PROP_ID=None, MATL_ID=None):
+                PROP_ID=None, MATL_ID=None, OUTPUT=None):
         """Adds a devc key to internal attribute devcs
         
         Adds a devc key to internal attribte devcs. Optional parameters
@@ -382,6 +492,8 @@ class fdsFileOperations(object):
             String identifier of properties for device
         MATL_ID : str, optional
             String identifier for material properties for device
+        OUTPUT : bool, optional
+            Flag whether the device should be output to the CSV file by FDS
         """
         
         devc = defaultdict(bool)
@@ -408,6 +520,7 @@ class fdsFileOperations(object):
         if SETPOINT != None: devc['SETPOINT'] = SETPOINT
         if PROP_ID != None: devc['PROP_ID'] = PROP_ID
         if MATL_ID != None: devc['MATL_ID'] = MATL_ID
+        if OUTPUT != None: devc['OUTPUT'] = OUTPUT
         self.devcs[ID] = devc
     
     
@@ -552,7 +665,7 @@ class fdsFileOperations(object):
         self.matls[ID] = matl
         
         
-    def addMESH(self, ID, IJK, XB):
+    def addMESH(self, ID, IJK, XB, mpiProcess=None):
         """Adds a mesh key to internal attribute meshes
         
         Adds a mesh key to internal attribute meshes.
@@ -575,6 +688,8 @@ class fdsFileOperations(object):
         mesh['ID'] = ID
         mesh['IJK'] = IJK
         mesh['XB'] = XB
+        if mpiProcess is not None:
+            mesh['MPI_PROCESS'] = mpiProcess
         self.meshes[ID] = mesh
     
     
@@ -914,7 +1029,7 @@ class fdsFileOperations(object):
     def addSURF(self, ID, Mid=None, Col=None, Thi=None, Bac=None,
                 Geo=None, Fyi=None, Len=None, LeaPat=None, Hrrpua=None,
                 qramp=None, Rgb=None, adiabatic=False, VOLUME_FLOW=None,
-                VEL_T=None):
+                VEL_T=None, Wid=None):
         """Adds a surf key to internal attribute surfs
         
         Adds a surf key to internal attribute surfs. Optional parameters
@@ -962,6 +1077,9 @@ class fdsFileOperations(object):
         VEL_T : float, optional
             Value of specified tangential velocity from the surface
             (default None)
+        Wid : float, optional
+            Value of width to be used in heat transfer calculation
+            (default None)
         """
         
         surf = defaultdict(bool)
@@ -980,6 +1098,7 @@ class fdsFileOperations(object):
         if adiabatic: surf['ADIABATIC'] = True
         if VOLUME_FLOW != None: surf['VOLUME_FLOW'] = VOLUME_FLOW
         if VEL_T != None: surf['VEL_T'] = VEL_T
+        if Wid != None: surf['WIDTH'] = Wid
         self.surfs[ID] = surf
         
         
@@ -1443,15 +1562,15 @@ class fdsFileOperations(object):
         newlines['HEAD'] = False
         newlines['TIME'] = False
         newlines['MISC'] = False
-        newlines['INIT'] = True
+        newlines['INIT'] = False
         newlines['DUMP'] = False
-        newlines['ZONE'] = True
-        newlines['PRES'] = True
+        newlines['ZONE'] = False
+        newlines['PRES'] = False
         newlines['MESH'] = False
-        newlines['REAC'] = True
-        newlines['RADI'] = True
-        newlines['MATL'] = True
-        newlines['SURF'] = True
+        newlines['REAC'] = False
+        newlines['RADI'] = False
+        newlines['MATL'] = False
+        newlines['SURF'] = False
         newlines['RAMP'] = False
         newlines['OBST'] = False
         newlines['HOLE'] = False
@@ -1613,7 +1732,10 @@ class fdsFileOperations(object):
             elif (types[key2] == 'float'):
                 #print(key2, dic[key2])
                 if dic[key2] is not False:
-                    text = "%s%s=%s, "%(text, key2, '{:.{prec}f}'.format(dic[key2], prec=decimals))
+                    if dic[key2] < 1e-3:
+                        text = "%s%s=%e, "%(text, key2, dic[key2])
+                    else:
+                        text = "%s%s=%s, "%(text, key2, '{:.{prec}f}'.format(dic[key2], prec=decimals))
             elif (types[key2] == 'int'):
                 if dic[key2] is not False:
                     text = "%s%s=%0.0f, "%(text, key2, dic[key2])

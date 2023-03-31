@@ -580,7 +580,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
             correctQuantity = (qty == quantityToExport)
             # Check if slice is 2-dimensional
             threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
-            
+            #print(qty, quantityToExport)
             if correctQuantity and threeDimSlice:
                 (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
                 # Check if slice is 3-D

@@ -234,6 +234,7 @@ class fdsFileOperations(object):
         self.matls = defaultdict(bool)
         self.meshes = defaultdict(bool)
         self.misc = defaultdict(bool)
+        self.move = defaultdict(bool)
         self.mult = defaultdict(bool)
         self.obsts = defaultdict(bool)
         self.parts = defaultdict(bool)
@@ -1294,9 +1295,11 @@ class fdsFileOperations(object):
         
         lineDict = defaultdict(bool)
         keys = self.splitLineIntoKeys(line)
-        for key in keys:
+        for i, key in enumerate(keys):
+            #print(key)
             keyID, keyID2, keyType, keyValue = self.interpretKey(key, lineType, types)
-            #print(keyID, keyID2, keyType, keyValue)
+            #print(i, keyID)
+            print(i, keyID, keyID2, keyType, keyValue)
             if keyType == 'string':
                 keyValue = keyValue.split("'")[1]
             elif keyType == 'float':
@@ -1317,6 +1320,7 @@ class fdsFileOperations(object):
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
                     keyValue = keyValue[:-1]
                 keyValues = keyValue.split(",")
+                #print(keyValues)
                 for t in keyValues:
                     if 'string' in keyType: preprocess = t.split("'")[1]
                     if 'float' in keyType: preprocess = float(t.replace(' ', '').replace(',','').replace('/',''))
@@ -1345,6 +1349,9 @@ class fdsFileOperations(object):
 
             elif ('list' in keyType) and ('ind' not in keyType) and ('row' in keyType):
                 vals = []
+                if keyType == 'liststring':
+                    pass
+                    #print(keyType, keyValue)
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
                     keyValue = keyValue[:-1]
                 keyValues = keyValue.split(",")
@@ -1355,38 +1362,99 @@ class fdsFileOperations(object):
                     vals.append(preprocess)
                 keyValue = vals
             elif ('matrix' in keyType):
+                if lineDict[keyID2] is False:
+                    lineDict[keyID2] = np.empty((6,6), dtype=object)
+                    lineDict[keyID2][:, :] = np.nan
+                matrix = lineDict[keyID2]
                 #print(keyID, keyID2, keyType, keyValue)
                 regex1 = r"(\(.{0,3});(.{0,3}\))"
+                regex2 = r"(\(.{0,3}):(.{0,3}\))"
+                regex3 = r"(\(.{0,3}.\))"
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
                     keyValue = keyValue[:-1]
                 keyValues = keyValue.split(",")
                 if 'string' in keyType: keyValues = [x.split("'")[1] for x in keyValues]
                 if 'float' in keyType: keyValues = [float(x) for x in keyValues]
                 tmp = re.search(regex1, keyID)
-                if tmp is not None:
-                    ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')]
-                    ar2 = [int(x) for x in tmp.groups()[1].replace(')','').split(':')]
-                    if len(ar1) == 1: ar1 = [ar1[0], ar1[0]]
-                    if len(ar2) == 1: ar2 = [ar2[0], ar2[0]]
-                else:
-                    (ar1, ar2) = ([1, 1], [1, len(keyValues)])
-                tmp = np.zeros((np.max(ar1), np.max(ar2)), dtype='object')
-                counter = 0
-                if ar1[0] == ar1[1]:
-                    ar1 = np.array(np.zeros((len(keyValues),)) + ar1[0], dtype=np.int32)
-                else:
-                    ar1 = list(range(ar1[0], ar1[1]+1))
-                if ar2[0] == ar2[1]:
-                    ar2 = np.array(np.zeros((len(keyValues),)) + ar2[0], dtype=np.int32)
-                else:
-                    ar2 = list(range(ar2[0], ar2[1]+1))
-                for counter in range(0, len(keyValues)):
-                    i = ar1[counter]
-                    j = ar2[counter]
-                    tmp[i-1, j-1] = keyValues[counter]
-                    counter += 1
-                keyValue = tmp
+                tmp2 = re.search(regex2, keyID)
+                tmp3 = re.search(regex3, keyID)
                 
+                if tmp is not None:
+                    t1 = tmp.groups()[0].replace('(','')
+                    t2 = tmp.groups()[1].replace(')','')
+                    t1_l = len(t1.replace(':','').strip())
+                    t2_l = len(t2.replace(':','').strip())
+                    if (':' in t1) and (':' in t2):
+                        if (t1_1 > 1) and (t2_1) > 1:
+                            print("Warning, matrix input on both axes not implemented.")
+                        elif (t1_l > 1):
+                            ar1 = int(t1.split(':')[0])
+                            ar2 = int(t1.split(':')[1])
+                            matrix[ar1:ar2,:] = keyValues
+                        elif (t2_l > 1):
+                            matrix[:, ar1:ar2] = keyValues
+                    elif (':' in t1):
+                        if (t1_l > 1):
+                            ar1 = int(t1.split(':')[0])-1
+                            ar2 = int(t1.split(':')[1])-1
+                            ar3 = int(t2)-1
+                            if (ar2-ar1+1) == len(keyValues):
+                                matrix[ar1:ar2+1, ar3] = keyValues
+                            elif len(keyValues) == 1:
+                                matrix[ar1:ar2+1, ar3] = keyValues
+                            else:
+                                print('Warning number of key values do not match indices in matrix.')
+                        else:
+                            ar1 = 0
+                            ar2 = matrix.shape[0]
+                            ar3 = int(t2)-1
+                            if (ar2-ar1+1) == len(keyValues):
+                                matrix[ar1:ar2+1, ar3] = keyValues
+                            elif len(keyValues) == 1:
+                                matrix[ar1:ar2+1, ar3] = keyValues
+                            else:
+                                matrix[:len(keyValues),ar3] = keyValues
+                    elif (':' in t2):
+                        if (t2_l > 1):
+                            ar1 = int(t2.split(':')[0])-1
+                            ar2 = int(t2.split(':')[1])-1
+                            ar3 = int(t1)-1
+                            if (ar2-ar1+1) == len(keyValues):
+                                matrix[ar3,ar1:ar2+1] = keyValues
+                            elif len(keyValues) == 1:
+                                matrix[ar3,ar1:ar2+1] = keyValues
+                            else:
+                                print('Warning number of key values do not match indices in matrix.')
+                        else:
+                            ar1 = 0
+                            ar2 = matrix.shape[0]
+                            ar3 = int(t1)-1
+                            if (ar2-ar1+1) == len(keyValues):
+                                matrix[ar3,ar1:ar2+1] = keyValues
+                            elif len(keyValues) == 1:
+                                matrix[ar3,ar1:ar2+1] = keyValues
+                            else:
+                                matrix[ar3,:len(keyValues)] = keyValues
+                    elif (len(keyValues) == 1):
+                        ar1 = int(t1)-1
+                        ar2 = int(t2)-1
+                        matrix[ar1,ar2] = keyValues[0]
+                    else:
+                        print("Warning undetermined number of key values and entries in matrix.")
+                elif tmp2 is not None:
+                    ar1 = int(tmp2.groups()[0].replace('(',''))-1
+                    ar2 = int(tmp2.groups()[1].replace(')',''))-1
+                    matrix[ar1:ar2+1, 0] = keyValues
+                elif tmp3 is not None:
+                    ar1 = int(tmp3.groups()[0].replace('(','').replace(')','').strip())-1
+                    matrix[ar1, 0] = keyValues[0]
+                else:
+                    if len(keyValues) == 1:
+                        matrix[0, 0] = keyValues[0]
+                    else:
+                        # Assuming multiple homogeneous layers
+                        matrix[:len(keyValues),0] = keyValues
+                keyValue = matrix
             else:
                 print(lineType.lower(), keyID, keyID2, keyType)
                 print(len(keyID))
@@ -1586,8 +1654,9 @@ class fdsFileOperations(object):
         newlines['INIT'] = False
         newlines['MATL'] = False
         newlines['MESH'] = False
-        newlines['MULT'] = False
         newlines['MISC'] = False
+        newlines['MOVE'] = False
+        newlines['MULT'] = False
         newlines['OBST'] = False
         newlines['PART'] = False
         newlines['PRES'] = False
@@ -1688,9 +1757,15 @@ class fdsFileOperations(object):
         """
 
         keyID = key.split('=')[0].upper()
-        keyValue = '='.join(key.split('=')[1:])
+        keyValue = key.split(keyID)[1]
+        while keyValue[0] == '=': keyValue = keyValue[1:]
+        #keyValue = '='.join(key.split('=')[1:])
         regex1 = r"\(\s*.*\)"
         regex2 = r""
+        if 'SMOKEVIEW' in keyID:
+            #print(key)
+            #print(keyID, keyValue)
+            pass
         try:
             keyID2 = re.sub(regex1, regex2, keyID)
         except:
@@ -1858,6 +1933,7 @@ class fdsFileOperations(object):
         if lineType == 'MATL': key = 'matls'
         if lineType == 'MESH': key = 'meshes'
         if lineType == 'MISC': key = 'misc'
+        if lineType == 'MOVE': key = 'move'
         if lineType == 'MULT': key = 'mult'
         if lineType == 'OBST': key = 'obsts'
         if lineType == 'PART': key = 'parts'
@@ -1905,27 +1981,89 @@ class fdsFileOperations(object):
             textFDS = textFDS.replace("--------------------PyroSim-generated Section--------------------","")
         if '&TAIL' in textFDS:
             textFDS = textFDS.split('&TAIL')[0]
-        linesFDS = [x for x in textFDS.split("&")[1:]]
+        linesFDS_tmp = [x for x in textFDS.split("&")[1:]]
+        # Combine non-namelist &
+        linesFDS = []
+        for line in linesFDS_tmp:
+            if ' ' in line[:4]:
+                if len(linesFDS) > 0:
+                    linesFDS[-1] = linesFDS[-1] + '&' + line
+            else:
+                linesFDS.append(line)
+        
         for i in range(0, len(linesFDS)):
             try:
                 line2 = linesFDS[i]
+                
+                # Remove trailing "/" and replace non-text spaces with commas
+                c = 0
+                text=False
+                parent=False
+                line3 = ''
+                while c < len(line2):
+                    if text is False:
+                        if line2[c] == "'":
+                            text = "'"
+                            line3 = line3 + line2[c]
+                        elif line2[c] == '"':
+                            text = '"'
+                            line3 = line3 + line2[c]
+                        elif line2[c] == "/":
+                            line2 = line2[:c+1]
+                            line3 = line3 + line2[c]
+                        elif line2[c] == ' ':
+                            if parent is False:
+                                line3 = line3 + ','
+                            else:
+                                pass
+                        elif line2[c] == '(':
+                            parent = True
+                            line3 = line3 + line2[c]
+                        elif line2[c] == ')':
+                            parent = False
+                            line3 = line3 + line2[c]
+                        else:
+                            line3 = line3 + line2[c]
+                    else:
+                        if line2[c] == text:
+                            text = False
+                            parent = False
+                        line3 = line3 + line2[c]
+                    c = c + 1
+                line2 = line3
+                # Clean line text
                 line2 = '/'.join(line2.split('/')[:-1])
+                if ('\n' in line2) and ('!' in line2):
+                    tmp = line2.split('\n')
+                    tmp = [t.split('!')[0] for t in tmp]
+                    line2 = '\n'.join(tmp)
+                while (('\t ' in line2) or (' \t' in line2)): line2 = line2.replace('\t',' ')
+                while (('\t=' in line2) or ('=\t' in line2)): line2 = line2.replace('\t',' ')
                 line2 = line2.replace('\r', ',')
                 line2 = line2.replace('\n', ',')
                 line2 = line2.replace('\t', ',')
-                if len(line2) > 0:
+                #print(list(filter(None, re.findall(r'"[^"]*"|([a-z_]\w*(?:\.[a-z_]\w*)*)', line2, re.ASCII | re.I))))
+                #print(list(filter(None, re.findall(r'"[^"]*"|([a-z_]\w*(?:\\[a-z_]\w*)*)', line2, re.ASCII | re.I))))
+                #if len(line2.split('/')) > 1: print("Warning, more than one / found in line: \n%s."%(line2))
+                #line2 = line2.split('/')[0] + "/"
+                
+                if len(line2) > 3:
                     line2 = "%s,"%(line2) if line2[-1] != ',' else line2
                     line2 = '%s /'%(line2)
                     
                     while ',,' in line2: line2 = line2.replace(',,',',')
                     while ' ,' in line2: line2 = line2.replace(' ,',',')
+                    while ', ' in line2: line2 = line2.replace(', ',',')
                     while '  ' in line2: line2 = line2.replace("  ", " ")
                     while ',,' in line2: line2 = line2.replace(',,',',')
+                    while ((',=' in line2) or ('=,' in line2)): line2 = line2.replace('=,','=').replace(',=','=')
                     line_tmp = list(line2)
+                    #print(line2)
                     if line_tmp[4] == ',':
                         line_tmp[4] = ' '
                         line2 = "".join(line_tmp)
                         while '  ' in line2: line2 = line2.replace("  ", " ")
+                        while '=,' in line2: line2 = line2.replace('=,','=')
                 linesFDS[i] = line2
             except:
                 print(line2)
@@ -2063,6 +2201,7 @@ class fdsFileOperations(object):
         if lineType == 'MATL': key = 'enumerate'
         if lineType == 'MESH': key = 'enumerate'
         if lineType == 'MISC': key = 'merge'
+        if lineType == 'MOVE': key = 'enumerate'
         if lineType == 'MULT': key = 'enumerate'
         if lineType == 'OBST': key = 'enumerate'
         if lineType == 'PART': key = 'enumerate'
@@ -2137,6 +2276,7 @@ class fdsFileOperations(object):
             print("WARNING: Unknown line in input file.\n")
             print("%s\n"%(line))
             check = False
+            assert False, "Stopped"
         if check:
             tmp = getattr(self, key)
             mergeType = self.mergeTypeFromLineType(lineType)
@@ -2222,7 +2362,6 @@ class fdsFileOperations(object):
         list
             List containing namelist keys
         """
-        
         line = line2.replace('\n', ',').replace('\r', ',')
         while (',,' in line) or ('  ' in line):
             line = line.replace(',,', ',').replace('  ', ' ')    
@@ -2238,9 +2377,13 @@ class fdsFileOperations(object):
         updatedKeys = []
         txt = ''
         for i in range(0,len(keys)):
-            if '=' in keys[i]:
-                updatedKeys.append(txt)
-                txt = keys[i]
+            tmp = keys[i].strip()
+            if ('=' in keys[i]):
+                if ((tmp[0] == "'" and tmp[-1] == "'") or (tmp[0] == '"' and tmp[-1] == '"')):
+                    txt = ','.join([txt,keys[i]])
+                else:
+                    updatedKeys.append(txt)
+                    txt = keys[i]
             else:
                 txt = ','.join([txt,keys[i]])
         updatedKeys.append(txt)

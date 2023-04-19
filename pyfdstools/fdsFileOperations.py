@@ -221,31 +221,39 @@ class fdsFileOperations(object):
         """
         
         self.head = defaultdict(bool)
+        self.bndfs = defaultdict(bool)
+        self.clip = defaultdict(bool)
+        self.comb = defaultdict(bool)
+        self.ctrls = defaultdict(bool)
         self.devcs = defaultdict(bool)
-        self.inits = defaultdict(bool)
-        self.obsts = defaultdict(bool)
+        self.dump = defaultdict(bool)
+        self.geom = defaultdict(bool)
         self.holes = defaultdict(bool)
         self.hvac = defaultdict(bool)
-        self.vents = defaultdict(bool)
-        self.surfs = defaultdict(bool)
-        self.ramps = defaultdict(bool)
-        self.ctrls = defaultdict(bool)
-        self.meshes = defaultdict(bool)
-        self.slcfs = defaultdict(bool)
-        self.bndfs = defaultdict(bool)
-        self.time = defaultdict(bool)
-        self.dump = defaultdict(bool)
-        self.misc = defaultdict(bool)
-        self.zones = defaultdict(bool)
-        self.reacs = defaultdict(bool)
+        self.inits = defaultdict(bool)
         self.matls = defaultdict(bool)
-        self.radis = defaultdict(bool)
-        self.pres = defaultdict(bool)
+        self.meshes = defaultdict(bool)
+        self.misc = defaultdict(bool)
+        self.mult = defaultdict(bool)
+        self.obsts = defaultdict(bool)
         self.parts = defaultdict(bool)
+        self.pres = defaultdict(bool)
         self.profs = defaultdict(bool)
         self.props = defaultdict(bool)
+        self.radis = defaultdict(bool)
+        self.ramps = defaultdict(bool)
+        self.reacs = defaultdict(bool)
+        self.slcfs = defaultdict(bool)
         self.specs = defaultdict(bool)
+        self.surfs = defaultdict(bool)
+        self.tabl = defaultdict(bool)
+        self.time = defaultdict(bool)
+        self.trnx = defaultdict(bool)
+        self.trny = defaultdict(bool)
+        self.trnz = defaultdict(bool)
+        self.vents = defaultdict(bool)
         self.winds = defaultdict(bool)
+        self.zones = defaultdict(bool)
         self.customLines = []
         
         self.devcs['unknownCounter'] = 0
@@ -1296,7 +1304,14 @@ class fdsFileOperations(object):
             elif keyType == 'int':
                 keyValue = int(keyValue.replace(' ', '').replace(',','').replace('/',''))
             elif keyType == 'bool':
-                keyValue = keyValue.split(".")[1]
+                if '.' in keyValue:
+                    keyValue = keyValue.split(".")[1]
+                elif 'F' in keyValue:
+                    keyValue = False
+                elif 'T' in keyValue:
+                    keyValue = True
+                else:
+                    pass
             elif ('list' in keyType) and ('ind' not in keyType) and ('row' not in keyType):
                 vals = []
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
@@ -1559,29 +1574,37 @@ class fdsFileOperations(object):
         """
         
         newlines = defaultdict(bool)
-        newlines['HEAD'] = False
-        newlines['TIME'] = False
-        newlines['MISC'] = False
-        newlines['INIT'] = False
-        newlines['DUMP'] = False
-        newlines['ZONE'] = False
-        newlines['PRES'] = False
-        newlines['MESH'] = False
-        newlines['REAC'] = False
-        newlines['RADI'] = False
-        newlines['MATL'] = False
-        newlines['SURF'] = False
-        newlines['RAMP'] = False
-        newlines['OBST'] = False
-        newlines['HOLE'] = False
-        newlines['VENT'] = False
-        newlines['PART'] = False
-        newlines['DEVC'] = False
-        newlines['CTRL'] = False
         newlines['BNDF'] = False
-        newlines['SLCF'] = False
+        newlines['CLIP'] = False
+        newlines['COMB'] = False
+        newlines['CTRL'] = False
+        newlines['DEVC'] = False
+        newlines['DUMP'] = False
+        newlines['GEOM'] = False
+        newlines['HEAD'] = False
+        newlines['HOLE'] = False
+        newlines['INIT'] = False
+        newlines['MATL'] = False
+        newlines['MESH'] = False
+        newlines['MULT'] = False
+        newlines['MISC'] = False
+        newlines['OBST'] = False
+        newlines['PART'] = False
+        newlines['PRES'] = False
         newlines['PROP'] = False
+        newlines['RADI'] = False
+        newlines['RAMP'] = False
+        newlines['REAC'] = False
+        newlines['SLCF'] = False
         newlines['SPEC'] = False
+        newlines['SURF'] = False
+        newlines['TABL'] = False
+        newlines['TIME'] = False
+        newlines['TRNX'] = False
+        newlines['TRNY'] = False
+        newlines['TRNZ'] = False
+        newlines['VENT'] = False
+        newlines['ZONE'] = False
         return newlines
     
     
@@ -1820,33 +1843,42 @@ class fdsFileOperations(object):
         str
             String containing internal attribute name
         """
-        
-        if lineType == 'HEAD': key = 'head'
-        if lineType == 'DEVC': key = 'devcs'
-        if lineType == 'INIT': key = 'inits'
-        if lineType == 'OBST': key = 'obsts'
-        if lineType == 'VENT': key = 'vents'
-        if lineType == 'SURF': key = 'surfs'
-        if lineType == 'RAMP': key = 'ramps'
-        if lineType == 'CTRL': key = 'ctrls'
-        if lineType == 'MESH': key = 'meshes'
-        if lineType == 'SLCF': key = 'slcfs'
+        key = False
         if lineType == 'BNDF': key = 'bndfs'
-        if lineType == 'TIME': key = 'time'
+        if lineType == 'CLIP': key = 'clip'
+        if lineType == 'COMB': key = 'comb'
+        if lineType == 'CTRL': key = 'ctrls'
+        if lineType == 'DEVC': key = 'devcs'
         if lineType == 'DUMP': key = 'dump'
-        if lineType == 'MISC': key = 'misc'
-        if lineType == 'ZONE': key = 'zones'
-        if lineType == 'REAC': key = 'reacs'
-        if lineType == 'MATL': key = 'matls'
-        if lineType == 'RADI': key = 'radis'
-        if lineType == 'PRES': key = 'pres'
+        if lineType == 'GEOM': key = 'geom'
+        if lineType == 'HEAD': key = 'head'
         if lineType == 'HOLE': key = 'holes'
-        if lineType == 'PART': key = 'parts'
-        if lineType == 'PROP': key = 'props'
-        if lineType == 'SPEC': key = 'specs'
-        if lineType == 'PROF': key = 'profs'
-        if lineType == 'WIND': key = 'winds'
         if lineType == 'HVAC': key = 'hvac'
+        if lineType == 'INIT': key = 'inits'
+        if lineType == 'MATL': key = 'matls'
+        if lineType == 'MESH': key = 'meshes'
+        if lineType == 'MISC': key = 'misc'
+        if lineType == 'MULT': key = 'mult'
+        if lineType == 'OBST': key = 'obsts'
+        if lineType == 'PART': key = 'parts'
+        if lineType == 'PRES': key = 'pres'
+        if lineType == 'PROF': key = 'profs'
+        if lineType == 'PROP': key = 'props'
+        if lineType == 'RADI': key = 'radis'
+        if lineType == 'RAMP': key = 'ramps'
+        if lineType == 'REAC': key = 'reacs'
+        if lineType == 'SLCF': key = 'slcfs'
+        if lineType == 'SPEC': key = 'specs'
+        if lineType == 'SURF': key = 'surfs'
+        if lineType == 'TABL': key = 'tabl'
+        if lineType == 'TIME': key = 'time'
+        if lineType == 'TRNX': key = 'trnx'
+        if lineType == 'TRNY': key = 'trny'
+        if lineType == 'TRNZ': key = 'trnz'
+        if lineType == 'VENT': key = 'vents'
+        if lineType == 'WIND': key = 'winds'
+        if lineType == 'ZONE': key = 'zones'
+        if key is False: print(lineType)
         return key
     
     
@@ -1880,19 +1912,20 @@ class fdsFileOperations(object):
                 line2 = '/'.join(line2.split('/')[:-1])
                 line2 = line2.replace('\r', ',')
                 line2 = line2.replace('\n', ',')
-                
-                line2 = "%s,"%(line2) if line2[-1] != ',' else line2
-                line2 = '%s /'%(line2)
-                
-                while ',,' in line2: line2 = line2.replace(',,',',')
-                while ' ,' in line2: line2 = line2.replace(' ,',',')
-                while '  ' in line2: line2 = line2.replace("  ", " ")
-                while ',,' in line2: line2 = line2.replace(',,',',')
-                line_tmp = list(line2)
-                if line_tmp[4] == ',':
-                    line_tmp[4] = ' '
-                    line2 = "".join(line_tmp)
+                line2 = line2.replace('\t', ',')
+                if len(line2) > 0:
+                    line2 = "%s,"%(line2) if line2[-1] != ',' else line2
+                    line2 = '%s /'%(line2)
+                    
+                    while ',,' in line2: line2 = line2.replace(',,',',')
+                    while ' ,' in line2: line2 = line2.replace(' ,',',')
                     while '  ' in line2: line2 = line2.replace("  ", " ")
+                    while ',,' in line2: line2 = line2.replace(',,',',')
+                    line_tmp = list(line2)
+                    if line_tmp[4] == ',':
+                        line_tmp[4] = ' '
+                        line2 = "".join(line_tmp)
+                        while '  ' in line2: line2 = line2.replace("  ", " ")
                 linesFDS[i] = line2
             except:
                 print(line2)
@@ -2016,32 +2049,40 @@ class fdsFileOperations(object):
         """
         
         key = 'unknown'
-        if lineType == 'HEAD': key = 'merge'
-        if lineType == 'DEVC': key = 'enumerate'
-        if lineType == 'INIT': key = 'enumerate'
-        if lineType == 'OBST': key = 'enumerate'
-        if lineType == 'VENT': key = 'enumerate'
-        if lineType == 'SURF': key = 'enumerate'
-        if lineType == 'RAMP': key = 'append'
-        if lineType == 'CTRL': key = 'enumerate'
-        if lineType == 'MESH': key = 'enumerate'
-        if lineType == 'SLCF': key = 'enumerate'
         if lineType == 'BNDF': key = 'enumerate'
-        if lineType == 'TIME': key = 'merge'
+        if lineType == 'CLIP': key = 'enumerate'
+        if lineType == 'COMB': key = 'enumerate'
+        if lineType == 'CTRL': key = 'enumerate'
+        if lineType == 'DEVC': key = 'enumerate'
         if lineType == 'DUMP': key = 'merge'
-        if lineType == 'MISC': key = 'merge'
-        if lineType == 'ZONE': key = 'enumerate'
-        if lineType == 'REAC': key = 'enumerate'
-        if lineType == 'MATL': key = 'enumerate'
-        if lineType == 'RADI': key = 'merge'
-        if lineType == 'PRES': key = 'merge'
+        if lineType == 'GEOM': key = 'enumerate'
+        if lineType == 'HEAD': key = 'merge'
         if lineType == 'HOLE': key = 'enumerate'
         if lineType == 'HVAC': key = 'enumerate'
+        if lineType == 'INIT': key = 'enumerate'
+        if lineType == 'MATL': key = 'enumerate'
+        if lineType == 'MESH': key = 'enumerate'
+        if lineType == 'MISC': key = 'merge'
+        if lineType == 'MULT': key = 'enumerate'
+        if lineType == 'OBST': key = 'enumerate'
         if lineType == 'PART': key = 'enumerate'
-        if lineType == 'PROP': key = 'enumerate'
-        if lineType == 'SPEC': key = 'enumerate'
+        if lineType == 'PRES': key = 'merge'
         if lineType == 'PROF': key = 'enumerate'
+        if lineType == 'PROP': key = 'enumerate'
+        if lineType == 'RADI': key = 'merge'
+        if lineType == 'RAMP': key = 'append'
+        if lineType == 'REAC': key = 'enumerate'
+        if lineType == 'SLCF': key = 'enumerate'
+        if lineType == 'SPEC': key = 'enumerate'
+        if lineType == 'SURF': key = 'enumerate'
+        if lineType == 'TABL': key = 'append'
+        if lineType == 'TIME': key = 'merge'
+        if lineType == 'TRNX': key = 'enumerate'
+        if lineType == 'TRNY': key = 'enumerate'
+        if lineType == 'TRNZ': key = 'enumerate'
+        if lineType == 'VENT': key = 'enumerate'
         if lineType == 'WIND': key = 'merge'
+        if lineType == 'ZONE': key = 'enumerate'
         return key
     
     
@@ -2056,9 +2097,13 @@ class fdsFileOperations(object):
         
         for line in lines:
             lineType = self.getLineType(line)
-            key = self.keyFromLineType(lineType)
-            types = fdsLineTypes(version=self.version)
-            self.parseLine(line, lineType, types, key)
+            if lineType != '':
+                key = self.keyFromLineType(lineType)
+                if key is not False:
+                    types = fdsLineTypes(version=self.version)
+                    self.parseLine(line, lineType, types, key)
+                else:
+                    print("Warning, lineType %s unknown maybe a comment"%(lineType))
         devcKeys = list(self.devcs.keys())
         devcKeys.remove('unknownCounter')
         for key in devcKeys:

@@ -222,6 +222,7 @@ class fdsFileOperations(object):
         
         self.head = defaultdict(bool)
         self.bndfs = defaultdict(bool)
+        self.catf = defaultdict(bool)
         self.clip = defaultdict(bool)
         self.comb = defaultdict(bool)
         self.ctrls = defaultdict(bool)
@@ -231,6 +232,7 @@ class fdsFileOperations(object):
         self.holes = defaultdict(bool)
         self.hvac = defaultdict(bool)
         self.inits = defaultdict(bool)
+        self.isof = defaultdict(bool)
         self.matls = defaultdict(bool)
         self.meshes = defaultdict(bool)
         self.misc = defaultdict(bool)
@@ -245,6 +247,7 @@ class fdsFileOperations(object):
         self.ramps = defaultdict(bool)
         self.reacs = defaultdict(bool)
         self.slcfs = defaultdict(bool)
+        self.sm3d = defaultdict(bool)
         self.specs = defaultdict(bool)
         self.surfs = defaultdict(bool)
         self.tabl = defaultdict(bool)
@@ -1295,17 +1298,18 @@ class fdsFileOperations(object):
         
         lineDict = defaultdict(bool)
         keys = self.splitLineIntoKeys(line)
+        #print(line)
         for i, key in enumerate(keys):
             #print(key)
             keyID, keyID2, keyType, keyValue = self.interpretKey(key, lineType, types)
             #print(i, keyID)
-            print(i, keyID, keyID2, keyType, keyValue)
+            #print(i, keyID, keyID2, keyType, keyValue)
             if keyType == 'string':
                 keyValue = keyValue.split("'")[1]
             elif keyType == 'float':
                 keyValue = float(keyValue.replace(' ', '').replace(',','').replace('/',''))
             elif keyType == 'int':
-                keyValue = int(keyValue.replace(' ', '').replace(',','').replace('/',''))
+                keyValue = int(keyValue.replace(' ', '').replace(',','').replace('/','').replace('.',''))
             elif keyType == 'bool':
                 if '.' in keyValue:
                     keyValue = keyValue.split(".")[1]
@@ -1385,7 +1389,7 @@ class fdsFileOperations(object):
                     t1_l = len(t1.replace(':','').strip())
                     t2_l = len(t2.replace(':','').strip())
                     if (':' in t1) and (':' in t2):
-                        if (t1_1 > 1) and (t2_1) > 1:
+                        if (t1_l > 1) and (t2_l) > 1:
                             print("Warning, matrix input on both axes not implemented.")
                         elif (t1_l > 1):
                             ar1 = int(t1.split(':')[0])
@@ -1643,6 +1647,7 @@ class fdsFileOperations(object):
         
         newlines = defaultdict(bool)
         newlines['BNDF'] = False
+        newlines['CATF'] = False
         newlines['CLIP'] = False
         newlines['COMB'] = False
         newlines['CTRL'] = False
@@ -1652,6 +1657,7 @@ class fdsFileOperations(object):
         newlines['HEAD'] = False
         newlines['HOLE'] = False
         newlines['INIT'] = False
+        newlines['ISOF'] = False
         newlines['MATL'] = False
         newlines['MESH'] = False
         newlines['MISC'] = False
@@ -1665,6 +1671,7 @@ class fdsFileOperations(object):
         newlines['RAMP'] = False
         newlines['REAC'] = False
         newlines['SLCF'] = False
+        newlines['SM3D'] = False
         newlines['SPEC'] = False
         newlines['SURF'] = False
         newlines['TABL'] = False
@@ -1726,7 +1733,18 @@ class fdsFileOperations(object):
         elif textList != None:
             textFDS = '\n'.join(textList)
         lines = self.makeFDSLines(textFDS)
+        #print(lines)
         self.parseFDSLines(lines)
+        if self.catf['ID']:
+            otherFiles = self.catf['ID']['OTHER_FILES']
+            workingDir = file.split(os.sep)[:-1]
+            for oFile in otherFiles:
+                oPath = os.path.join(os.sep.join(workingDir),oFile)
+                f = self.zopen(oPath)
+                o_textFDS = f.read()
+                o_textFDS = o_textFDS.decode("utf-8")
+                lines = self.makeFDSLines(o_textFDS)
+                self.parseFDSLines(lines)
         
         
     def interpretKey(self, key, lineType, types):
@@ -1757,15 +1775,13 @@ class fdsFileOperations(object):
         """
 
         keyID = key.split('=')[0].upper()
-        keyValue = key.split(keyID)[1]
+        keyValue = key.strip()
+        keyValue = keyValue[len(keyID):]
+        #keyValue = key.split(keyID)[1]
         while keyValue[0] == '=': keyValue = keyValue[1:]
         #keyValue = '='.join(key.split('=')[1:])
         regex1 = r"\(\s*.*\)"
         regex2 = r""
-        if 'SMOKEVIEW' in keyID:
-            #print(key)
-            #print(keyID, keyValue)
-            pass
         try:
             keyID2 = re.sub(regex1, regex2, keyID)
         except:
@@ -1874,6 +1890,8 @@ class fdsFileOperations(object):
                     text = "%s%s "%(text, tempTxt)
             elif ('matrix' in types[key2]):
                 temp = np.array(dic[key2])
+                temp_inds = np.array([[x is not np.nan for x in sub] for sub in temp])
+                temp = np.array(temp[temp_inds])
                 sz = temp.shape
                 if len(sz) == 1:
                     temp = np.reshape(temp, (temp.shape[0], 1))
@@ -1889,7 +1907,6 @@ class fdsFileOperations(object):
                     if ('int' in types[key2]):
                         tempTxt = "%s %0.0f,"%(tempTxt, float(t))
                 text = "%s%s "%(text, tempTxt)
-                
             else:
                 print(keys)
                 print(dic)
@@ -1920,6 +1937,7 @@ class fdsFileOperations(object):
         """
         key = False
         if lineType == 'BNDF': key = 'bndfs'
+        if lineType == 'CATF': key = 'catf'
         if lineType == 'CLIP': key = 'clip'
         if lineType == 'COMB': key = 'comb'
         if lineType == 'CTRL': key = 'ctrls'
@@ -1930,6 +1948,7 @@ class fdsFileOperations(object):
         if lineType == 'HOLE': key = 'holes'
         if lineType == 'HVAC': key = 'hvac'
         if lineType == 'INIT': key = 'inits'
+        if lineType == 'ISOF': key = 'isof'
         if lineType == 'MATL': key = 'matls'
         if lineType == 'MESH': key = 'meshes'
         if lineType == 'MISC': key = 'misc'
@@ -1944,6 +1963,7 @@ class fdsFileOperations(object):
         if lineType == 'RAMP': key = 'ramps'
         if lineType == 'REAC': key = 'reacs'
         if lineType == 'SLCF': key = 'slcfs'
+        if lineType == 'SM3D': key = 'sm3d'
         if lineType == 'SPEC': key = 'specs'
         if lineType == 'SURF': key = 'surfs'
         if lineType == 'TABL': key = 'tabl'
@@ -1981,7 +2001,9 @@ class fdsFileOperations(object):
             textFDS = textFDS.replace("--------------------PyroSim-generated Section--------------------","")
         if '&TAIL' in textFDS:
             textFDS = textFDS.split('&TAIL')[0]
-        linesFDS_tmp = [x for x in textFDS.split("&")[1:]]
+        while (textFDS[0] != '&'): textFDS = textFDS[1:]
+        textFDS = "\n"+textFDS
+        linesFDS_tmp = [x for x in textFDS.split("\n&")[1:]]
         # Combine non-namelist &
         linesFDS = []
         for line in linesFDS_tmp:
@@ -2160,15 +2182,27 @@ class fdsFileOperations(object):
         for key in list(ramps.keys()):
             ID = ramps[key]['ID']
             makeControl = True
-            for F, T in zip(ramps[key]['F'], ramps[key]['T']):
-                if makeControl and ramps[key]['CTRL_ID']:
-                    text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, CTRL_ID='%s'/\n"%(text, ID, T, F, ramps[key]['CTRL_ID'])
-                    makeControl = False
-                elif makeControl and ramps[key]['DEVC_ID']:
-                    text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, DEVC_ID='%s'/\n"%(text, ID, T, F, ramps[key]['DEVC_ID'])
-                    makeControl = False
-                else:
-                    text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, /\n"%(text, ID, T, F)
+            if ramps[key]['F'] is not False:
+                for F, T in zip(ramps[key]['F'], ramps[key]['T']):
+                    if makeControl and ramps[key]['CTRL_ID']:
+                        text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, CTRL_ID='%s'/\n"%(text, ID, T, F, ramps[key]['CTRL_ID'])
+                        makeControl = False
+                    elif makeControl and ramps[key]['DEVC_ID']:
+                        text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, DEVC_ID='%s'/\n"%(text, ID, T, F, ramps[key]['DEVC_ID'])
+                        makeControl = False
+                    else:
+                        text = "%s&RAMP ID='%s', T = %0.4f, F = %0.4f, /\n"%(text, ID, T, F)
+            else:
+                for T in ramps[key]['T']:
+                    if makeControl and ramps[key]['CTRL_ID']:
+                        text = "%s&RAMP ID='%s', T = %0.4f, CTRL_ID='%s'/\n"%(text, ID, T, ramps[key]['CTRL_ID'])
+                        makeControl = False
+                    elif makeControl and ramps[key]['DEVC_ID']:
+                        text = "%s&RAMP ID='%s', T = %0.4f, DEVC_ID='%s'/\n"%(text, ID, T, ramps[key]['DEVC_ID'])
+                        makeControl = False
+                    else:
+                        text = "%s&RAMP ID='%s', T = %0.4f, /\n"%(text, ID, T)
+
         return text
     
     
@@ -2188,6 +2222,7 @@ class fdsFileOperations(object):
         
         key = 'unknown'
         if lineType == 'BNDF': key = 'enumerate'
+        if lineType == 'CATF': key = 'enumerate'
         if lineType == 'CLIP': key = 'enumerate'
         if lineType == 'COMB': key = 'enumerate'
         if lineType == 'CTRL': key = 'enumerate'
@@ -2198,6 +2233,7 @@ class fdsFileOperations(object):
         if lineType == 'HOLE': key = 'enumerate'
         if lineType == 'HVAC': key = 'enumerate'
         if lineType == 'INIT': key = 'enumerate'
+        if lineType == 'ISOF': key = 'enumerate'
         if lineType == 'MATL': key = 'enumerate'
         if lineType == 'MESH': key = 'enumerate'
         if lineType == 'MISC': key = 'merge'
@@ -2212,6 +2248,7 @@ class fdsFileOperations(object):
         if lineType == 'RAMP': key = 'append'
         if lineType == 'REAC': key = 'enumerate'
         if lineType == 'SLCF': key = 'enumerate'
+        if lineType == 'SM3D': key = 'enumerate'
         if lineType == 'SPEC': key = 'enumerate'
         if lineType == 'SURF': key = 'enumerate'
         if lineType == 'TABL': key = 'append'
@@ -2372,8 +2409,46 @@ class fdsFileOperations(object):
             line = re.sub(regex1, regex2, line)
         except:
             pass
-        keys = line.split(',')
-        keys[0] = keys[0][4:]
+        
+        
+        c = 4
+        text=False
+        parent=False
+        workingKey = ''
+        keys = []
+        #print(line)
+        while c < len(line):
+            if text is False:
+                if line[c] == "'":
+                    text = "'"
+                    workingKey = workingKey + text
+                elif line[c] == '"':
+                    text = '"'
+                    workingKey = workingKey + text
+                elif line[c] == ',':
+                    if parent is False:
+                        keys.append(workingKey)
+                        workingKey = ''
+                    else:
+                        workingKey = workingKey + ','
+                elif line[c] == '(':
+                    parent = True
+                    workingKey = workingKey + line[c]
+                elif line[c] == ')':
+                    parent = False
+                    workingKey = workingKey + line[c]
+                else:
+                    workingKey = workingKey + line[c]
+            else:
+                if line[c] == text:
+                    text = False
+                    parent = False
+                workingKey = workingKey + line[c]
+            #print(c, workingKey, text, parent)
+            c = c + 1
+        
+        #keys = line.split(',')
+        #keys[0] = keys[0][4:]
         updatedKeys = []
         txt = ''
         for i in range(0,len(keys)):

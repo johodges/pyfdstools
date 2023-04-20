@@ -117,8 +117,8 @@ def parseOBST(lines, i, gridTRNX, gridTRNY, gridTRNZ):
     numOBST = int(lines[i+1].replace(' ',''))
     tmp1 = lines[i+2:i+2+numOBST]
     tmp2 = lines[i+2+numOBST:i+2+numOBST+numOBST]
-    tmp1 = [x.replace('\n','') for x in tmp1]
-    tmp2 = [x.replace('\n','') for x in tmp2]
+    tmp1 = [x.replace('\n','').split('!')[0] for x in tmp1]
+    tmp2 = [x.replace('\n','').split('!')[0] for x in tmp2]
     tmp1 = [[float(y) for y in x.split()] for x in tmp1]
     tmp2 = [[float(y) for y in x.split()] for x in tmp2]
     for j in range(0, len(tmp2)):

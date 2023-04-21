@@ -76,13 +76,13 @@ class fdsLineTypes(object):
 
     def getCATFtypes(self, version="6.7.4"):
         catfTypes = defaultdict(bool)
-        catfTypes['ID'] = 'string'
+        catfTypes['ID'] = 'ignore'
         catfTypes['OTHER_FILES'] = 'liststring'
         return catfTypes
 
     def getCLIPtypes(self, version="6.7.4"):
         clipTypes = defaultdict(bool)
-        clipTypes['ID'] = 'string'
+        clipTypes['ID'] = 'ignore'
         clipTypes['MAXIMUM_DENSITY'] = 'float'
         clipTypes['MAXIMUM_TEMPERATURE'] = 'float'
         clipTypes['MINIMUM_DENSITY'] = 'float'
@@ -95,7 +95,7 @@ class fdsLineTypes(object):
         combTypes['CHECK_REALIZABILITY'] = 'bool'
         combTypes['EXTINCTION_MODEL'] = 'string'
         combTypes['FIXED_MIX_TIME'] = 'float'
-        combTypes['ID'] = 'string'
+        combTypes['ID'] = 'ignore'
         combTypes['INITIAL_UNMIXED_FRACTION'] = 'float'
         combTypes['MAX_CHEMISTRY_SUBSTEPS'] = 'int'
         combTypes['N_FIXED_CHEMISTRY_SUBSTEPS'] = 'int'
@@ -777,7 +777,7 @@ class fdsLineTypes(object):
 
     def getSM3Dtypes(self, version="6.7.4"):
         sm3dTypes = defaultdict(bool)
-        sm3dTypes['ID'] = 'string'
+        sm3dTypes['ID'] = 'ignore'
         sm3dTypes['QUANTITY'] = 'string'
         sm3dTypes['SPEC_ID'] = 'string'
         return sm3dTypes
@@ -824,7 +824,7 @@ class fdsLineTypes(object):
         surfTypes['LENGTH'] = 'float'
         surfTypes['MASS_FLUX'] = 'float'
         surfTypes['MASS_FLUX_TOTAL'] = 'float'
-        surfTypes['MASS_FRACTION'] = 'matrixfloat'
+        surfTypes['MASS_FRACTION'] = 'listind1float'
         surfTypes['MASS_PER_VOLUME'] = 'float'
         surfTypes['MATL_ID'] = 'matrixstring'
         surfTypes['MATL_MASS_FRACTION'] = 'matrixfloat'
@@ -1001,7 +1001,7 @@ class fdsLineTypes(object):
 
     def getZONEtypes(self, version="6.7.4"):
         zoneTypes = defaultdict(bool)
-        zoneTypes['ID'] = 'string'
+        zoneTypes['ID'] = 'ignore'
         zoneTypes['XB'] = 'listfloat'
         zoneTypes['XYZ'] = 'listfloat'
         zoneTypes['LEAK_AREA'] = 'listind0float'

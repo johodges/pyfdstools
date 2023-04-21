@@ -178,7 +178,8 @@ class fdsFileOperations(object):
     interpretKey(key, lineType, types)
         Intermediate function which processes a key from a namelist
         key pair to returns the keyID, keyType, and keyValue.
-    keyAssist(text, types, dic, internalKeys=['counter'], newline=False)
+    keyAssist(text, types, dic, precision, internalKeys=['counter'], 
+        newline=False)
         Returns a namelist text line based on an input dictionary and
         type dictionary.
     keyFromLineType(lineType)
@@ -1332,8 +1333,13 @@ class fdsFileOperations(object):
                     vals.append(preprocess)
                 keyValue = vals
             elif ('list' in keyType) and ('ind' in keyType) and ('row' not in keyType):
+                if lineDict[keyID2] is False:
+                    lineDict[keyID2] = np.empty((20,), dtype=object)
+                    lineDict[keyID2][:] = np.nan
+                matrix = lineDict[keyID2]
                 #print(keyID, keyID2, keyType, keyValue)
                 regex1 = r"(\(.{0,3}):(.{0,3}\))"
+                regex2 = r"(\(.{0,3}.\))"
                 while (keyValue[-1] == ' ') or (keyValue[-1] == ',') or (keyValue[-1] == '/'):
                     keyValue = keyValue[:-1]
                 keyValues = keyValue.split(",")
@@ -1341,15 +1347,20 @@ class fdsFileOperations(object):
                 if 'float' in keyType: keyValues = [float(x) for x in keyValues]
                 if 'int' in keyType: keyValues = [int(x) for x in keyValues]
                 tmp = re.search(regex1, keyID)
+                tmp2 = re.search(regex2, keyID)
                 if tmp is not None:
-                    ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')]
-                    ar2 = [int(x) for x in tmp.groups()[1].replace(')','').split(':')]
+                    ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')][0]
+                    ar2 = [int(x) for x in tmp.groups()[1].replace(')','').split(':')][0]
+                    matrix[ar1:ar2+1] = keyValues
+                elif tmp2 is not None:
+                    if 'ind0' in keyType:
+                        ar1 = int(tmp2.groups()[0].replace('(','').replace(')','').strip())
+                    elif 'ind1' in keyType:
+                        ar1 = int(tmp2.groups()[0].replace('(','').replace(')','').strip())-1
+                    matrix[ar1] = keyValues[0]
                 else:
-                    (ar1, ar2) = ([1], [len(keyValues)])
-                tmp = np.zeros((np.max([ar1, ar2]), 1), dtype='object')
-                for i in range(0, tmp.shape[0]):
-                    tmp[i-1, 0] = keyValues[i-1]
-                keyValue = tmp
+                    matrix[:len(keyValues)] = keyValues
+                keyValue = matrix
 
             elif ('list' in keyType) and ('ind' not in keyType) and ('row' in keyType):
                 vals = []
@@ -1367,7 +1378,7 @@ class fdsFileOperations(object):
                 keyValue = vals
             elif ('matrix' in keyType):
                 if lineDict[keyID2] is False:
-                    lineDict[keyID2] = np.empty((6,6), dtype=object)
+                    lineDict[keyID2] = np.empty((20,20), dtype=object)
                     lineDict[keyID2][:, :] = np.nan
                 matrix = lineDict[keyID2]
                 #print(keyID, keyID2, keyType, keyValue)
@@ -1511,7 +1522,8 @@ class fdsFileOperations(object):
         return template
     
     
-    def generateFDStext(self, newlines=None, fields=None):
+    def generateFDStext(self, newlines=None, fields=None, precision=15,
+        mpiProcesses=False):
         """Returns str of input file
         
         This function generates the fds input file based on the stored
@@ -1529,6 +1541,8 @@ class fdsFileOperations(object):
         fields : list, optional
             List containing the order namelists will be exported to
             the input file. (default None)
+        mpiProcesses : int, optional
+            Number of mpi processes to add to meshes.
         
         Returns
         -------
@@ -1543,26 +1557,29 @@ class fdsFileOperations(object):
         types = fdsLineTypes(version=self.version)
         if newlines is None: newlines = self.getNewlineFromTypes()
         if fields is None: fields = self.getDefaultFields()
-        if self.meshOrder is False: self.addMPIprocesses(1)
+        if (self.meshOrder is False) and (mpiProcesses is not False):
+            self.addMPIprocesses(mpiProcesses)
         text = "%s\n"%("!"*72)
         text = "%s%s %s on %s%s%s\n"%(
                 text, "!"*5, intro, dateStr, " "*2, "!"*5)
         text = "%s%s\n"%(text, "!"*72)
         
         for field in fields:
+            #print(field)
             key = self.keyFromLineType(field)
             keyN = "&%s"%(field)
             keyT = getattr(types, field.lower())
             keyD = getattr(self, key)
             if key == 'meshes':
-                txt = self.makeMESH(keyD, keyT, order=self.meshOrder)
+                txt = self.makeMESH(keyD, keyT, order=self.meshOrder, precision=precision)
             elif key == 'ramps':
                 txt = self.makeRAMP(keyD)
             else:
                 newline1 = newlines[field]
                 newline2 = keyD['newline']
                 newline = (newline1 or newline2)
-                txt = self.makeLinesFromDict(keyD, keyT, keyN, newline)
+                #print(field, keyT)
+                txt = self.makeLinesFromDict(keyD, keyT, keyN, precision, newline)
             text = "%s%s"%(text, txt)
         
         for line in self.customLines:
@@ -1580,10 +1597,13 @@ class fdsFileOperations(object):
             List of default field order
         """
         
-        fields = ["HEAD", "TIME", "MISC", "WIND", "INIT", "DUMP", "ZONE", 
-                  "PRES", "MESH", "REAC", "RADI", "MATL", "SURF",
-                  "RAMP", "OBST", "HOLE", "VENT", "PART", "DEVC",
-                  "CTRL", "BNDF", "SLCF", "PROP", "SPEC", "PROF"]
+        fields = ["HEAD", "TIME", "DUMP", "MISC", "MESH", "MULT",
+                  "CLIP", "COMB", 'TRNX', 'TRNY', 'TRNZ', "INIT",
+                  "PRES", "REAC", "RADI", "SPEC", "WIND", "ZONE", 
+                  "MATL", "SURF", 'GEOM', "HOLE", "HVAC", 'MOVE', "OBST",
+                  "PART", "PROP", "RAMP", 'TABL', "VENT", 
+                  "BNDF", "CTRL", "DEVC", "ISOF","PROF", "SLCF", "SM3D",
+                  'CATF']
         return fields
     
     
@@ -1745,6 +1765,7 @@ class fdsFileOperations(object):
                 o_textFDS = o_textFDS.decode("utf-8")
                 lines = self.makeFDSLines(o_textFDS)
                 self.parseFDSLines(lines)
+        self.catf = defaultdict(bool)
         
         
     def interpretKey(self, key, lineType, types):
@@ -1797,7 +1818,7 @@ class fdsFileOperations(object):
         return keyID, keyID2, keyType, keyValue
     
     
-    def keyAssist(self, text, types, dic,
+    def keyAssist(self, text, types, dic, precision,
                   internalKeys=['counter'], newline=False):
         """Returns a namelist text line from dictionary inputs.
         
@@ -1812,6 +1833,8 @@ class fdsFileOperations(object):
             Dictionary containing types for namelist fields
         dic : dict
             Dictionary containing namelist keys and values
+        precision : int
+            Number of decimals to include in the output
         internalKeys : list, optional
             List containing internal software fields not to be exported
             to the text line
@@ -1832,12 +1855,16 @@ class fdsFileOperations(object):
         for key in internalKeys:
             if key in keys:
                 keys.remove(key)
+        decimals = precision
+        #print(types[key2])
         for key2 in keys:
             #print(key2)
+            '''
             if 'THICKNESS' in key2:
                 decimals = 8
             else:
                 decimals = 4
+            '''
             if (types[key2] == 'ignore'):
                 pass
             elif (types[key2] == 'string'):
@@ -1864,17 +1891,48 @@ class fdsFileOperations(object):
                     text = "%s%s=.FALSE., "%(text, key2)
             elif ('listind' in types[key2]):
                 temp = np.array(dic[key2])
-                tempTxt = "%s(%0.0f:%0.0f)="%(
-                        key2, 1, temp.shape[0])
-                if type(temp[0]) == np.float64: temp = [temp]
-                for t in temp:
-                    for tt in t:
-                        if ('string' in types[key2]):
-                            tempTxt = "%s '%s',"%(tempTxt, tt)
-                        if ('float' in types[key2]):
-                            tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(tt, prec=decimals))
-                        if ('int' in types[key2]):
-                            tempTxt = "%s %0.0f,"%(tempTxt, tt)
+                temp_inds = np.where(np.array([x is not np.nan for x in temp]))[0]
+                if len(temp_inds) < 1:
+                    print("Warning no values provided for listind")
+                    print(key2, temp, temp_inds, len(temp_inds))
+                elif len(temp_inds) == 1:
+                    temp = temp[temp_inds[0]]
+                    tempTxt = "%s(%0.0f)="%(key2, temp_inds[0]+1)
+                    if ('string') in types[key2]:
+                        tempTxt = "%s '%s',"%(tempTxt, temp)
+                    elif ('float') in types[key2]:
+                        tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(temp, prec=decimals))
+                    elif ('int') in types[key2]:
+                        tempTxt = "%s %0.0f,"%(tempTxt, temp)
+                else:
+                    if 'ind0' in types[key2]:
+                        (i0, i1) = (temp_inds[0], temp_inds[-1])
+                    elif 'ind1' in types[key2]:
+                        (i0, i1) = (temp_inds[0]+1, temp_inds[-1]+1)
+                    else:
+                        pass
+                    #print(key2, temp, temp_inds, len(temp_inds), i1-i0+1)
+                    if (i1-i0+1) != len(temp_inds):
+                        for i, t in zip(temp_inds, temp):
+                            tempTxt = "%s(%0.0f)="%(key2, i+1)
+                            if ('string' in types[key2]):
+                                tempTxt = "%s '%s',"%(tempTxt, t)
+                            if ('float' in types[key2]):
+                                tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(t, prec=decimals))
+                            if ('int' in types[key2]):
+                                tempTxt = "%s %0.0f,"%(tempTxt, t)
+                        #print("Warning number of values in listind do not match indices.")
+                        
+                    else:
+                        tempTxt = "%s(%0.0f:%0.0f)="%(key2, i0, i1)
+                        temp = temp[temp_inds]
+                        for t in temp:
+                            if ('string' in types[key2]):
+                                tempTxt = "%s '%s',"%(tempTxt, t)
+                            if ('float' in types[key2]):
+                                tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(t, prec=decimals))
+                            if ('int' in types[key2]):
+                                tempTxt = "%s %0.0f,"%(tempTxt, t)
                 text = "%s%s "%(text, tempTxt)
             elif ('list' in types[key2]):
                 temp = dic[key2]
@@ -2097,7 +2155,7 @@ class fdsFileOperations(object):
         return linesFDS
     
     
-    def makeLinesFromDict(self, items, types, prefix, newline=False):
+    def makeLinesFromDict(self, items, types, prefix, precision, newline=False):
         """Returns a str generated from a namelist dictionary
         
         This function generates a text string from a namelist
@@ -2128,12 +2186,12 @@ class fdsFileOperations(object):
         if 'newline' in keys: keys.remove('newline')
         for key in keys:
             text = "%s%s "%(text, prefix)
-            text = self.keyAssist(text, types, items[key], newline=newline)
+            text = self.keyAssist(text, types, items[key], precision, newline=newline)
             text = "%s /\n"%(text)
         return text
     
     
-    def makeMESH(self, meshes, meshTypes, order=False):
+    def makeMESH(self, meshes, meshTypes, order=False, precision=15):
         """Returns a str generated from a meshes namelist dictionary.
         
         Parameters
@@ -2145,6 +2203,8 @@ class fdsFileOperations(object):
         order : list, optional
             Order to output mehes. If False, meshes are not output in
             any particular order. (default False)
+        precision : int, optional
+            Number of decimals to include in output precision.
         
         Returns
         -------
@@ -2159,7 +2219,7 @@ class fdsFileOperations(object):
         if (order is not False): meshList = [meshList[x] for x in order]
         for key in meshList:
             text = "%s&MESH "%(text)
-            text = self.keyAssist(text, meshTypes, meshes[key])
+            text = self.keyAssist(text, meshTypes, meshes[key], precision)
             text = "%s /\n"%(text)
         return text
     
@@ -2309,6 +2369,7 @@ class fdsFileOperations(object):
         check = True
         try:
             lineDict = self.dictFromLine(line, lineType, types)
+            #print(lineDict)
         except:
             print("WARNING: Unknown line in input file.\n")
             print("%s\n"%(line))
@@ -2353,7 +2414,8 @@ class fdsFileOperations(object):
     def saveModel(self, mpiProcesses, location,
                   fields=None, newlines=None,
                   allowMeshSplitting=True, splitMultiplier=1.2,
-                  meshSplitAxes=[True, True, False]):
+                  meshSplitAxes=[True, True, False],
+                  precision=15):
         """Saves an fds input file
         
         Input file is generated based on internal attribute namelist
@@ -2374,13 +2436,16 @@ class fdsFileOperations(object):
         meshSplitAxes : list of booleans, optional
             Specifies along which axes the software is allowed to split
             meshes
+        precision : number of digits to include in output precision
         """
-        self.addMPIprocesses(
-                mpiProcesses, allowMeshSplitting=allowMeshSplitting, 
-                splitMultiplier=splitMultiplier,
-                meshSplitAxes=meshSplitAxes)
+        if mpiProcesses is not False:
+            self.addMPIprocesses(
+                    mpiProcesses, allowMeshSplitting=allowMeshSplitting, 
+                    splitMultiplier=splitMultiplier,
+                    meshSplitAxes=meshSplitAxes)
         
-        text = self.generateFDStext(newlines=newlines, fields=fields)
+        text = self.generateFDStext(newlines=newlines, fields=fields, 
+                                    precision=precision)
         with open(location, 'w') as f:
             f.write(text)
         print("Input file written to: %s"%(location))

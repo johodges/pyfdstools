@@ -1304,7 +1304,8 @@ class fdsFileOperations(object):
             #print(key)
             keyID, keyID2, keyType, keyValue = self.interpretKey(key, lineType, types)
             #print(i, keyID)
-            #print(i, keyID, keyID2, keyType, keyValue)
+            #if lineType == 'MATL':
+            #    print(i, keyID, keyID2, keyType, keyValue)
             if keyType == 'string':
                 keyValue = keyValue.split("'")[1]
             elif keyType == 'float':
@@ -1351,7 +1352,10 @@ class fdsFileOperations(object):
                 if tmp is not None:
                     ar1 = [int(x) for x in tmp.groups()[0].replace('(','').split(':')][0]
                     ar2 = [int(x) for x in tmp.groups()[1].replace(')','').split(':')][0]
-                    matrix[ar1:ar2+1] = keyValues
+                    if 'ind0' in keyType:
+                        matrix[ar1:ar2+1] = keyValues
+                    elif 'ind1' in keyType:
+                        matrix[ar1-1:ar2-1+1] = keyValues
                 elif tmp2 is not None:
                     if 'ind0' in keyType:
                         ar1 = int(tmp2.groups()[0].replace('(','').replace(')','').strip())
@@ -1393,7 +1397,11 @@ class fdsFileOperations(object):
                 tmp = re.search(regex1, keyID)
                 tmp2 = re.search(regex2, keyID)
                 tmp3 = re.search(regex3, keyID)
-                
+                #print("GOT HERE")
+                #print(keyID, keyID2, keyType, keyValue)
+                #print("TMP", tmp)
+                #print("TMP2", tmp2)
+                #print("TMP3", tmp3)
                 if tmp is not None:
                     t1 = tmp.groups()[0].replace('(','')
                     t2 = tmp.groups()[1].replace(')','')
@@ -1413,10 +1421,11 @@ class fdsFileOperations(object):
                             ar1 = int(t1.split(':')[0])-1
                             ar2 = int(t1.split(':')[1])-1
                             ar3 = int(t2)-1
+                            #print(ar1, ar2, ar3, keyValues, ar2-ar1+1, len(keyValues))
                             if (ar2-ar1+1) == len(keyValues):
                                 matrix[ar1:ar2+1, ar3] = keyValues
                             elif len(keyValues) == 1:
-                                matrix[ar1:ar2+1, ar3] = keyValues
+                                matrix[ar1:ar2+1, ar3] = keyValues[0]
                             else:
                                 print('Warning number of key values do not match indices in matrix.')
                         else:
@@ -1564,6 +1573,8 @@ class fdsFileOperations(object):
                 text, "!"*5, intro, dateStr, " "*2, "!"*5)
         text = "%s%s\n"%(text, "!"*72)
         
+        self.sortDEVCs()
+        #print(self.matls)
         for field in fields:
             #print(field)
             key = self.keyFromLineType(field)
@@ -1587,6 +1598,25 @@ class fdsFileOperations(object):
         
         return text
     
+    def sortDEVCs(self):
+        """ Sorts devcs as required by FDS.
+        Currently only moves aspiration devices to the end.
+        """
+        devc_keys = list(self.devcs.keys())
+        endDevcs = defaultdict(bool)
+        startDevcs = defaultdict(bool)
+        counter = 0
+        if 'unknownCounter' in devc_keys: devc_keys.remove('unknownCounter')
+        for key in devc_keys:
+            devc = defaultdict(bool, self.devcs[key])
+            if devc['QUANTITY'] == 'ASPIRATION':
+                endDevcs[key] = devc
+                self.devcs.pop(key)
+            else:
+                startDevcs['DEVICE-%06d-%s'%(counter, key)] = devc
+        self.devcs = startDevcs
+        for key in endDevcs.keys():
+            self.devcs[key] = endDevcs[key]
     
     def getDefaultFields(self):
         """Returns default field order
@@ -1753,7 +1783,8 @@ class fdsFileOperations(object):
         elif textList != None:
             textFDS = '\n'.join(textList)
         lines = self.makeFDSLines(textFDS)
-        #print(lines)
+        #for line in lines:
+        #    print(line)
         self.parseFDSLines(lines)
         if self.catf['ID']:
             otherFiles = self.catf['ID']['OTHER_FILES']
@@ -1858,7 +1889,7 @@ class fdsFileOperations(object):
         decimals = precision
         #print(types[key2])
         for key2 in keys:
-            #print(key2)
+            #print(key2, dic[key2])
             '''
             if 'THICKNESS' in key2:
                 decimals = 8
@@ -1890,6 +1921,7 @@ class fdsFileOperations(object):
                 else:
                     text = "%s%s=.FALSE., "%(text, key2)
             elif ('listind' in types[key2]):
+                #print(dic[key2])
                 temp = np.array(dic[key2])
                 temp_inds = np.where(np.array([x is not np.nan for x in temp]))[0]
                 if len(temp_inds) < 1:
@@ -1913,7 +1945,8 @@ class fdsFileOperations(object):
                         pass
                     #print(key2, temp, temp_inds, len(temp_inds), i1-i0+1)
                     if (i1-i0+1) != len(temp_inds):
-                        for i, t in zip(temp_inds, temp):
+                        for i, t in zip(temp_inds, temp[temp_inds]):
+                            #print(i, t)
                             tempTxt = "%s(%0.0f)="%(key2, i+1)
                             if ('string' in types[key2]):
                                 tempTxt = "%s '%s',"%(tempTxt, t)
@@ -1947,9 +1980,74 @@ class fdsFileOperations(object):
                             tempTxt = "%s %0.0f,"%(tempTxt, t)
                     text = "%s%s "%(text, tempTxt)
             elif ('matrix' in types[key2]):
+                #print(dic[key2])
                 temp = np.array(dic[key2])
                 temp_inds = np.array([[x is not np.nan for x in sub] for sub in temp])
                 temp = np.array(temp[temp_inds])
+                inds = np.where(temp_inds)
+                uniqueRows = np.unique(inds[0])
+                uniqueCols = np.unique(inds[1])
+                #print(temp, uniqueRows, uniqueCols)
+                if (len(uniqueRows) == 1) and (len(uniqueCols) == 1):
+                    if (uniqueRows[0] == 0) and (uniqueCols[0] == 0):
+                        text = "%s%s="%(text, key2)
+                        if ('string' in types[key2]): 
+                            text = "%s '%s',"%(text, temp[0])
+                        if ('float' in types[key2]):
+                            text = "%s %s,"%(text, '{:.{prec}f}'.format(temp[0], prec=decimals))
+                        if ('int' in types[key2]):
+                            text = "%s %0.0f,"%(text, float(temp[0]))
+                    elif (uniqueRows[0] != 0) and (uniqueCols[0] == 0):
+                        text = "%s%s(%d)="%(text, key2, uniqueRows[0]+1)
+                        if ('string' in types[key2]): 
+                            text = "%s '%s',"%(text, temp[0])
+                        if ('float' in types[key2]):
+                            text = "%s %s,"%(text, '{:.{prec}f}'.format(temp[0], prec=decimals))
+                        if ('int' in types[key2]):
+                            text = "%s %0.0f,"%(text, float(temp[0]))
+                    elif (uniqueCols[0] != 0):
+                        text = "%s%s(%d,%d)="%(text, key2, uniqueRows[0]+1, uniqueCols[0]+1)
+                        if ('string' in types[key2]): 
+                            text = "%s '%s',"%(text, temp[0])
+                        if ('float' in types[key2]):
+                            text = "%s %s,"%(text, '{:.{prec}f}'.format(temp[0], prec=decimals))
+                        if ('int' in types[key2]):
+                            text = "%s %0.0f,"%(text, float(temp[0]))
+                elif (len(uniqueRows) == 1) and (len(uniqueCols) != 1):
+                    ar1 = "(%d,%0.0f:%0.0f)"%(uniqueRows[0]+1, 1, len(uniqueCols))
+                    tempTxt = "%s%s="%(key2, ar1)
+                    for t in temp.flatten():
+                        if ('string' in types[key2]):
+                            tempTxt = "%s '%s',"%(tempTxt, t)
+                        if ('float' in types[key2]):
+                            tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(t, prec=decimals))
+                        if ('int' in types[key2]):
+                            tempTxt = "%s %0.0f,"%(tempTxt, float(t))
+                    text = "%s%s "%(text, tempTxt)
+                elif (len(uniqueRows) != 1) and (len(uniqueCols) == 1):
+                    ar1 = "(%0.0f:%0.0f,1)"%(1, len(uniqueRows))
+                    tempTxt = "%s%s="%(key2, ar1)
+                    for t in temp.flatten():
+                        if ('string' in types[key2]):
+                            tempTxt = "%s '%s',"%(tempTxt, t)
+                        if ('float' in types[key2]):
+                            tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(t, prec=decimals))
+                        if ('int' in types[key2]):
+                            tempTxt = "%s %0.0f,"%(tempTxt, float(t))
+                    text = "%s%s "%(text, tempTxt)
+                elif (len(uniqueRows) != 1) and (len(uniqueCols) != 1):
+                    #print(temp)
+                    ar1 = "(%0.0f:%0.0f,%0.0f:%0.0f)"%(1, len(uniqueRows), 1, len(uniqueCols))
+                    tempTxt = "%s%s="%(key2, ar1)
+                    for t in temp.flatten():
+                        if ('string' in types[key2]):
+                            tempTxt = "%s '%s',"%(tempTxt, t)
+                        if ('float' in types[key2]):
+                            tempTxt = "%s %s,"%(tempTxt, '{:.{prec}f}'.format(t, prec=decimals))
+                        if ('int' in types[key2]):
+                            tempTxt = "%s %0.0f,"%(tempTxt, float(t))
+                    text = "%s%s "%(text, tempTxt)
+                '''
                 sz = temp.shape
                 if len(sz) == 1:
                     temp = np.reshape(temp, (temp.shape[0], 1))
@@ -1965,6 +2063,7 @@ class fdsFileOperations(object):
                     if ('int' in types[key2]):
                         tempTxt = "%s %0.0f,"%(tempTxt, float(t))
                 text = "%s%s "%(text, tempTxt)
+                '''
             else:
                 print(keys)
                 print(dic)
@@ -2061,6 +2160,7 @@ class fdsFileOperations(object):
             textFDS = textFDS.split('&TAIL')[0]
         while (textFDS[0] != '&'): textFDS = textFDS[1:]
         textFDS = "\n"+textFDS
+        textFDS = textFDS.replace("\n&","/\n&")
         linesFDS_tmp = [x for x in textFDS.split("\n&")[1:]]
         # Combine non-namelist &
         linesFDS = []
@@ -2184,6 +2284,8 @@ class fdsFileOperations(object):
         keys.sort()
         if 'unknownCounter' in keys: keys.remove('unknownCounter')
         if 'newline' in keys: keys.remove('newline')
+        #print(items)
+        #print(self.matls)
         for key in keys:
             text = "%s%s "%(text, prefix)
             text = self.keyAssist(text, types, items[key], precision, newline=newline)

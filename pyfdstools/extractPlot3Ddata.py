@@ -627,6 +627,9 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
     xGrid_abs = grid_abs[:, :, :, 0]
     yGrid_abs = grid_abs[:, :, :, 1]
     zGrid_abs = grid_abs[:, :, :, 2]
+    if len(grids[list(grids.keys())[0]]['datas3D']) == 0:
+        print("No 3D slice data found for qty %s"%(quantityToExport))
+        return False, False, False
     tInd = grids[list(grids.keys())[0]]['datas3D'][0].shape[3]
     data_abs = np.zeros((xGrid_abs.shape[0],
                          xGrid_abs.shape[1],

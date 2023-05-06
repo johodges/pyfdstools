@@ -1606,7 +1606,12 @@ class fdsFileOperations(object):
         endDevcs = defaultdict(bool)
         startDevcs = defaultdict(bool)
         counter = 0
-        if 'unknownCounter' in devc_keys: devc_keys.remove('unknownCounter')
+        if 'unknownCounter' in devc_keys:
+            devc_keys.remove('unknownCounter')
+            endDevcs['unknownCounter'] = startDevcs['unknownCounter']
+        if 'newline' in devc_keys:
+            devc_keys.remove('newline')
+            endDevcs['newline'] = startDevcs['newline']
         for key in devc_keys:
             devc = defaultdict(bool, self.devcs[key])
             if devc['QUANTITY'] == 'ASPIRATION':

@@ -364,7 +364,7 @@ class fdsLineTypes(object):
         matlTypes['GAS_DIFFUSION_DEPTH'] = 'float'
         matlTypes['HEAT_OF_COMBUSTION'] = 'float'
         matlTypes['HEAT_OF_REACTION'] = 'listfloat'
-        matlTypes['HEATING_RATE'] = 'float'
+        matlTypes['HEATING_RATE'] = 'listfloat'
         matlTypes['ID'] = 'string'
         matlTypes['MATL_ID'] = 'matrixstring'
         matlTypes['MW'] = 'float'

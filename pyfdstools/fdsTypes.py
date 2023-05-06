@@ -201,6 +201,7 @@ class fdsLineTypes(object):
         dumpTypes['SIG_FIGS_EXP'] = 'int'
         dumpTypes['SMOKE3D'] = 'bool'
         dumpTypes['VELOCITY_ERROR_FILE'] = 'bool'
+        dumpTypes['WRITE_STL'] = 'bool'
         dumpTypes['WRITE_XYZ'] = 'bool'
         dumpTypes['newline'] = 'ignore'
         return dumpTypes

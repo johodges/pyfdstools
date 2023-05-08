@@ -37,6 +37,7 @@ The package can be installed through pip or source.
     ```
   - Run the example cases
     ```
+    cd pyfdstools
     python pyfdstools/examples.py
     ```
 

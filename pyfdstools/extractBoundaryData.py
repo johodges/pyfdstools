@@ -124,7 +124,7 @@ class fdspatch(object):
         stores them in the x, y, and z attributes
         """
         
-        (NX, NY) = (self.data.shape[0], self.data.shape[1])
+        (NX, NY) = (self.data.shape[0]+1, self.data.shape[1]+1)
         if self.lims[0] == self.lims[1]:
             xGrid = np.zeros((NX, NY)) + self.lims[0]
             y = np.linspace(self.lims[2], self.lims[3], NX)
@@ -158,12 +158,13 @@ class fdspatch(object):
         
         NX, NY, NT = self.data.shape
         pts = np.zeros((NX*NY, NT))
-        coords = np.zeros((NX*NY, 3))
+        #coords = np.zeros((NX*NY, 3))
+        coords = np.zeros(((NX+1)*(NY+1), 3))
         for iT in range(0, NT):
             pts[:, iT] = self.data[:, :, iT].flatten()
-        coords[:, 0] = self.x.flatten()
-        coords[:, 1] = self.y.flatten()
-        coords[:, 2] = self.z.flatten()
+        coords[:, 0] = self.x.flatten() #((self.x[:-1,:-1]+self.x[1:,1:])/2).flatten() #self.x.flatten()
+        coords[:, 1] = self.y.flatten() #((self.y[:-1,:-1]+self.y[1:,1:])/2).flatten() #self.y.flatten()
+        coords[:, 2] = self.z.flatten() #((self.z[:-1,:-1]+self.z[1:,1:])/2).flatten() #self.z.flatten()
         orients = np.zeros((NX*NY,)) + self.orientation
         return coords, pts, orients
     
@@ -627,7 +628,7 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid):
                 patchData = patchData.reshape((pdx,pdz),order='F')
             elif abs(patchIors[k]) == 3:
                 patchData = patchData.reshape((pdx,pdy),order='F')
-            patchData = patchData[:-1,:-1]
+            #patchData = patchData[:-1,:-1]
             if i == 1:
                 lims = getLimsFromGrid(patchDs[k][3:],grid)
                 patch = fdspatch(patchData.shape[0],

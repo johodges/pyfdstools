@@ -22,12 +22,44 @@ from .utilities import zopen, zreadlines, getFileList
 def importParticles(resultDir, chid):
     partFiles = getFileList(resultDir, chid, 'prt5')
     particle_data = defaultdict(bool)
+    particle_data['tags'] = defaultdict(bool)
+    particle_data['classes'] = defaultdict(bool)
+    allTimes = []
     for file in partFiles:
-        p_data = importParticle(file)
-        for key in list(p_data.keys()):
-            particle_data[key] = p_data[key]
+        p_data, times = importParticle(file)
+        for key in list(p_data['tags'].keys()):
+            particle_data['tags'][key] = p_data['tags'][key]
+        allTimes.append(times)
+        classes = list(p_data['classes'].keys())
+        classes.remove('times')
+        for key in classes:
+            if particle_data['classes'][key] is False:
+                particle_data['classes'][key] = defaultdict(bool)
+                particle_data['classes'][key]['nPart'] = np.array(p_data['classes'][key]['nPart'])
+                particle_data['classes'][key]['nQty'] = p_data['classes'][key]['nQty']
+                particle_data['classes'][key]['qtyNames'] = p_data['classes'][key]['qtyNames']
+                particle_data['classes'][key]['qtyUnits'] = p_data['classes'][key]['qtyUnits']
+            else:
+                #print(key)
+                #print("dict", particle_data['classes'][key]['nPart'])
+                #print("add", np.array(p_data['classes'][key]))
+                particle_data['classes'][key]['nPart'] += np.array(p_data['classes'][key]['nPart'])
+                
+    allTimes = np.unique(np.squeeze(allTimes))
     
-    return particle_data
+    times_data = defaultdict(bool)
+    for time in allTimes:
+        times_data[time] = defaultdict(bool)
+        times_data[time]['particles'] = []
+    
+    particles = list(particle_data['tags'].keys())
+    for particle in particles:
+        for t in particle_data['tags'][particle]['times']:
+            times_data[t]['particles'].append(particle)
+    
+    particle_data['times'] = allTimes
+    
+    return particle_data, times_data
 
 def importParticle(file):
     txt = zreadlines(file.replace('.prt5','.prt5.bnd'))
@@ -62,11 +94,16 @@ def importParticle(file):
         counter = counter+8
         particle_data[pid]['qtyNames'] = qtyNames
         particle_data[pid]['qtyUnits'] = qtyUnits
+        particle_data[pid]['nPart'] = []
+        particle_data[pid]['times'] = []
     
     particle_dict = defaultdict(bool)
+    particle_dict['classes'] = particle_data
+    particle_dict['tags'] = defaultdict(bool)
+    particle_data['times'] = []
     for time in times:
         time2 = np.frombuffer(data[counter:counter+4], np.float32)[0]
-        tid = 'T=%0.8f'%(time)
+        #tid = 'T=%0.8f'%(time)
         counter = counter + 12
         if abs(time-time2) > 0.01:
             print(np.frombuffer(data[counter-32:counter+32], np.float32))
@@ -75,15 +112,19 @@ def importParticle(file):
         
         for i in range(0, nPart_class):
             pid = 'N-%04d'%(i)
-            particle_data[pid][tid] = dict()
+            #particle_data[pid][tid] = dict()
             nPart = np.frombuffer(data[counter:counter+16], np.int32)[0]
             counter = counter+12
             nQty = particle_data[pid]['nQty']
             qtyNames = particle_data[pid]['qtyNames']
             qtyUnits = particle_data[pid]['qtyUnits']
             #print('nPart_class: ', i, 'npart', nPart)
+            
+            particle_data[pid]['nPart'].append(nPart)
+            particle_data[pid]['times'].append(time)
             if nPart > 0:
-                particle_data[pid][tid]['nPart'] = nPart
+                #particle_data[pid][tid]['nPart'] = nPart
+                
                 xyzs = np.frombuffer(data[counter:counter+12*nPart], np.float32)
                 counter = counter + 12*nPart + 8
                 
@@ -107,30 +148,31 @@ def importParticle(file):
                 '''
                 for j in range(0, nPart):
                     ppid = pid + "-%04d"%(j)
-                    particle_data[pid][tid][ppid] = dict()
+                    #particle_data[pid][tid][ppid] = dict()
                     xyz = xyzs[j::nPart]
                     tag = tags[j]
                     qtyValue = qtyValues[j::nPart]
                     
-                    if particle_dict[tag] is not False:
-                        particle_dict[tag]['times'].append(time)
-                        particle_dict[tag]['xyz'].append(xyz)
+                    if particle_dict['tags'][tag] is not False:
+                        particle_dict['tags'][tag]['times'].append(time)
+                        particle_dict['tags'][tag]['xyz'].append(xyz)
                         for k in range(0, nQty):
                             qid = qtyNames[k] + '(%s)'%(qtyUnits[k])
                             try:
-                                particle_dict[tag][qid].append(qtyValue[k])
+                                particle_dict['tags'][tag][qid].append(qtyValue[k])
                             except IndexError:
-                                print(particle_dict[tag], qid)
+                                print(particle_dict['tags'][tag], qid)
                                 print(k, qtyValue)
                                 assert False, "Stopped"
                     else:
-                        particle_dict[tag] = defaultdict(bool)
-                        particle_dict[tag]['times'] = [time]
-                        particle_dict[tag]['xyz'] = [xyz]
+                        particle_dict['tags'][tag] = defaultdict(bool)
+                        particle_dict['tags'][tag]['times'] = [time]
+                        particle_dict['tags'][tag]['xyz'] = [xyz]
                         for k in range(0, nQty):
                             qid = qtyNames[k] + '(%s)'%(qtyUnits[k])
-                            particle_dict[tag][qid] = [qtyValue[k]]
-                    particle_data[pid][tid][ppid]['xyz'] = xyz
+                            particle_dict['tags'][tag][qid] = [qtyValue[k]]
+                        particle_dict['tags'][tag]['class'] = pid
+                    #particle_data[pid][tid][ppid]['xyz'] = xyz
                 counter = counter + 0
             else:
                 if nQty > 0:
@@ -139,4 +181,4 @@ def importParticle(file):
                 pass
         counter = counter + 0
     
-    return particle_dict
+    return particle_dict, times

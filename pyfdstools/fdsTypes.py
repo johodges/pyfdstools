@@ -482,9 +482,12 @@ class fdsLineTypes(object):
     def getMULTtypes(self, version="6.7.4"):
         multTypes = defaultdict(bool)
         multTypes['DX'] = 'float'
+        multTypes['DX0'] = 'float'
         multTypes['DXB'] = 'listfloat'
         multTypes['DY'] = 'float'
+        multTypes['DY0'] = 'float'
         multTypes['DZ'] = 'float'
+        multTypes['DZ0'] = 'float'
         multTypes['I_LOWER'] = 'int'
         multTypes['I_UPPER'] = 'int'
         multTypes['ID'] = 'string'

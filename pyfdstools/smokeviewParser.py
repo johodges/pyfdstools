@@ -199,13 +199,14 @@ def parseSMVFile(smvFile):
     files['SLICES'] = defaultdict(bool)
     for i in range(0, len(linesSMV)):
         line2 = linesSMV[i]
+        
         if ("GRID" in line2):
             gridTRNX, gridTRNY, gridTRNZ = parseGRID(linesSMV, i)
             grids.append([gridTRNX.copy(),
                           gridTRNY.copy(),
                           gridTRNZ.copy()])
             dx, dy, dz = calculateDeltas(gridTRNX, gridTRNY, gridTRNZ)
-        if ("OBST" in line2) and ("HIDE_OBST" not in line2):
+        if ("OBST" in line2[:6]) and ("HIDE_OBST" not in line2):
             smvObj = parseOBST(
                     linesSMV, i, gridTRNX, gridTRNY, gridTRNZ)
             if len(smvObj) > 0:

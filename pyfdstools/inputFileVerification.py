@@ -38,7 +38,7 @@ def checkDevices(fdsFile, smvFile=None):
         smvFile = fdsFile.split(os.sep)
         smvFile[-1] = "%s.smv"%(chid)
         smvFile = os.sep.join(smvFile)
-    grids, obsts, bndfs, surfs  = parseSMVFile(smvFile)
+    grids, obsts, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
     
     obstHulls = []
     for i in range(0,obsts.shape[0]):

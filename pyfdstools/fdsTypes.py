@@ -726,7 +726,7 @@ class fdsLineTypes(object):
         slcfTypes['CELL_CENTERED'] = 'bool'
         slcfTypes['DB'] = 'string'
         slcfTypes['FYI'] = 'string'
-        slcfTypes['ID'] = 'ignore'
+        slcfTypes['ID'] = 'string'
         slcfTypes['PART_ID'] = 'string'
         slcfTypes['PBX'] = 'float'
         slcfTypes['PBY'] = 'float'

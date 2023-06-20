@@ -287,14 +287,14 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
                 zmax = max([zmax, lims[5]])
                 NX, NZ, NT = patches[i].data.shape
                 if abs(axis) == 1:
-                    dx = np.round((lims[3]-lims[2])/NX, decimals=decimals+2)
-                    dz = np.round((lims[5]-lims[4])/NZ, decimals=decimals+2)
+                    dx = np.round((lims[3]-lims[2])/(NX-1), decimals=decimals+2)
+                    dz = np.round((lims[5]-lims[4])/(NZ-1), decimals=decimals+2)
                 elif abs(axis) == 2:
-                    dx = np.round((lims[1]-lims[0])/NX, decimals=decimals+2)
-                    dz = np.round((lims[5]-lims[4])/NZ, decimals=decimals+2)
+                    dx = np.round((lims[1]-lims[0])/(NX-1), decimals=decimals+2)
+                    dz = np.round((lims[5]-lims[4])/(NZ-1), decimals=decimals+2)
                 elif abs(axis) == 3:
-                    dx = np.round((lims[1]-lims[0])/NX, decimals=decimals+2)
-                    dz = np.round((lims[3]-lims[2])/NZ, decimals=decimals+2)
+                    dx = np.round((lims[1]-lims[0])/(NX-1), decimals=decimals+2)
+                    dz = np.round((lims[3]-lims[2])/(NZ-1), decimals=decimals+2)
                     
                 allPatches.append(patches[i])
     return times, allPatches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz
@@ -348,7 +348,8 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
     x_abs = np.round(x_abs, decimals=decimals)
     z_abs = np.round(z_abs, decimals=decimals)
-    
+    #print(xmin, xmax, dx, x_abs)
+    #print(zmin, zmax, dz, z_abs)
     x_grid_abs, z_grid_abs = np.meshgrid(x_abs, z_abs)
     NXA, NZA = x_grid_abs.shape
     NX, NZ, NT = patches[0].data.shape
@@ -371,6 +372,10 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         #print(x_grid_abs[0, :])
         #print(xMin, xMax)
         #print(x_grid_abs.shape)
+        #print(x_grid_abs)
+        #print(xMin, xMax)
+        #print(z_grid_abs)
+        #print(zMin)
         xInd1 = np.argwhere(np.isclose(x_grid_abs, xMin, atol=10**(-1*decimals)))[0][1]
         xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
         zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin, atol=10**(-1*decimals)))[1][0]

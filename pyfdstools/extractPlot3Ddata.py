@@ -960,7 +960,7 @@ def readSLCFtimes(file, timesFile=None):
 
 def readSLCFquantities(chid, resultDir):
     smvFile = os.path.join(resultDir, '%s.smv'%(chid))
-    grids, obsts, bndfs, surfs, files = parseSMVFile(smvFile)
+    grids, obsts, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
     if '.zip' in resultDir:
         slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
         zip = zipfile.ZipFile(resultDir, 'r')
@@ -1436,7 +1436,7 @@ def slcfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None,
     # Add new slices to smokeview file
     smvFile = getFileList(resultDir, chid, 'smv')[0]
     linesSMV = zreadlines(smvFile)
-    grid, obst, bndfs, surfs, files = parseSMVFile(smvFile)
+    grid, obst, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
     slices = files['SLICES']
     if outQty is None:
         outQty = sName + ' (%0.0ds Avg)'%(dt)

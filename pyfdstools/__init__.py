@@ -21,6 +21,7 @@
 
 from .smokeviewParser import *
 from .extractBoundaryData import *
+from .extractGeomData import *
 from .extractPlot3Ddata import *
 from .extractParticleData import *
 from .fdsErrorCalculation import *

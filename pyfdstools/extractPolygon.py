@@ -40,7 +40,7 @@ def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, chid, fdsQuantitie
     bndfs = getFileList(resultDir, chid, 'bf')
     bndf_dic = linkBndfFileToMesh(meshes, bndfs, fdsQuantities)
     
-    smvGrids, smvObsts, smvBndfs, smvSurfs = parseSMVFile(smvFilePath)
+    smvGrids, smvObsts, smvBndfs, smvSurfs, bndes = parseSMVFile(smvFilePath)
     
     datas = defaultdict(bool)
     for qty in fdsQuantities:

@@ -8,7 +8,7 @@ from collections import defaultdict
 
 def obstToStl(resultDir, chid):
     smvFile = fds.getFileListFromResultDir(resultDir, chid, 'smv')[0]
-    grid, obst, bndfs, surfs, files = fds.parseSMVFile(smvFile)
+    grid, obst, bndfs, surfs, files, bndes = fds.parseSMVFile(smvFile)
     # Define the 12 triangles composing the cube
     faces = np.array([\
         [0,3,1],
@@ -185,6 +185,7 @@ def writeVtkPointFile(fname, pieces):
         
         with open(fname + '.vtp', 'a') as f:
             f.write('<Piece NumberOfPoints="%0d" NumberOfVerts="0" NumberOfLines="0" NumberOfPolys="0">\n'%(numberOfPoints))
+            #f.write('<Piece NumberOfPoints="%0d" NumberOfVerts="%0d" NumberOfLines="0" NumberOfPolys="0">\n'%(numberOfPoints, numberOfPoints))
             f.write('    <Points>\n')
             f.write('        <DataArray type="Float32" NumberOfComponents="3" format="ascii">\n        ')
             for point in points:
@@ -198,6 +199,16 @@ def writeVtkPointFile(fname, pieces):
                     f.write('%0.4f '%(v))
                 f.write('\n         </DataArray>\n')
             f.write('    </PointData>\n')
+            '''
+            f.write('    <VertexData>\n')
+            for qty in quantities:
+                f.write('        <DataArray type="Float32" Name="%s" format="ascii">\n            '%(qty))
+                values = piece["PointData"][qty]
+                for v in values:
+                    f.write('%0.4f '%(v))
+                f.write('\n         </DataArray>\n')
+            f.write('    </VertexData>\n')
+            '''
             f.write('</Piece>\n')
     with open(fname + '.vtp', 'a') as f:
         f.write('</PolyData>\n</VTKFile>')
@@ -272,7 +283,7 @@ def exportBndfDataToVtk(chid, resultDir):
     fdsFile = fds.fdsFileOperations()
     fdsFile.importFile(fds.getFileList(resultDir, chid, 'fds')[0])
     meshes = list(fdsFile.meshes.keys())
-    smvGrids, smvObsts, smvBndfs, smvSurfs, smvFiles = fds.parseSMVFile(smvFile)
+    smvGrids, smvObsts, smvBndfs, smvSurfs, smvFiles, bndes = fds.parseSMVFile(smvFile)
     bndf_dic = fds.linkBndfFileToMesh(meshes, bndfs, quantities)
     
     series_data = dict()
@@ -424,7 +435,7 @@ def exportPrt5DataToVtk(chid, resultDir):
 if __name__ == '__main__':
     
     chid = "case002"
-    resultDir = "case002\\"
+    resultDir = "examples\\case002\\"
     
     exportSl3dDataToVtk(chid, resultDir)
     exportBndfDataToVtk(chid, resultDir)

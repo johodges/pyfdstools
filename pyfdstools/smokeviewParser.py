@@ -170,6 +170,36 @@ def parseBNDF(lines, i):
     return mesh, bndfName, vID, vNum
 
 
+def parseBNDE(lines, i):
+    """This function parses the smokeview file to find bnde files
+    
+    Parameters
+    ----------
+    lines : list
+        List of strings corresponding to lines from a smokeview file
+    i : int
+        Index of bndf line
+    
+    Returns
+    -------
+    float
+        Mesh number for bndf file
+    string
+        Boundary file name
+    string
+        String variable number
+    float
+        Variable number
+    """
+    
+    (_,mesh,vNum) = lines[i].split()
+    bndeName = lines[i+1].split(' ')[1].replace('\n','')
+    gbfName = lines[i+2].split(' ')[1].replace('\n','')
+    vID = ' '.join(lines[i+3].split(' ')[1:]).replace('\n','')
+    (mesh, vNum) = (float(mesh), float(vNum))
+    return mesh, bndeName, gbfName, vID, vNum
+
+
 def parseSMVFile(smvFile):
     """This function parses a smokeview file
     
@@ -195,6 +225,7 @@ def parseSMVFile(smvFile):
     obsts = []
     bndfs = []
     surfs = []
+    bndes = []
     files = defaultdict(bool)
     files['SLICES'] = defaultdict(bool)
     for i in range(0, len(linesSMV)):
@@ -217,6 +248,9 @@ def parseSMVFile(smvFile):
         if (".bf" in line2):
             mesh, bndfName, vID, vNum = parseBNDF(linesSMV, i)
             bndfs.append([mesh, bndfName, vID, vNum])
+        if ("BNDE" in line2[:6]):
+            mesh, bndeName, gbfName, vID, vNum = parseBNDE(linesSMV, i)
+            bndes.append([mesh, bndeName, gbfName, vID, vNum])
         if 'SURFACE\n' in linesSMV[i]:
             sname = ' '.join(linesSMV[i+1].split())
             Tign = linesSMV[i+2].split()[0]
@@ -246,5 +280,5 @@ def parseSMVFile(smvFile):
             files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
             files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
             files['SLICES'][file]['LINETEXT'] = linesSMV[i]
-    return grids, obsts, bndfs, surfs, files
+    return grids, obsts, bndfs, surfs, files, bndes
 

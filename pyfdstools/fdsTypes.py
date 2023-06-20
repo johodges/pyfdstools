@@ -169,6 +169,7 @@ class fdsLineTypes(object):
         devcTypes['XYZ'] = 'listfloat'
         devcTypes['Z_ID'] = 'string'
         devcTypes['UNITS'] = 'string'
+        devcTypes['VELO_INDEX'] = 'int'
         devcTypes['unknownCounter'] = 'ignore'
         devcTypes['newline'] = 'ignore'
         return devcTypes
@@ -682,6 +683,7 @@ class fdsLineTypes(object):
     def getREACtypes(self, version="6.7.4"):
         reacTypes = defaultdict(bool)
         reacTypes['A'] = 'float'
+        reacTypes['AIT_EXCLUSION_ZONE'] = 'listfloat'
         reacTypes['AUTO_IGNITION_TEMPERATURE'] = 'float'
         reacTypes['C'] = 'float'
         reacTypes['CO_YIELD'] = 'float'

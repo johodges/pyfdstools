@@ -574,7 +574,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
     f.close()
     (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
     if (grid is None) and (smvFile is not None):
-        grid, obst, bndfs, surfs, files = parseSMVFile(smvFile)
+        grid, obst, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
     elif (grid is None) and (smvFile is None):
         print("Either smokeview file or grid must be provided.")
         return None, None
@@ -1171,6 +1171,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
     
     bndfFiles = getFileList(resultDir, chid, 'bf')
     # print('bndfFiles',bndfFiles)
+    #print(resultDir, chid)
     smvFile = getFileList(resultDir, chid, 'smv')[0]
     
     fdsFile = fdsFileOperations()
@@ -1332,7 +1333,7 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     
     #names = ['CE212319', 'CE210006', 'CE212298']
 
-    smvGrids, smvObsts, smvBndfs, smvSurfs, smvFiles = parseSMVFile(smvF)
+    smvGrids, smvObsts, smvBndfs, smvSurfs, smvFiles, bndes = parseSMVFile(smvF)
     
     fdsObsts = fdsFile.obsts
     points = parseFDSforPts(fdsObsts, smvObsts, names, extend=extend)
@@ -1380,7 +1381,7 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
     
     smvFile = getFileList(resultDir, chid, 'smv')[0]
     linesSMV = zreadlines(smvFile)
-    grid, obst, bndfs, surfs, files = parseSMVFile(smvFile)
+    grid, obst, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
     bndf_ref_files = [x[1] for x in bndfs]
     meshes = [int(x[0]) for x in bndfs]
     vnums = [int(x[3]) for x in bndfs]

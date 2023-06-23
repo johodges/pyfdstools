@@ -537,6 +537,93 @@ def readPlot3Ddata(chid, resultDir, time):
         data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:] = data
     return grid_abs, data_abs
 
+def readSingleSlcfFile(slcfFile,
+                       time=None, dt=None, saveTimesFile=False):
+    if saveTimesFile:
+        timesFile = slcfFile.replace('.sf','_times.csv')
+    else:
+        timesFile = None
+    timesSLCF = readSLCFtimes(slcfFile, timesFile)
+    times = []
+    f = zopen(slcfFile)
+    
+    qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+    # Check if slice is 2-dimensional
+    threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
+    
+    if threeDimSlice:
+        (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
+        # Check if slice is 3-D
+        #print(slcfFile, qty, sName, uts, iX, eX, iY, eY, iZ, eZ)
+        shape = (NX+1, NY+1, NZ+1)
+        if time == None:
+            NT = len(timesSLCF)
+            datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
+            for i in range(0, NT):
+                t, data = readNextTime(f, NX, NY, NZ)
+                data = np.reshape(data, shape, order='F')
+                datas2[:, :, :, i] = data
+            times = timesSLCF
+        elif (time != None) and (dt == None):
+            datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+            i = np.argmin(abs(timesSLCF-time))
+            f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
+            t, data = readNextTime(f, NX, NY, NZ)
+            data = np.reshape(data, shape, order='F')
+            datas2[:, :, :, 0] = data
+            times = [timesSLCF[i]]
+        elif (time != None) and (dt != None):
+            datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+            i = np.argmin(abs(timesSLCF - (time - dt/2)))
+            j = np.argmin(abs(timesSLCF - (time + dt/2)))
+            f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
+            data = True
+            for ii in range(i, j+1):
+                if data is not False:
+                    t, data = readNextTime(f, NX, NY, NZ)
+                    data = np.reshape(data, shape, order='F')
+                    datas2[:, :, :, 0] += data
+            if j - i > 0:
+                datas2[:, :, :, 0] = datas2[:, :, :, 0] / (j-i)
+            times = [timesSLCF[i]]
+        lims = [iX, eX, iY, eY, iZ, eZ]
+    else:
+        (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
+        #print("2-D slice:", slcfFile)
+        shape = (NX+1, NY+1, NZ+1)
+        if time == None:
+            NT = len(timesSLCF)
+            datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
+            for i in range(0, NT):
+                t, data = readNextTime(f, NX, NY, NZ)
+                data = np.reshape(data, shape, order='F')
+                datas2[:, :, :, i] = data
+            times = timesSLCF
+        elif (time != None) and (dt == None):
+            datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+            i = np.argmin(abs(timesSLCF-time))
+            f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
+            t, data = readNextTime(f, NX, NY, NZ)
+            data = np.reshape(data, shape, order='F')
+            datas2[:, :, :, 0] = data
+            times = [timesSLCF[i]]
+        elif (time != None) and (dt != None):
+            datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+            i = np.argmin(abs(timesSLCF - (time - dt/2)))
+            j = np.argmin(abs(timesSLCF - (time + dt/2)))
+            f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
+            for ii in range(i, j+1):
+                t, data = readNextTime(f, NX, NY, NZ)
+                data = np.reshape(data, shape, order='F')
+                datas2[:, :, :, 0] += data
+            if j - i > 0:
+                datas2[:, :, :, 0] = datas2[:, :, :, 0] / (j-i)
+            times = [timesSLCF[i]]
+        lims = [iX, eX, iY, eY, iZ, eZ]
+    f.close()
+    return lims, datas2, times
+
+
 def readSLCF3Ddata(chid, resultDir, quantityToExport,
                    time=None, dt=None, saveTimesFile=False):
     if '.zip' in resultDir:

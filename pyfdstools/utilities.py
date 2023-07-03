@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import os
 import zipfile
 import glob
+import struct
 from .colorSchemes import getVTcolors
 
 def kalmanFilter(z, Q=1e-5, R=0.5**2):
@@ -284,6 +285,34 @@ def zopen(file, readtype='rb'):
     else:
         f = open(file, readtype)
     return f
+
+def getEndianness(resultDir, chid):
+    endFiles = getFileList(resultDir, chid, 'end')
+    if len(endFiles) == 0:
+        print('Unable to find endianness file, %s.'%(os.path.join(resultDir, chid+'.end')))
+        print("Assuming little-endian.")
+        return "<"
+        
+    f = zopen(endFiles[0])
+    data = f.read()
+    f.close()
+    if struct.unpack('<i',data[4:8])[0] == 1:
+        return '<'
+    elif struct.unpack('>i',data[4:8])[0] == 1:
+        return ">"
+    else:
+        print("Unable to determine endianness from file, %s."%(os.path.join(resultDir, chid+'.end')))
+        print("Assuming little-endian.")
+        return "<"
+
+def getDatatypeByEndianness(datatype1, endianness):
+    if endianness == '>':
+        datatype2 = np.dtype(datatype1).newbyteorder('>')
+    elif endianness == '<':
+        datatype2 = np.dtype(datatype1).newbyteorder('<')
+    else:
+        print("Endianness unknown, could not determine datatype")
+    return datatype2
 
 def getTwoZone(z, val, lowtohigh=True):
     if lowtohigh:

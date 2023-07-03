@@ -24,6 +24,7 @@ import struct
 import scipy.interpolate as scpi
 import pandas as pd
 from collections import defaultdict
+from .utilities import getDatatypeByEndianness, getEndianness
 from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
 from .colorSchemes import buildSMVcolormap
 from .smokeviewParser import parseSMVFile
@@ -537,17 +538,25 @@ def readPlot3Ddata(chid, resultDir, time):
         data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:] = data
     return grid_abs, data_abs
 
+def extractResultDirAndChidFromSlcfName(slcfFile):
+    resultDir = os.sep.join(os.path.abspath(slcfFile).split(os.sep)[:-1])
+    chid = '_'.join(os.path.abspath(slcfFile).split(os.sep)[-1].split('_')[:-2])
+    return resultDir, chid
+
 def readSingleSlcfFile(slcfFile,
                        time=None, dt=None, saveTimesFile=False):
     if saveTimesFile:
         timesFile = slcfFile.replace('.sf','_times.csv')
     else:
         timesFile = None
-    timesSLCF = readSLCFtimes(slcfFile, timesFile)
+    resultDir, chid = extractResultDirAndChidFromSlcfName(slcfFile)
+    endianness = getEndianness(resultDir, chid)
+    datatype = getDatatypeByEndianness(np.float32, endianness)
+    timesSLCF = readSLCFtimes(slcfFile, timesFile, endianness=endianness)
     times = []
     f = zopen(slcfFile)
     
-    qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+    qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
     # Check if slice is 2-dimensional
     threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
     
@@ -560,7 +569,7 @@ def readSingleSlcfFile(slcfFile,
             NT = len(timesSLCF)
             datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
             for i in range(0, NT):
-                t, data = readNextTime(f, NX, NY, NZ)
+                t, data = readNextTime(f, NX, NY, NZ, datatype)
                 data = np.reshape(data, shape, order='F')
                 datas2[:, :, :, i] = data
             times = timesSLCF
@@ -568,7 +577,7 @@ def readSingleSlcfFile(slcfFile,
             datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
             i = np.argmin(abs(timesSLCF-time))
             f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-            t, data = readNextTime(f, NX, NY, NZ)
+            t, data = readNextTime(f, NX, NY, NZ, datatype)
             data = np.reshape(data, shape, order='F')
             datas2[:, :, :, 0] = data
             times = [timesSLCF[i]]
@@ -580,7 +589,7 @@ def readSingleSlcfFile(slcfFile,
             data = True
             for ii in range(i, j+1):
                 if data is not False:
-                    t, data = readNextTime(f, NX, NY, NZ)
+                    t, data = readNextTime(f, NX, NY, NZ, datatype)
                     data = np.reshape(data, shape, order='F')
                     datas2[:, :, :, 0] += data
             if j - i > 0:
@@ -595,7 +604,7 @@ def readSingleSlcfFile(slcfFile,
             NT = len(timesSLCF)
             datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
             for i in range(0, NT):
-                t, data = readNextTime(f, NX, NY, NZ)
+                t, data = readNextTime(f, NX, NY, NZ, datatype)
                 data = np.reshape(data, shape, order='F')
                 datas2[:, :, :, i] = data
             times = timesSLCF
@@ -603,7 +612,7 @@ def readSingleSlcfFile(slcfFile,
             datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
             i = np.argmin(abs(timesSLCF-time))
             f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-            t, data = readNextTime(f, NX, NY, NZ)
+            t, data = readNextTime(f, NX, NY, NZ, datatype)
             data = np.reshape(data, shape, order='F')
             datas2[:, :, :, 0] = data
             times = [timesSLCF[i]]
@@ -613,7 +622,7 @@ def readSingleSlcfFile(slcfFile,
             j = np.argmin(abs(timesSLCF - (time + dt/2)))
             f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
             for ii in range(i, j+1):
-                t, data = readNextTime(f, NX, NY, NZ)
+                t, data = readNextTime(f, NX, NY, NZ, datatype)
                 data = np.reshape(data, shape, order='F')
                 datas2[:, :, :, 0] += data
             if j - i > 0:
@@ -626,6 +635,8 @@ def readSingleSlcfFile(slcfFile,
 
 def readSLCF3Ddata(chid, resultDir, quantityToExport,
                    time=None, dt=None, saveTimesFile=False):
+    endianness = getEndianness(resultDir, chid)
+    datatype = getDatatypeByEndianness(np.float32, endianness)
     if '.zip' in resultDir:
         xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
     else:
@@ -658,11 +669,11 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
                 timesFile = slcfFile.replace('.sf','_times.csv')
             else:
                 timesFile = None
-            timesSLCF = readSLCFtimes(slcfFile, timesFile)
+            timesSLCF = readSLCFtimes(slcfFile, timesFile, endianness=endianness)
             times = []
             f = zopen(slcfFile)
 
-            qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+            qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
             # Check if slice is correct quantity
             correctQuantity = (qty == quantityToExport)
             # Check if slice is 2-dimensional
@@ -677,7 +688,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
                     NT = len(timesSLCF)
                     datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
                     for i in range(0, NT):
-                        t, data = readNextTime(f, NX, NY, NZ)
+                        t, data = readNextTime(f, NX, NY, NZ, datatype)
                         data = np.reshape(data, shape, order='F')
                         datas2[:, :, :, i] = data
                     times = timesSLCF
@@ -685,7 +696,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
                     datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
                     i = np.argmin(abs(timesSLCF-time))
                     f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-                    t, data = readNextTime(f, NX, NY, NZ)
+                    t, data = readNextTime(f, NX, NY, NZ, datatype)
                     data = np.reshape(data, shape, order='F')
                     datas2[:, :, :, 0] = data
                     times = [timesSLCF[i]]
@@ -697,7 +708,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
                     data = True
                     for ii in range(i, j+1):
                         if data is not False:
-                            t, data = readNextTime(f, NX, NY, NZ)
+                            t, data = readNextTime(f, NX, NY, NZ, datatype)
                             data = np.reshape(data, shape, order='F')
                             datas2[:, :, :, 0] += data
                     if j - i > 0:
@@ -868,6 +879,8 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
     else:
         xyzFiles = glob.glob("%s%s*.xyz"%(resultDir, chid))
     grids = defaultdict(bool)
+    endianness = getEndianness(resultDir, chid)
+    datatype = getDatatypeByEndianness(np.float32, endianness)
     
     for xyzFile in xyzFiles:
         grid, gridHeader = readXYZfile(xyzFile)
@@ -891,45 +904,44 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
         coords2D = []
         times2D = []
         for slcfFile in slcfFiles:
-            timesSLCF = readSLCFtimes(slcfFile)
+            timesSLCF = readSLCFtimes(slcfFile, None, endianness)
             times = []
             f = zopen(slcfFile)
             
-            qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+            qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
             # Check if slice is correct quantity
             correctQuantity = (qty == quantityToExport)
             # Check if slice is 2-dimensional
             threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
-            
             if correctQuantity and not threeDimSlice:
                 (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
                 print("2-D slice:", slcfFile)
                 shape = (NX+1, NY+1, NZ+1)
                 if time == None:
                     NT = len(timesSLCF)
-                    datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, NT), dtype=np.float32)
                     for i in range(0, NT):
-                        t, data = readNextTime(f, NX, NY, NZ)
+                        t, data = readNextTime(f, NX, NY, NZ, datatype)
                         data = np.reshape(data, shape, order='F')
-                        datas2[:, :, :, i] = data
+                        datas2[:, :, :, i] = np.array(data, dtype=np.float32)
                     times = timesSLCF
                 elif (time != None) and (dt == None):
-                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1), dtype=np.float32)
                     i = np.argmin(abs(timesSLCF-time))
                     f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-                    t, data = readNextTime(f, NX, NY, NZ)
+                    t, data = readNextTime(f, NX, NY, NZ, datatype)
                     data = np.reshape(data, shape, order='F')
-                    datas2[:, :, :, 0] = data
+                    datas2[:, :, :, 0] = np.array(data, dtype=np.float32)
                     times = [timesSLCF[i]]
                 elif (time != None) and (dt != None):
-                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1), dtype=np.float32)
                     i = np.argmin(abs(timesSLCF - (time - dt/2)))
                     j = np.argmin(abs(timesSLCF - (time + dt/2)))
                     f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
                     for ii in range(i, j+1):
-                        t, data = readNextTime(f, NX, NY, NZ)
+                        t, data = readNextTime(f, NX, NY, NZ, datatype)
                         data = np.reshape(data, shape, order='F')
-                        datas2[:, :, :, 0] += data
+                        datas2[:, :, :, 0] += np.array(data, dtype=np.float32)
                     if j - i > 0:
                         datas2[:, :, :, 0] = datas2[:, :, :, 0] / (j-i)
                     times = [timesSLCF[i]]
@@ -996,21 +1008,21 @@ def extractPoint(point, grid, data):
         print("Warning, error for point %s."%(errPt))
     return d
 
-def readNextTime(f, NX, NY, NZ):
-    _ = np.frombuffer(f.read(8), dtype=np.float32)
-    time = np.frombuffer(f.read(4), dtype=np.float32)
-    _ = np.frombuffer(f.read(8), dtype=np.float32)
+def readNextTime(f, NX, NY, NZ, datatype):
+    _ = np.frombuffer(f.read(8), dtype=datatype)
+    time = np.frombuffer(f.read(4), dtype=datatype)
+    _ = np.frombuffer(f.read(8), dtype=datatype)
     try:
         data = np.frombuffer(f.read((NX+1)*(NY+1)*(NZ+1)*4), 
-                             dtype=np.float32)
+                             dtype=datatype)
     except:
         data = False
     return time, data
 
-def readSLCFheader(f, byteSize=False):
+def readSLCFheader(f, endianness, byteSize=False):
     data = f.read(142)
     header = data[:110]
-    size = struct.unpack('>iiiiii', data[115:139])
+    size = struct.unpack('%siiiiii'%(endianness), data[118:142])
     tmp = header.split(b'\x1e')
     quantity = tmp[1].decode('utf-8').replace('\x00','').strip(' ')
     shortName = tmp[3].decode('utf-8').replace('\x00','').strip(' ')
@@ -1022,14 +1034,16 @@ def readSLCFheader(f, byteSize=False):
         iX, eX, iY, eY, iZ, eZ = size
         return quantity, shortName, units, iX, eX, iY, eY, iZ, eZ
 
-def readSLCFtimes(file, timesFile=None):
+def readSLCFtimes(file, timesFile=None, endianness=None):
     if timesFile != None:
         if os.path.exists(timesFile) == True:
             times = np.loadtxt(timesFile, delimiter=',')
             return times
-        
+    if endianness == None:
+        resultDir, chid = extractResultDirAndChidFromSlcfName(file)
+        endianness = getEndianness(resultDir, chid)
     f = zopen(file)
-    qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+    qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
     (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
     data = f.read()
     f.close()
@@ -1053,6 +1067,7 @@ def readSLCFquantities(chid, resultDir):
         zip = zipfile.ZipFile(resultDir, 'r')
     else:
         slcfFiles = glob.glob("%s%s_*.sf"%(resultDir, chid))
+    endianness = getEndianness(resultDir, chid)
     quantities = []
     dimensions = []
     meshes = []
@@ -1062,7 +1077,7 @@ def readSLCFquantities(chid, resultDir):
             f = zip.open(file.split("%s%s"%('.zip',os.sep))[1])
         else:
             f = open(file, 'rb')
-        qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+        qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
         quantities.append(qty)
         dimensions.append([iX, eX, iY, eY, iZ, eZ])
         n = file.split(chid)[-1].split('_')
@@ -1142,9 +1157,13 @@ def getGridsFromXyzFiles(xyzFiles, chid):
         grids[meshStr]['zGrid'] = zGrid
     return grids
 
+
 def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
+    resultDir = os.sep.join(os.path.abspath(slcfFile).split(os.sep)[:-1])
+    endianness = getEndianness(resultDir, chid)
+    datatype = getDatatypeByEndianness(np.float32, endianness)
     
-    timesSLCF = readSLCFtimes(slcfFile)
+    timesSLCF = readSLCFtimes(slcfFile, None, endianness=endianness)
     times = []
     
     xyzFile = '%s%s'%('_'.join(slcfFile.split('_')[:-1]), '.xyz')
@@ -1164,7 +1183,7 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
         dz = 0
     f = zopen(slcfFile)
     
-    qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+    qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
     headerSize = 142
     
     (NX, NY, NZ) = (eX - iX, eY - iY, eZ - iZ)
@@ -1185,7 +1204,7 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
         NT = len(timesSLCF)
         datas2 = np.zeros((NX+1, NY+1, NZ+1, NT), dtype=np.float32)
         for i in range(0, NT):
-            t, data = readNextTime(f, NX, NY, NZ)
+            t, data = readNextTime(f, NX, NY, NZ, datatype)
             data = np.reshape(data, shape, order='F')
             datas2[:, :, :, i] = data
         times = timesSLCF
@@ -1193,7 +1212,7 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
         NT = len(timesSLCF)
         datas3 = np.zeros((NX+1, NY+1, NZ+1, NT))
         for i in range(0, NT):
-            t, data = readNextTime(f, NX, NY, NZ)
+            t, data = readNextTime(f, NX, NY, NZ, datatype)
             data = np.reshape(data, shape, order='F')
             datas3[:, :, :, i] = data
         datas2 = datas3.copy()
@@ -1216,7 +1235,7 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
         datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
         i = np.argmin(abs(timesSLCF-time))
         f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-        t, data = readNextTime(f, NX, NY, NZ)
+        t, data = readNextTime(f, NX, NY, NZ, datatype)
         data = np.reshape(data, shape, order='F')
         datas2[:, :, :, 0] = data
         times = [timesSLCF[i]]
@@ -1232,7 +1251,7 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
         ts = []
         for ind in inds:
             f.seek(ind * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)) + headerSize, 0)
-            t, data = readNextTime(f, NX, NY, NZ)
+            t, data = readNextTime(f, NX, NY, NZ, datatype)
             data = np.reshape(data, shape, order='F')
             datas2[:, :, :, 0] += data
             ts.append(t)
@@ -1243,7 +1262,7 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
         j = np.argmin(abs(timesSLCF - (time + dt/2)))
         f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
         for ii in range(i, j+1):
-            t, data = readNextTime(f, NX, NY, NZ)
+            t, data = readNextTime(f, NX, NY, NZ, datatype)
             data = np.reshape(data, shape, order='F')
             datas2[:, :, :, 0] += data
         if j - i > 0:
@@ -1442,16 +1461,19 @@ def writeSLCFTime(f, time, data):
 def slcfTimeAverage(slcfFile, dt, outFile=None, outQty=None, outdt=None):
     
     # Read the data
-    timesSLCF = readSLCFtimes(slcfFile, None)
+    resultDir, chid = extractResultDirAndChidFromSlcfName(slcfFile)
+    endianness = getEndianness(resultDir, chid)
+    datatype = getDatatypeByEndianness(np.float32, endianness)
+    timesSLCF = readSLCFtimes(slcfFile, None, endianness=endianness)
     f = zopen(slcfFile)
-    qty, sName, uts, size = readSLCFheader(f, byteSize=True)
+    qty, sName, uts, size = readSLCFheader(f, endianness, byteSize=True)
     iX, eX, iY, eY, iZ, eZ = size
     (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
     NT = len(timesSLCF)
     datas2 = np.zeros((NX+1, NY+1, NZ+1, NT), dtype=np.float32)
     shape = (NX+1, NY+1, NZ+1)
     for i in range(0, NT):
-        t, data = readNextTime(f, NX, NY, NZ)
+        t, data = readNextTime(f, NX, NY, NZ, datatype)
         if data is not False:
             data2 = np.reshape(data, shape, order='F')
             datas2[:, :, :, i] = data2
@@ -1499,9 +1521,10 @@ def slcfTimeAverage(slcfFile, dt, outFile=None, outQty=None, outdt=None):
 def slcfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None, outdt=None):
     slcfFiles = getFileList(resultDir, chid, 'sf')
     filesWithQueriedQuantity = []
+    endianness = getEndianness(resultDir, chid)
     for sliceFile in slcfFiles:
         f = zopen(sliceFile)
-        qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f)
+        qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
         f.close()
         # Check if slice is correct quantity
         correctQuantity = (qty == fdsQuantity)

@@ -286,19 +286,19 @@ def stretchedMeshExample(resultDir=None, outDir=None, chid=None,
     fds.plotSlice(x, z, data_slc, 3, figsize=(10, 10))
 
 
-def exampleAddOccupantFedDevices():
+def exampleAddOccupantFedDevices(indir,outdir):
     name = 3
     height_above_floor = 1.8
-    occupants = pd.read_csv('examples//fed_example_occupants.csv', header=[0], skiprows=[1])
+    occupants = pd.read_csv(os.path.join(indir,'fed_example_occupants.csv'), header=[0], skiprows=[1])
     t = occupants.loc[occupants['name'] == name,'t'].values
     x = occupants.loc[occupants['name'] == name,'x'].values
     y = occupants.loc[occupants['name'] == name,'y'].values
     z = occupants.loc[occupants['name'] == name,'z'].values + height_above_floor
     
     fdsFile = fds.fdsFileOperations()
-    fdsFile.importFile("examples//fed_example.fds")
+    fdsFile.importFile(os.path.join(indir, 'fed_example.fds'))
     fdsFile.addOccupant('Occupant %d'%(name), x, y, z, t, output=True)
-    fdsFile.saveModel(1, "generated//fed_example_out.fds", allowMeshSplitting=False)
+    fdsFile.saveModel(1, os.path.join(outdir, "fed_example_out.fds"), allowMeshSplitting=False)
     
 
 def runExamples():
@@ -346,7 +346,8 @@ def runExamples():
     stretchedMeshExample()
     
     print("Add Occupant FED calculation example", flush=True)
-    exampleAddOccupantFedDevices()
+    exampleAddOccupantFedDevices(os.path.join(systemPath, "examples"),
+                                 os.path.join(systemPath, "generated"))
 
 if __name__ == '__main__':
     runExamples()

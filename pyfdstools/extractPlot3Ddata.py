@@ -26,6 +26,9 @@ import pandas as pd
 from collections import defaultdict
 from .utilities import getDatatypeByEndianness, getEndianness
 from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
+from .utilities import getFileListFromResultDir
+from .utilities import getGridsFromXyzFiles, getAbsoluteGrid, rearrangeGrid
+from .utilities import readXYZfile
 from .colorSchemes import buildSMVcolormap
 from .smokeviewParser import parseSMVFile
 
@@ -73,40 +76,6 @@ def mesh2str(mesh):
     meshStr = "%04.0f"%(mesh)
     return meshStr
 
-def readXYZfile(file):
-    """Reads points from an xyz file
-    
-    This subroutine reads grid coordinates from an xyz file. Note,
-    xyz file can be generated in FDS by adding WRITE_XYZ=.TRUE. in the
-    &DUMP namelist.
-    
-    Parameters
-    ----------
-    file : str
-        String containing the path to an xyz file or xyz file in an
-        archive
-    
-    Returns
-    -------
-    array(NX, NY, NZ, 3)
-        Array containing float global coordinates
-    array()
-        Array containing header information from xyz file
-    """
-    
-    try:
-        f = zopen(file)
-    except FileNotFoundError:
-        tmp = file[:-4].split('_')
-        meshStr = str(int(tmp[-1]))
-        file2 = '%s_%s.xyz'%('_'.join(tmp[:-1]), meshStr)
-        f = zopen(file2)
-    header = struct.unpack('<iiiiif', f.read(24))
-    (nx, ny, nz) = (header[1], header[2], header[3])
-    data = np.frombuffer(f.read(nx*ny*nz*4*4), dtype=np.float32)
-    grid = np.reshape(data, (int(data.shape[0]/4), 4),order='F')
-    f.close()
-    return grid, header[1:-1]
 
 def readP3Dfile(file):
     """Reads data from plot3D file
@@ -167,43 +136,6 @@ def writeP3Dfile(file, data):
         d = d1.tobytes()
         f.write(d)
 
-def rearrangeGrid(grid, iblock=False):
-    """Builds a meshgrid based on grid array
-    
-    Parameters
-    ----------
-    grid : array(NX, NY, NZ, 3)
-        Array containing float global coordinates
-    
-    Returns
-    -------
-    array(NX, NY, NZ)
-        Array containing float global coordinates for x-axis
-    array(NX, NY, NZ)
-        Array containing float global coordinates for y-axis
-    array(NX, NY, NZ)
-        Array containing float global coordinates for z-axis
-    """
-    
-    xs = np.unique(grid[:,0])
-    ys = np.unique(grid[:,1])
-    zs = np.unique(grid[:,2])
-    xGrid, yGrid, zGrid = np.meshgrid(xs, ys, zs)
-    xGrid = np.swapaxes(xGrid, 0, 1)
-    yGrid = np.swapaxes(yGrid, 0, 1)
-    zGrid = np.swapaxes(zGrid, 0, 1)
-    
-    if iblock:
-        iGrid = np.zeros_like(xGrid)
-        for i in range(0, xGrid.shape[0]):
-            for j in range(0, xGrid.shape[1]):
-                for k in range(0, xGrid.shape[2]):
-                    dist = abs(xs-xGrid[i, j, k]) + abs(ys-yGrid[i, j, k]) + abs(zs-zGrid[i, j, k])
-                    ind = np.argmin(dist)
-                    iGrid[i, j, k] = grid[ind, 3]
-        return xGrid, yGrid, zGrid, iGrid
-    else:
-        return xGrid, yGrid, zGrid
 
 def buildDataFile(meshStr, time):
     """Builds a plot3D datafile name
@@ -247,89 +179,6 @@ def printExtents(grid, data):
     print("%0.4f < HRRPUV < %0.4f"%(
             np.min(data[:,4]),np.max(data[:,4])))
         
-def getAbsoluteGrid(grids, makeUniform=False):
-    """Builds absolute grid from defaultdict of local grids
-    
-    Parameters
-    ----------
-    grids : defaultdict
-        Dictionary containing arrays(NX, NY, NZ) for each grid
-    makeUniform : bool
-        Boolean flag indicating whether the absolute grid should be
-        interpolated to be rectangular at the most resolved mesh.
-    Returns
-    -------
-    array(NX, NY, NZ, 3)
-        Array containing the absolute grid coordinates
-    """
-    
-    if makeUniform:
-        mins = []
-        maxs = []
-        deltas = []
-        for key in list(grids.keys()):
-            xGrid = grids[key]['xGrid']
-            yGrid = grids[key]['yGrid']
-            zGrid = grids[key]['zGrid']
-            mins.append([xGrid.min(), yGrid.min(), zGrid.min()])
-            maxs.append([xGrid.max(), yGrid.max(), zGrid.max()])
-            dx = np.round(xGrid[1, 0, 0] - xGrid[0, 0, 0], decimals=4)
-            dy = np.round(yGrid[0, 1, 0] - yGrid[0, 0, 0], decimals=4)
-            dz = np.round(zGrid[0, 0, 1] - zGrid[0, 0, 0], decimals=4)
-            deltas.append([dx, dy, dz])
-        absMins = np.min(mins, axis=0)
-        absMaxs = np.max(maxs, axis=0)
-        absDeltas = np.min(deltas, axis=0)
-        
-        Nx = int(np.round((absMaxs[0] - absMins[0]) / absDeltas[0]) + 1)
-        Ny = int(np.round((absMaxs[1] - absMins[1]) / absDeltas[1]) + 1)
-        Nz = int(np.round((absMaxs[2] - absMins[2]) / absDeltas[2]) + 1)
-        
-        xs = np.linspace(absMins[0], absMaxs[0], Nx)
-        ys = np.linspace(absMins[1], absMaxs[1], Ny)
-        zs = np.linspace(absMins[2], absMaxs[2], Nz)
-        
-        xGrid_abs, yGrid_abs, zGrid_abs = np.meshgrid(xs, ys, zs)
-        xGrid_abs = np.swapaxes(xGrid_abs, 0, 1)
-        yGrid_abs = np.swapaxes(yGrid_abs, 0, 1)
-        zGrid_abs = np.swapaxes(zGrid_abs, 0, 1)
-        
-        grid_abs = np.zeros((xGrid_abs.shape[0],
-                             xGrid_abs.shape[1],
-                             xGrid_abs.shape[2],
-                             3))
-        grid_abs[:, :, :, 0] = xGrid_abs
-        grid_abs[:, :, :, 1] = yGrid_abs
-        grid_abs[:, :, :, 2] = zGrid_abs
-    else:
-        all_xs = []
-        all_ys = []
-        all_zs = []
-        for key in list(grids.keys()):
-            xs = grids[key]['xGrid'][:, 0, 0]
-            ys = grids[key]['yGrid'][0, :, 0]
-            zs = grids[key]['zGrid'][0, 0, :]
-            all_xs.extend(xs)
-            all_ys.extend(ys)
-            all_zs.extend(zs)
-        
-        abs_xs = np.unique(all_xs)
-        abs_ys = np.unique(all_ys)
-        abs_zs = np.unique(all_zs)
-        xGrid_abs, yGrid_abs, zGrid_abs = np.meshgrid(abs_xs, abs_ys, abs_zs)
-        
-        xGrid_abs = np.swapaxes(xGrid_abs, 0, 1)
-        yGrid_abs = np.swapaxes(yGrid_abs, 0, 1)
-        zGrid_abs = np.swapaxes(zGrid_abs, 0, 1)
-        
-        grid_abs = np.zeros((xGrid_abs.shape[0],
-                             xGrid_abs.shape[1],
-                             xGrid_abs.shape[2],
-                             3))
-        grid_abs[:, :, :, 0] = xGrid_abs
-        grid_abs[:, :, :, 1] = yGrid_abs
-        grid_abs[:, :, :, 2] = zGrid_abs
-    return grid_abs
 
 def findSliceLocation(grid, data, axis, value, plot3d=False):
     """Extracts slice location from absolute grid
@@ -1083,7 +932,8 @@ def readSLCFquantities(chid, resultDir):
         n = file.split(chid)[-1].split('_')
         meshStr = n[-2]
         meshes.append(meshStr)
-        #print(files['SLICES'].keys(), file.split(os.sep)[-1])
+        #print(files['SLICES'][file.split(os.sep)[-1]])
+        #print(file)
         centers.append(files['SLICES'][file.split(os.sep)[-1]]['CELL_CENTERED'])
         f.close()
     if '.zip' in resultDir:
@@ -1134,28 +984,6 @@ def visualizePlot3D(x, z, T, U, V, W, HRR,
     plt.contourf(x, z, T, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx,
                  levels=levels, extend='both')
     plt.colorbar()
-
-
-def getFileListFromResultDir(resultDir, chid, ext):
-    if '.zip' in resultDir:
-        fileList = getFileListFromZip(resultDir, chid, ext)
-    else:
-        fileList = glob.glob(os.path.join(resultDir, '%s*.%s'%(chid, ext)))
-    return fileList
-
-def getGridsFromXyzFiles(xyzFiles, chid):
-    grids = defaultdict(bool)
-    for xyzFile in xyzFiles:
-        grid, gridHeader = readXYZfile(xyzFile)
-        xGrid, yGrid, zGrid = rearrangeGrid(grid)
-        mesh = xyzFile.split(chid)[-1].split('.xyz')[0].replace('_','')
-        meshStr = "%s"%(chid) if mesh == '' else mesh
-        
-        grids[meshStr] = defaultdict(bool)
-        grids[meshStr]['xGrid'] = xGrid
-        grids[meshStr]['yGrid'] = yGrid
-        grids[meshStr]['zGrid'] = zGrid
-    return grids
 
 
 def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):

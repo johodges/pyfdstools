@@ -287,11 +287,12 @@ def zopen(file, readtype='rb'):
         f = open(file, readtype)
     return f
 
+
 def getEndianness(resultDir, chid):
     endFiles = getFileList(resultDir, chid, 'end')
     if len(endFiles) == 0:
-        print('Unable to find endianness file, %s.'%(os.path.join(resultDir, chid+'.end')))
-        print("Assuming little-endian.")
+        #print('Unable to find endianness file, %s.'%(os.path.join(resultDir, chid+'.end')))
+        #print("Assuming little-endian.")
         return "<"
         
     f = zopen(endFiles[0])

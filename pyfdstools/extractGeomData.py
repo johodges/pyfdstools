@@ -18,12 +18,14 @@
 import numpy as np
 import os, shutil
 from collections import defaultdict
-#from pyfdstools import zopen, zreadlines, getFileList, buildSMVcolormap, parseSMVFile
 from .utilities import zopen, getFileList, zreadlines
 from .smokeviewParser import parseSMVFile
 
 def getBndeQuantities(smvFile):
-    grid, obst, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
+    smvData = parseSMVFile(smvFile)
+    (grid, obst) = (smvData['grids'], smvData['obsts'])
+    (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
+    (files, bndes) = (smvData['files'], smvData['bndes'])
     quantities = defaultdict(bool)
     file_quantities = defaultdict(bool)
     for bnde in bndes:

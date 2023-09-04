@@ -579,7 +579,10 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
     f.close()
     (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
     if (grid is None) and (smvFile is not None):
-        grid, obst, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
+        smvData = parseSMVFile(smvFile)
+        (grid, obst) = (smvData['grids'], smvData['obsts'])
+        (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
+        (files, bndes) = (smvData['files'], smvData['bndes'])
     elif (grid is None) and (smvFile is None):
         print("Either smokeview file or grid must be provided.")
         return None, None
@@ -1338,7 +1341,10 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     
     #names = ['CE212319', 'CE210006', 'CE212298']
 
-    smvGrids, smvObsts, smvBndfs, smvSurfs, smvFiles, bndes = parseSMVFile(smvF)
+    smvData = parseSMVFile(smvF)
+    (smvGrids, smvObsts) = (smvData['grids'], smvData['obsts'])
+    (smvBndfs, smvSurfs) = (smvData['bndfs'], smvData['surfs'])
+    (smvFiles, bndes) = (smvData['files'], smvData['bndes'])
     
     fdsObsts = fdsFile.obsts
     points = parseFDSforPts(fdsObsts, smvObsts, names, extend=extend)
@@ -1386,7 +1392,10 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
     
     smvFile = getFileList(resultDir, chid, 'smv')[0]
     linesSMV = zreadlines(smvFile)
-    grid, obst, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
+    smvData = parseSMVFile(smvFile)
+    (grid, obst) = (smvData['grids'], smvData['obsts'])
+    (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
+    (files, bndes) = (smvData['files'], smvData['bndes'])
     bndf_ref_files = [x[1] for x in bndfs]
     meshes = [int(x[0]) for x in bndfs]
     vnums = [int(x[3]) for x in bndfs]

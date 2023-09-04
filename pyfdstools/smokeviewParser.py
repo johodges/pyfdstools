@@ -228,6 +228,8 @@ def parseSMVFile(smvFile):
     bndes = []
     files = defaultdict(bool)
     files['SLICES'] = defaultdict(bool)
+    files['SMOKF3D'] = defaultdict(bool)
+    smvOutputs = defaultdict(bool)
     for i in range(0, len(linesSMV)):
         line2 = linesSMV[i]
         
@@ -280,5 +282,26 @@ def parseSMVFile(smvFile):
             files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
             files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
             files['SLICES'][file]['LINETEXT'] = linesSMV[i]
-    return grids, obsts, bndfs, surfs, files, bndes
+        if 'SLCT' in linesSMV[i]:
+            file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
+            files['SLICES'][file] = defaultdict(bool)
+            files['SLICES'][file]['CELL_CENTERED'] = False
+            files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
+            files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
+            files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
+            files['SLICES'][file]['LINETEXT'] = linesSMV[i]
+        if 'SMOKF3D' in linesSMV[i]:
+            file = '%s.s3d'%(linesSMV[i+1][1:].split('.s3d')[0])
+            files['SMOKF3D'][file] = defaultdict(bool)
+            files['SMOKF3D'][file]['QUANTITY'] = linesSMV[i+2].strip()
+            files['SMOKF3D'][file]['SHORTNAME'] = linesSMV[i+3].strip()
+            files['SMOKF3D'][file]['UNITS'] = linesSMV[i+4].strip()
+            files['SMOKF3D'][file]['LINETEXT'] = linesSMV[i]
+    smvOutputs['grids'] = grids
+    smvOutputs['obsts'] = obsts
+    smvOutputs['bndfs'] = bndfs
+    smvOutputs['surfs'] = surfs
+    smvOutputs['files'] = files
+    smvOutputs['bndes'] = bndes
+    return smvOutputs
 

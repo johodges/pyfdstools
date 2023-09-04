@@ -8,7 +8,10 @@ from collections import defaultdict
 
 def obstToStl(resultDir, chid):
     smvFile = fds.getFileListFromResultDir(resultDir, chid, 'smv')[0]
-    grid, obst, bndfs, surfs, files, bndes = fds.parseSMVFile(smvFile)
+    smvData = fds.parseSMVFile(smvFile)
+    (smvGrids, smvObsts) = (smvData['grids'], smvData['obsts'])
+    (smvBndfs, smvSurfs) = (smvData['bndfs'], smvData['surfs'])
+    (smvFiles, bndes) = (smvData['files'], smvData['bndes'])
     # Define the 12 triangles composing the cube
     faces = np.array([\
         [0,3,1],
@@ -24,7 +27,7 @@ def obstToStl(resultDir, chid):
         [0,1,5],
         [0,5,4]])
     meshes = []
-    for o in obst:
+    for o in smvObsts:
         (xmn, xmx, ymn, ymx, zmn, zmx) = (o[0], o[1], o[2], o[3], o[4], o[5])
         # Define the 8 vertices of the cube
         vertices = np.array([[xmn, ymn, zmn],
@@ -283,7 +286,10 @@ def exportBndfDataToVtk(chid, resultDir):
     fdsFile = fds.fdsFileOperations()
     fdsFile.importFile(fds.getFileList(resultDir, chid, 'fds')[0])
     meshes = list(fdsFile.meshes.keys())
-    smvGrids, smvObsts, smvBndfs, smvSurfs, smvFiles, bndes = fds.parseSMVFile(smvFile)
+    smvData = fds.parseSMVFile(smvFile)
+    (smvGrids, smvObsts) = (smvData['grids'], smvData['obsts'])
+    (smvBndfs, smvSurfs) = (smvData['bndfs'], smvData['surfs'])
+    (smvFiles, bndes) = (smvData['files'], smvData['bndes'])
     bndf_dic = fds.linkBndfFileToMesh(meshes, bndfs, quantities)
     
     series_data = dict()

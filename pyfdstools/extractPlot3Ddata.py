@@ -1,4 +1,4 @@
-.5#-----------------------------------------------------------------------
+#-----------------------------------------------------------------------
 # Copyright (C) 2020, All rights reserved
 #
 # Jonathan L. Hodges
@@ -910,7 +910,10 @@ def readSLCFtimes(file, timesFile=None, endianness=None):
 
 def readSLCFquantities(chid, resultDir):
     smvFile = os.path.join(resultDir, '%s.smv'%(chid))
-    grids, obsts, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
+    smvData = parseSMVFile(smvFile)
+    (grid, obst) = (smvData['grids'], smvData['obsts'])
+    (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
+    (files, bndes) = (smvData['files'], smvData['bndes'])
     if '.zip' in resultDir:
         slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
         zip = zipfile.ZipFile(resultDir, 'r')
@@ -1263,8 +1266,8 @@ def renderSliceCsvs(data, chid, outdir):
         d.to_csv(outFile)
 
 
-def writeSLCFheader(f, quantity, shortName, units, size):
-    sz = struct.pack('>%0.0fi'%(len(size)), *size)
+def writeSLCFheader(f, quantity, shortName, units, size, endianness):
+    sz = struct.pack('%s%0.0fi'%(endianness, len(size)), *size)
     qty = str.encode("{:<30}".format(quantity))
     sn = str.encode("{:<30}".format(shortName))
     un = str.encode("{:<30}".format(units))
@@ -1274,17 +1277,22 @@ def writeSLCFheader(f, quantity, shortName, units, size):
     f.write(sn)
     f.write(b'\x1e\x00\x00\x00\x1e\x00\x00\x00')
     f.write(un)
-    f.write(b'\x1e\x00\x00\x00\x18')
+    f.write(b'\x1e\x00\x00\x00\x18\x00\x00\x00')
     f.write(sz)
-    f.write(b'\x00\x00\x00')
+    f.write(b'\x18\x00\x00\x00')
 
-def writeSLCFTime(f, time, data):
-    f.write(b'\x00\x00\x00\x00\x00\x00\x00\x00')
+def writeSLCFTime(f, time, data, endianness):
+    f.write(b'\x04\x00\x00\x00')
     t = time.tobytes()
     f.write(t)
-    f.write(b'\x00\x00\x00\x00\x00\x00\x00\x00')
+    f.write(b'\x04\x00\x00\x00')
+    f.write(struct.pack('%si'%(endianness), data.shape[0]*4))
     d = data.tobytes()
     f.write(d)
+    if data.shape[0]*4 <= 65535:
+        f.write(struct.pack('%sHH'%(endianness), data.shape[0]*4,0))
+    else:
+        f.write(struct.pack('%sI'%(endianness), data.shape[0]*4))
 
 def slcfTimeAverage(slcfFile, dt, outFile=None, outQty=None, outdt=None):
     
@@ -1374,7 +1382,10 @@ def slcfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None,
     # Add new slices to smokeview file
     smvFile = getFileList(resultDir, chid, 'smv')[0]
     linesSMV = zreadlines(smvFile)
-    grid, obst, bndfs, surfs, files, bndes = parseSMVFile(smvFile)
+    smvData = parseSMVFile(smvFile)
+    (grid, obst) = (smvData['grids'], smvData['obsts'])
+    (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
+    (files, bndes) = (smvData['files'], smvData['bndes'])
     slices = files['SLICES']
     if outQty is None:
         outQty = sName + ' (%0.0ds Avg)'%(dt)
@@ -1410,3 +1421,37 @@ def slcfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None,
     print("wrote to %s"%(newSmvFile))
     
     return outFiles, outQty, filesWithQueriedQuantity, newSmvFile
+
+
+def writeXYZfile(file, grid):
+    """Writes grid to an xyz file
+    
+    This subroutine writes a grid to an xyz file.
+    
+    Parameters
+    ----------
+    file : str
+        String containing the path to an xyz file
+    
+    grid : array(NX, NY, NZ, 3)
+        Array containing float global coordinates
+    """
+    nx = np.unique(grid[:, 0]).shape[0]
+    ny = np.unique(grid[:, 1]).shape[0]
+    nz = np.unique(grid[:, 2]).shape[0]
+    v = 4
+    with open(file,'wb') as f:
+        f.write(b'\x0c\x00\x00\x00')
+        (nx, ny, nz, v) = (int(nx), int(ny), int(nz), int(v))
+        f.write(nx.to_bytes(4, 'little'))
+        f.write(ny.to_bytes(4, 'little'))
+        f.write(nz.to_bytes(4, 'little'))
+        f.write(b'\x0c\x00\x00\x00')
+        #empty = np.array([0, 1, 2, 3, 4, 5, 6], dtype=np.float32)
+        empty = np.array([0], dtype=np.float32)
+        empty.tofile(f)
+        d1 = grid.flatten(order='F')
+        d = d1.tobytes()
+        f.write(d)
+        byteStr = struct.pack('I', nx*ny*nz*v*4)
+        f.write(byteStr)

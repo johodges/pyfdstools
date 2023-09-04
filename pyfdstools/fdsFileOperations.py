@@ -2163,10 +2163,12 @@ class fdsFileOperations(object):
             textFDS = textFDS.replace("--------------------PyroSim-generated Section--------------------","")
         if '&TAIL' in textFDS:
             textFDS = textFDS.split('&TAIL')[0]
-        while (textFDS[0] != '&'): textFDS = textFDS[1:]
+        textFDS = "\n"+textFDS
+        while (textFDS[0] != '\n' or textFDS[1] != '&'): textFDS = textFDS[1:]
         textFDS = "\n"+textFDS
         textFDS = textFDS.replace("\n&","/\n&")
         linesFDS_tmp = [x for x in textFDS.split("\n&")[1:]]
+        #print(linesFDS_tmp)
         # Combine non-namelist &
         linesFDS = []
         for line in linesFDS_tmp:

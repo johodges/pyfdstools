@@ -20,6 +20,7 @@
 #=======================================================================
 
 from .smokeviewParser import *
+from .extractS3D import *
 from .extractBoundaryData import *
 from .extractGeomData import *
 from .extractPlot3Ddata import *

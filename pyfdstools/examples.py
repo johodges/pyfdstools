@@ -301,6 +301,95 @@ def exampleAddOccupantFedDevices(indir,outdir):
     fdsFile.saveModel(1, os.path.join(outdir, "fed_example_out.fds"), allowMeshSplitting=False)
     
 
+def exampleParseS3dFiles(resultDir=None, chid=None):
+    if (resultDir is None) and (chid is None):
+        systemPath = os.path.dirname(os.path.abspath(__file__))
+        chid = "case001"
+        resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
+    values, times = fds.extractS3dValues(resultDir, chid)
+    s3dfiles = fds.getFileList(resultDir, chid, 's3d')
+    smvFile = fds.getFileList(resultDir, chid, 'smv')[0]
+    smvData = fds.parseSMVFile(smvFile)
+    (grids, obsts) = (smvData['grids'], smvData['obsts'])
+    (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
+    (files, bndes) = (smvData['files'], smvData['bndes'])
+    
+    # Render soot file
+    meshNum = 0
+    quantity = 'SOOT DENSITY'
+    data_out = values[meshNum][quantity]
+    grid = grids[meshNum]
+    dx = np.median(grid[0][1:,1]-grid[0][:-1,1])
+    dy = np.median(grid[1][1:,1]-grid[1][:-1,1])
+    dz = np.median(grid[2][1:,1]-grid[2][:-1,1])
+    dd = (dx*dy*dz)**(1/3)
+    file = 'fakeout.s3d'
+    fds.writeS3dFile(file, times, data_out, quantity, dd)
+    
+    # To check
+    s3dfile = s3dfiles[0]
+    f = fds.zopen(s3dfile, 'rb')
+    data = f.read()
+    f.close()
+    
+    f1 = fds.zopen(file, 'rb')
+    data2 = f1.read()
+    f1.close()
+    
+    print("File %s, "%(s3dfile), data==data2)
+    
+    
+    # Render hrrpuv file
+    meshNum = 0
+    quantity = 'HRRPUV'
+    data_out = values[meshNum][quantity]
+    grid = grids[meshNum]
+    dx = np.median(grid[0][1:,1]-grid[0][:-1,1])
+    dy = np.median(grid[1][1:,1]-grid[1][:-1,1])
+    dz = np.median(grid[2][1:,1]-grid[2][:-1,1])
+    dd = (dx*dy*dz)**(1/3)
+    file = 'fakeout2.s3d'
+    
+    
+    fds.writeS3dFile(file, times, data_out, quantity, dd)
+
+    # To check
+    s3dfile = s3dfiles[1]
+    f = fds.zopen(s3dfile, 'rb')
+    data = f.read()
+    f.close()
+    
+    f1 = fds.zopen(file, 'rb')
+    data2 = f1.read()
+    f1.close()
+    
+    print("File %s, "%(s3dfile), data==data2)
+
+    
+    # Render temperature file
+    meshNum = 0
+    quantity = 'TEMPERATURE'
+    data_out = values[meshNum][quantity]
+    grid = grids[meshNum]
+    dx = np.median(grid[0][1:,1]-grid[0][:-1,1])
+    dy = np.median(grid[1][1:,1]-grid[1][:-1,1])
+    dz = np.median(grid[2][1:,1]-grid[2][:-1,1])
+    dd = (dx*dy*dz)**(1/3)
+    file = 'fakeout3.s3d'
+    fds.writeS3dFile(file, times, data_out, quantity, dd)
+    
+    # To check
+    s3dfile = s3dfiles[2]
+    f = fds.zopen(s3dfile, 'rb')
+    data = f.read()
+    f.close()
+    
+    f1 = fds.zopen(file, 'rb')
+    data2 = f1.read()
+    f1.close()
+    
+    print("File %s, "%(s3dfile), data==data2)
+
 def runExamples():
     systemPath = os.path.dirname(os.path.abspath(__file__))
     exampleInputFdsFile = os.path.join(systemPath, "examples", "case001.fds")
@@ -349,5 +438,9 @@ def runExamples():
     exampleAddOccupantFedDevices(os.path.join(systemPath, "examples"),
                                  os.path.join(systemPath, "generated"))
 
+
+
+
 if __name__ == '__main__':
     runExamples()
+    

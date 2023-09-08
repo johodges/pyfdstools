@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='pyfdstools',
-    version='0.0.13',    
+    version='0.0.14',    
     description='This software is part of a python library to assist in developing and analyzing simulation results from Fire Dynamics Simulator (FDS). FDS is an open source computational fluid dynamics (CFD) software package developed by NIST. The sourcecode is available at: https://github.com/firemodels/fds',
     url='https://github.com/johodges/pyfdstools',
     author='Jonathan Hodges',
@@ -14,9 +14,11 @@ setup(
     install_requires=[  'libopencv>=0.0.1',
                         'matplotlib>=3.0',
                         'numpy>=1.17',
+                        'numpy-stl>1.0',
                         'opencv-contrib-python>=4.7.0',
                         'pandas>=0.25',
-                        'scipy>=1.3.1',                   
+                        'pyevtk>=1.0',
+                        'scipy>=1.3.1',
                       ],
 
     classifiers=[

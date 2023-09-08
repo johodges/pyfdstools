@@ -1294,6 +1294,63 @@ def writeSLCFTime(f, time, data, endianness):
     else:
         f.write(struct.pack('%sI'%(endianness), data.shape[0]*4))
 
+def writeSlice(outFile, resultDir, chid, data, times, axis, val,
+                       outQty, sName, uts, meshnum, smvFile=None):
+    endianness = getEndianness(resultDir, chid)
+
+    outPath = os.path.join(resultDir, outFile)
+    smvPath = os.path.join(resultDir, smvFile)
+    
+    if axis == 1:
+        (NX, NY, NZ) = (0, data[0].shape[0]-1, data[0].shape[1]-1)
+        size = np.array([val, val, 0, NY, 0, NZ], dtype=np.int32)
+        X = [val, val, 0, NY, 0, NZ]
+    elif axis == 2:
+        (NX, NY, NZ) = (data[0].shape[0]-1, 0, data[0].shape[1]-1)
+        size = np.array([0, NX, val, val, 0, NZ], dtype=np.int32)
+        X = [0, NX, val, val, 0, NZ]
+    elif axis == 3:
+        (NX, NY, NZ) = (data[0].shape[0]-1, data[0].shape[1]-1, 0)
+        size = np.array([0, NX, 0, NY, val, val], dtype=np.int32)
+        X = [0, NX, 0, NY, val, val]
+        
+    NT = len(times)
+    f = zopen(outPath, 'wb')
+    writeSLCFheader(f, outQty, sName, uts, size, endianness)
+    shape2 = ((NX+1)*(NY+1)*(NZ+1),)
+    for i in range(0, NT):
+        data_out = np.reshape(data[i], shape2, order='F')
+        writeSLCFTime(f, times[i], data_out, endianness)
+    f.close()
+    
+    if smvFile is not None:
+        writeSliceToSmv(smvPath, meshnum, X, outQty, outFile, sName, uts)
+
+def writeSliceToSmv(file, meshNum, X, outQty, outFile, sName, uts):
+    with open(file, 'a') as f:
+        f.write('SLCF     %0.0f # STRUCTURED &     %0.0f    %0.0f     %0.0f    %0.0f     %0.0f    %0.0f !      %0.0f\n'%(meshNum, X[0], X[1], X[2], X[3], X[4], X[5], meshNum))
+        f.write(' %s\n'%(outFile))
+        f.write(' %s\n'%(outQty))
+        f.write(' %s\n'%(sName))
+        f.write(' %s\n\n'%(uts))
+
+def getAxisFromLims(lims):
+    iX, eX, iY, eY, iZ, eZ = lims
+    (NX, NY, NZ) = (eX - iX+1, eY - iY+1, eZ - iZ+1)
+    if (NX == 1):
+        slcf_axis = 1
+        val = eX
+    elif (NY == 1):
+        slcf_axis = 2
+        val = eY
+    elif (NZ == 1):
+        slcf_axis = 3
+        val = eZ
+    else:
+        slcf_axis = -1
+        val = None
+    return slcf_axis, val
+
 def slcfTimeAverage(slcfFile, dt, outFile=None, outQty=None, outdt=None):
     
     # Read the data

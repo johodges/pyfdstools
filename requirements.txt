@@ -4,3 +4,4 @@ numpy
 pandas
 scipy
 opencv-contrib-python
+numpy-stl

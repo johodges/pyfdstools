@@ -324,6 +324,7 @@ def exampleParseS3dFiles(resultDir=None, chid=None):
     dz = np.median(grid[2][1:,1]-grid[2][:-1,1])
     dd = (dx*dy*dz)**(1/3)
     file = 'fakeout.s3d'
+    print(data_out.shape)
     fds.writeS3dFile(file, times, data_out, quantity, dd)
     
     # To check
@@ -390,6 +391,63 @@ def exampleParseS3dFiles(resultDir=None, chid=None):
     
     print("File %s, "%(s3dfile), data==data2)
 
+def examplePostProcessVisibility(resultDir=None, chid=None, outDir=None, oldC=3, newC=8):
+    if resultDir == None:
+        resultDir = 'examples\\visibility_adjustment.zip'
+    if chid == None:
+        chid = 'visibility_adjustment'
+    if outDir == None:
+        outDir = 'generated\\'
+    qty = 'SOOT VISIBILITY'
+    sName = 'rho_C'
+    uts = 'kg/m3'
+    
+    slcfFiles = fds.getFileList(resultDir, chid, 'sf')
+    slcfFiles = [x for x in slcfFiles if '_custom.sf' not in x]
+    
+    endianness = fds.getEndianness(resultDir, chid)
+    quantities = []
+    for file in slcfFiles:
+        f = fds.zopen(file)
+        qty, sName, uts, iX, eX, iY, eY, iZ, eZ = fds.readSLCFheader(f, endianness)
+        quantities.append(qty)
+    
+    slcfFiles = [x for x,y in zip(slcfFiles, quantities) if qty in y]
+    quantities = [y for x,y in zip(slcfFiles, quantities) if qty in y]
+    
+    smvFile = fds.getFileList(resultDir, chid, 'smv')[0]
+    f = fds.zopen(smvFile, 'r')
+    smvTxt = f.read()
+    f.close()
+    if type(smvTxt) is bytes:
+        smvTxt = smvTxt.decode('utf-8')
+    if '.zip' in smvFile:
+        smvFileCustom = smvFile.replace('.smv','_custom.smv').split('.zip')[-1]
+        smvFileCustom = os.path.basename(smvFileCustom)
+    else:
+        smvFileCustom = smvFile.replace('.smv','_custom.smv')
+        smvFileCustom = os.path.basename(smvFileCustom)
+    smvPathCustom = os.path.join(outDir, smvFileCustom)
+    with open(smvPathCustom, 'w') as f:
+        f.write(smvTxt)
+    
+    for slcfFile in slcfFiles:
+        lims, data, times = fds.readSingleSlcfFile(slcfFile)
+        data = np.squeeze(data)/oldC*newC
+        data2 = [np.array(data[:,:,i], dtype=np.float32) for i in range(0, data.shape[2])]
+        axis, val = fds.getAxisFromLims(lims)
+        if axis < 0:
+            print("Warning %s is a 3-D slice, skipping."%(slcfFile))
+            continue
+        meshnum = int(slcfFile.split('_')[-2])
+        if '.zip' in slcfFile:
+            outFile = slcfFile.replace('.sf','_custom.sf').split('.zip')[-1]
+        else:
+            outFile = slcfFile.replace('.sf','_custom.sf')
+        outFile = os.path.basename(outFile)
+        fds.writeSlice(outFile, outDir, chid, data2, times, axis, val,
+                              qty+'C%d'%(newC), sName, uts, meshnum, smvFile=smvFileCustom)
+
 def runExamples():
     systemPath = os.path.dirname(os.path.abspath(__file__))
     exampleInputFdsFile = os.path.join(systemPath, "examples", "case001.fds")
@@ -424,9 +482,10 @@ def runExamples():
     print("Extracting max value from BNDF results example", flush=True)
     datas, figs = exampleExtractBndfMax(resultDir=resultDir, chid=chid, outDir=exampleOutputDir)
     
+    
     print("Rendering 2d slice to csv example.", flush=True)
     datas = example2dSliceToCsv(resultDir=resultDir, chid=chid, outDir=exampleOutputDir,
-                                axis=1, value=2.45, time=30, dt=60, quantity='TEMPERATURE', unit='C')
+                                axis=1, value=2.55, time=30, dt=60, quantity='TEMPERATURE', unit='C')
     
     print("Time-averaging a boundary file example.", flush=True)
     exampleBndfTimeAverage(dt=30, quantity='WALL TEMPERATURE')
@@ -437,10 +496,16 @@ def runExamples():
     print("Add Occupant FED calculation example", flush=True)
     exampleAddOccupantFedDevices(os.path.join(systemPath, "examples"),
                                  os.path.join(systemPath, "generated"))
-
+    
+    print("Example Post Process Visibility to Change C Factor")
+    examplePostProcessVisibility()
+    
+    #print("Example to parse Smoke 3D files")
+    #exampleParseS3dFiles()
 
 
 
 if __name__ == '__main__':
     runExamples()
     
+    #examplePostProcessVisibility()

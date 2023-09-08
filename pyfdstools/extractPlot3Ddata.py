@@ -393,13 +393,13 @@ def extractResultDirAndChidFromSlcfName(slcfFile):
     return resultDir, chid
 
 def readSingleSlcfFile(slcfFile,
-                       time=None, dt=None, saveTimesFile=False):
+                       time=None, dt=None, saveTimesFile=False, endianness="<"):
     if saveTimesFile:
         timesFile = slcfFile.replace('.sf','_times.csv')
     else:
         timesFile = None
     resultDir, chid = extractResultDirAndChidFromSlcfName(slcfFile)
-    endianness = getEndianness(resultDir, chid)
+    #endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
     timesSLCF = readSLCFtimes(slcfFile, timesFile, endianness=endianness)
     times = []
@@ -1167,7 +1167,11 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
         xAbs = grids_abs[:, :, 0, 0]
         zAbs = grids_abs[:, :, 0, 1]
     quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
+    print(quantities)
+    print(slcfFiles)
     datas = defaultdict(bool)
+    foundSlice = False
+    available_slices = []
     for qty, slcfFile, dim, cen in zip(quantities, slcfFiles, dimensions, centers):
         if qty == quantity:
             n = slcfFile.split(chid)[-1].split('_')
@@ -1178,8 +1182,11 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
                 meshStr = str(int(meshStr))
             #mesh = slcfFile.split(chid)[-1].split('.sf')[0].split('_')[-2]
             #meshStr = "%s"%(chid) if mesh == '' else "%s_%s"%(chid, mesh)
+            
             slcf_axis, slcf_value = getAxisAndValueFromXB(dim, grids[meshStr], cen)
-            if np.isclose(abs(axis), slcf_axis) and np.isclose(slcf_value, value, atol=atol):
+            
+            available_slices.append([slcf_axis, slcf_value])
+            if np.isclose(axis, abs(slcf_axis)) and np.isclose(slcf_value, value, atol=atol):
                 print("Reading %s"%(slcfFile), time, dt)
                 x, z, d, times, coords = read2dSliceFile(slcfFile, chid, time=time, dt=dt)
                 slcfName = '%s_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f'%(qty, coords[0], coords[1], coords[2], coords[3], coords[4], coords[5])
@@ -1189,7 +1196,15 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
                 datas[slcfName]['datas'] = d.copy()
                 datas[slcfName]['x'] = x.copy()
                 datas[slcfName]['z'] = z.copy()
-                
+                foundSlice = True
+    if not foundSlice:
+        print("Warning did not find a 2-D slice of %s on axis %d at value %0.4f"%(quantity, axis, value))
+        print("Available slices of qty %s:"%(quantity))
+        print('\tAxis\tValue')
+        for slcf_axis, slcf_value in available_slices:
+            print("\t%d\t%0.4f"%(slcf_axis, slcf_value))
+        print("Note an axis of -1 indicates a 3-D slice which is not currently supported in this function.")
+        return None        
     data_abs = np.zeros((xAbs.shape[0], xAbs.shape[1], len(times)), dtype=np.float32)
     for slcfName in list(datas.keys()):
         x = datas[slcfName]['x']
@@ -1295,9 +1310,7 @@ def writeSLCFTime(f, time, data, endianness):
         f.write(struct.pack('%sI'%(endianness), data.shape[0]*4))
 
 def writeSlice(outFile, resultDir, chid, data, times, axis, val,
-                       outQty, sName, uts, meshnum, smvFile=None):
-    endianness = getEndianness(resultDir, chid)
-
+                       outQty, sName, uts, meshnum, smvFile=None, endianness="<"):
     outPath = os.path.join(resultDir, outFile)
     smvPath = os.path.join(resultDir, smvFile)
     

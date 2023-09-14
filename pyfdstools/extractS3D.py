@@ -96,6 +96,10 @@ def extractS3dValues(resultDir, chid, decode=True):
     (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
     (files, bndes) = (smvData['files'], smvData['bndes'])
     
+    if len(s3dfiles) == 0:
+        print("Warning no s3d files found.")
+        return None, None
+    
     for s3dfile in s3dfiles:
         times, ordered_data = readS3dFile(s3dfile)
         file = s3dfile.split(os.sep)[-1]

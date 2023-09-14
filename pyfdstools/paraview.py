@@ -39,6 +39,10 @@ def obstToStl(resultDir, chid, outDir=None):
         [0,1,5],
         [0,5,4]])
     meshes = []
+    if len(obst) == 0:
+        print("Warning no obst found in %s, not generating an STL"%(smvFile))
+        return
+    
     for o in obst:
         (xmn, xmx, ymn, ymx, zmn, zmx) = (o[0], o[1], o[2], o[3], o[4], o[5])
         # Define the 8 vertices of the cube
@@ -397,7 +401,7 @@ def writeVtkPolyTimeSeries(namespace, series_data, times, binary=True):
 
 
 
-def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True, dtype='Float32'):
+def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True, dtype=None):
     if outDir is None: outDir = resultDir
     quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
     twoDslice = [True if (dim[0] == dim[1]) or (dim[2] == dim[3]) or (dim[4] == dim[5]) else False for dim in dimensions]
@@ -408,6 +412,12 @@ def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
     if np.all(twoDslice):
         print("No 3d sf files found in %s with chid %s"%(resultDir, chid))
         return None
+    if dtype is None:
+        if binary:
+            dtype='Float64'
+        else:
+            dtype='Float32'
+            
     uniqueMeshes = list(set(meshes))
     
     xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
@@ -480,7 +490,7 @@ def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
             f.write('    <PRectilinearGrid WholeExtent="%d %d %d %d %d %d" GhostLevel="0">\n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
             f.write('        <PPointData>\n')
             for qty in list(set(threeD_quantities)):
-                f.write('            <PDataArray type="Float64" Name="%s" NumberOfComponents="1"/>\n'%(qty))
+                f.write('            <PDataArray type="%s" Name="%s" NumberOfComponents="1"/>\n'%(dtype, qty))
             f.write('        </PPointData>\n')
             f.write('        <PCellData></PCellData>\n')
             f.write('        <PCoordinates>\n')
@@ -512,7 +522,8 @@ def exportBndfDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
     (smvGrids, smvObsts) = (smvData['grids'], smvData['obsts'])
     (smvBndfs, smvSurfs) = (smvData['bndfs'], smvData['surfs'])
     (smvFiles, bndes) = (smvData['files'], smvData['bndes'])
-    bndf_dic = linkBndfFileToMesh(meshes, smvBndfs, quantities)
+    bndfs = [os.path.join(resultDir, x[1]) for x in smvBndfs]
+    bndf_dic = linkBndfFileToMesh(meshes, bndfs, quantities)
     
     meshes = [x.split('_')[-2] for x in bndfs]
     uniqueMeshes = list(set(meshes))
@@ -659,7 +670,7 @@ def exportPrt5DataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
         print("No prt5 files found in %s with chid %s"%(resultDir, chid))
         return None
     meshes = [x.split('_')[-1].replace('.prt5','') for x in partFiles]
-    uniqueMeshes = list(set(meshes))
+    uniqueMeshes = sorted(list(set(meshes)))
     fname_written = defaultdict(bool)
     allQuantities = False
     for file in partFiles:
@@ -674,14 +685,14 @@ def exportPrt5DataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
                 qtyUnits = particle_data['classes'][pclass]['qtyUnits']
                 qids = [x + '(%s)'%(y) for x,y in zip(qtyNames, qtyUnits)]
                 allQuantities.extend(qids)
-            uniqueQuantities = list(set(allQuantities))
+            uniqueQuantities = sorted(list(set(allQuantities)))
         
         times_data = defaultdict(bool)
         for time in times:
             times_data[time] = defaultdict(bool)
             times_data[time]['particles'] = []
         
-        particles = list(particle_data['tags'].keys())
+        particles = sorted(list(particle_data['tags'].keys()))
         for particle in particles:
             for t in particle_data['tags'][particle]['times']:
                 times_data[t]['particles'].append(particle)
@@ -696,8 +707,9 @@ def exportPrt5DataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
         else:
             times2 = outtimes
         
-        for time in times: # enumerate([list(times_data.keys())[0]]):
-            particles = times_data[time]['particles']
+        for time in outtimes: # enumerate([list(times_data.keys())[0]]):
+            t_ind = np.argmin(abs(times-time))
+            particles = times_data[times[t_ind]]['particles']
             pieces = defaultdict(bool)
             nParts = 0
             for particle in particles:
@@ -708,7 +720,7 @@ def exportPrt5DataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
                 qids = [x + '(%s)'%(y) for x,y in zip(qtyNames, qtyUnits)]
                 ptimes = np.array(particle_data['tags'][particle]['times'])
                 
-                if (ptimes.min() < time) and (ptimes.max() > time):
+                if (ptimes.min() <= time) and (ptimes.max() >= time):
                     ptimeind = np.argmin(abs(ptimes-time))
                     nParts += 1
                     if pieces[pclass] is False:
@@ -725,7 +737,7 @@ def exportPrt5DataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
                         pieces[pclass]['PointData']['tag'].append(particle)
                         for qid in qids:
                             pieces[pclass]['PointData'][qid].append(particle_data['tags'][particle][qid][ptimeind])
-            classes = list(pieces.keys())
+            classes = sorted(list(pieces.keys()))
             for pclass in classes:
                 pieces[pclass]['Points'] = np.array(pieces[pclass]['Points']).flatten()
                 pieces[pclass]['xyz'] = np.array(pieces[pclass]['xyz']).flatten()
@@ -768,7 +780,7 @@ def exportPrt5DataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
                 f.write('    </PPolyData>\n')
                 f.write('</VTKFile>\n')
 
-def exportBndeDataToVtk(chid, resultDir, outtimes=None, outDir=None):
+def exportBndeDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True):
     if outDir is None: outDir = resultDir
     smvFiles = getFileList(resultDir, chid, 'smv')
     
@@ -785,10 +797,18 @@ def exportBndeDataToVtk(chid, resultDir, outtimes=None, outDir=None):
         print("No gcf files found in %s with chid %s"%(resultDir, chid))
         return None
     
+    if len(beFiles) == 0:
+        print("No be files found in %s with chid %s"%(resultDir, chid))
+        return None
+    
     #meshes = [x.split('_')[-2] for x in beFiles]
     meshes = [x.split('_')[-1].replace('.gcf','') for x in gcfFiles]
     uniqueMeshes = list(set(meshes))
     #outtimes = None
+    if binary:
+        dataprecision = "Float64"
+    else:
+        dataprecision = "Float32"
     
     for i in range(0, len(uniqueMeshes)):
         series_data = dict()
@@ -830,7 +850,7 @@ def exportBndeDataToVtk(chid, resultDir, outtimes=None, outDir=None):
             outtimes = times2
         else:
             times2 = outtimes
-        writeVtkPolyTimeSeries(namespace, series_data, times2)
+        writeVtkPolyTimeSeries(namespace, series_data, times2, binary=binary)
     
     
     wrapper_namespace = outDir + os.sep + chid + '_bnde_out'
@@ -843,10 +863,10 @@ def exportBndeDataToVtk(chid, resultDir, outtimes=None, outDir=None):
             f.write('        <PPointData></PPointData>\n')
             f.write('        <PCellData>\n')
             for qty in uniqueQuantities:
-                f.write('            <PDataArray type="Float32" Name="%s"/>\n'%(qty))
+                f.write('            <PDataArray type="%s" Name="%s"/>\n'%(dataprecision, qty))
             f.write('        </PCellData>\n')
             f.write('        <PPoints>\n')
-            f.write('            <PDataArray type="Float32" NumberOfComponents="3"/>\n')
+            f.write('            <PDataArray type="%s" NumberOfComponents="3"/>\n'%(dataprecision))
             f.write('        </PPoints>\n')
             for mesh in uniqueMeshes:
                 source_name = chid + "_bnde_%04d_%08d.vtp"%(int(mesh), time*1e3)

@@ -88,7 +88,7 @@ def writeVtkGrid(fname, x, y, z, gXB, lXB):
         f.write('</Coordinates>\n')
 
 def writeVtkScalarsPoints(fname, qtys, datas, dtype):
-    with open(fname+'.vtr', 'a') as f:
+    with open(fname, 'a') as f:
         f.write('<PointData>\n') # Scalars=%s>\n'%(",".join(['"%s"'%(q) for q in qtys])))
         for qty in qtys:
             f.write('<DataArray Name="%s" NumberOfComponents="1" type="%s" format="ascii">\n'%(qty, dtype))
@@ -103,7 +103,7 @@ def writeVtkScalarsPoints(fname, qtys, datas, dtype):
         f.write('</PointData>\n')
 
 def writeVtkScalarsCells(fname, qtys, datas, dtype):
-    with open(fname+'.vtr', 'a') as f:
+    with open(fname, 'a') as f:
         f.write('<CellData>\n') # Scalars=%s>\n'%(",".join(['"%s"'%(q) for q in qtys])))
         for qty in qtys:
             f.write('<DataArray Name="%s" NumberOfComponents="1" type="%s" format="ascii">\n'%(qty, dtype))
@@ -118,10 +118,10 @@ def writeVtkScalarsCells(fname, qtys, datas, dtype):
         f.write('</CellData>\n')
 
 
-def writeVtkTail(fname):
-    with open(fname+'.vtr', 'a') as f:
+def writeVtkTail(fname, ftype):
+    with open(fname, 'a') as f:
         f.write('</Piece>\n')
-        f.write('</RectilinearGrid>\n')
+        f.write('</%s>\n'%(ftype))
         f.write('</VTKFile>\n')
 
 def writeVtkFile(fname, x, y, z, gXB, lXB, datas, cell=False, binary=True, dtype='Float64'):
@@ -136,10 +136,10 @@ def writeVtkFile(fname, x, y, z, gXB, lXB, datas, cell=False, binary=True, dtype
         writeVtkHeader(fname, "RectilinearGrid", ".vtr")
         writeVtkGrid(fname, x, y, z, gXB, lXB)
         if cell:
-            writeVtkScalarsCells(fname, qtys, datas, dtype=dtype)
+            writeVtkScalarsCells(fname+'.vtr', qtys, datas, dtype=dtype)
         else:
-            writeVtkScalarsPoints(fname, qtys, datas, dtype=dtype)
-        writeVtkTail(fname)        
+            writeVtkScalarsPoints(fname+'.vtr', qtys, datas, dtype=dtype)
+        writeVtkTail(fname+'.vtr', 'RectilinearGrid')
     
 def writeVtkTimeSeries(namespace, grid, series_data, times, gXB, lXB, cell=False, binary=True, dtype='Float32'):
     nx, ny, nz, _ = np.shape(grid)
@@ -163,6 +163,56 @@ def writeVtkTimeSeries(namespace, grid, series_data, times, gXB, lXB, cell=False
                 print("Warning dtype %s unknown"%(dtype))
             datas[qty] = series_data[qty]['data'][:, :, :, tind].T.flatten()
         writeVtkFile(fname, x, y, z, gXB, lXB, datas, cell=cell, binary=binary, dtype=dtype)
+
+def writeVtkImageFile(fname, x, y, z, gXB, lXB, datas, cell=False, binary=True, dtype='Float64'):
+    qtys = list(datas.keys())
+    dx = np.median(x[1:]-x[:-1])
+    dy = np.median(y[1:]-y[:-1])
+    dz = np.median(z[1:]-z[:-1])
+    spacing = (dx, dy, dz)
+    origin = (x.min(), y.min(), z.min())
+    if binary:
+        start = (gXB[0], gXB[2], gXB[4])
+        if cell:
+            evtk.hl.imageToVTK(fname, origin, spacing, cellData = datas, start=start)
+        else:
+            evtk.hl.imageToVTK(fname, origin, spacing, pointData = datas, start=start)
+    else:
+        writeVtkHeader(fname, "ImageData", ".vti")
+        with open(fname+'.vti', 'a') as f:
+            f.write('<ImageData WholeExtent="%d %d %d %d %d %d"\n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
+            f.write(' Origin="%0.4f %0.4f %0.4f" Spacing="%0.4f %0.4f %0.4f">\n'%(origin[0], origin[1], origin[2], dx, dy, dz))
+            f.write('<Piece Extent="%d %d %d %d %d %d">\n'%(lXB[0], lXB[1], lXB[2], lXB[3], lXB[4], lXB[5]))
+            
+        #writeVtkGrid(fname, x, y, z, gXB, lXB)
+        if cell:
+            writeVtkScalarsCells(fname+'.vti', qtys, datas, dtype=dtype)
+        else:
+            writeVtkScalarsPoints(fname+'.vti', qtys, datas, dtype=dtype)
+        writeVtkTail(fname+'.vti', 'ImageData')
+        
+def writeVtkImageTimeSeries(namespace, grid, series_data, times, gXB, lXB, cell=False, binary=True, dtype='Float32'):
+    nx, ny, nz, _ = np.shape(grid)
+    x = np.array(grid[:, 0, 0, 0], dtype='float64')
+    y = np.array(grid[0, :, 0, 1], dtype='float64')
+    z = np.array(grid[0, 0, :, 2], dtype='float64')
+    
+    for time in times:
+        fname = namespace + '_%08d'%(time*1e3)
+        datas = dict()
+        for qty in list(series_data.keys()):
+            tind = np.argmin(abs(series_data[qty]['times'] - time))
+            tmp = series_data[qty]['data'][:, :, :, tind].T.flatten()
+            if dtype == 'Float32':
+                tmp = np.array(tmp, dtype='float32')
+            elif dtype == 'Float64':
+                tmp = np.array(tmp, dtype='float64')
+            elif dtype == 'UInt8':
+                tmp = np.array(tmp, dtype='uint8')
+            else:
+                print("Warning dtype %s unknown"%(dtype))
+            datas[qty] = series_data[qty]['data'][:, :, :, tind].T.flatten()
+        writeVtkImageFile(fname, x, y, z, gXB, lXB, datas, cell=cell, binary=binary, dtype=dtype)
 
 def writeVtkPolyFile(fname, pieces, binary=True):
     if binary:
@@ -401,7 +451,7 @@ def writeVtkPolyTimeSeries(namespace, series_data, times, binary=True):
 
 
 
-def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True, dtype=None):
+def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True, dtype=None, ftype='ImageData'):
     if outDir is None: outDir = resultDir
     quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
     twoDslice = [True if (dim[0] == dim[1]) or (dim[2] == dim[3]) or (dim[4] == dim[5]) else False for dim in dimensions]
@@ -418,7 +468,18 @@ def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
         else:
             dtype='Float32'
             
-    uniqueMeshes = list(set(meshes))
+    if ftype == 'ImageData':
+        ftype = 'ImageData'
+        pftype = 'PImageData'
+        fext = '.vti'
+        pext = '.pvti'
+    elif ftype == 'RectilinearGrid':
+        ftype = 'RectilinearGrid'
+        pftype = 'PRectilinearGrid'
+        fext = '.vtr'
+        pext = '.pvtr'
+    
+    uniqueMeshes = sorted(list(set(meshes)))
     
     xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
     grids = getGridsFromXyzFiles(xyzFiles, chid)
@@ -427,6 +488,7 @@ def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
     gXB = [0, grids_abs.shape[0]-1, 0, grids_abs.shape[1]-1, 0, grids_abs.shape[2]-1]
     pieces=defaultdict(bool)
     threeD_quantities = []
+    (xmin,xmax,ymin,ymax,zmin,zmax) = (1e12,-1e12,1e12,-1e12,1e12,-1e12)
     for i in range(0, len(uniqueMeshes)):
         mesh = uniqueMeshes[i]
         xyzFile = False
@@ -470,26 +532,44 @@ def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
                             np.argmin(abs(grids_abs[0, :, 0, 1]-lims_xb[3])),
                             np.argmin(abs(grids_abs[0, 0, :, 2]-lims_xb[4])),
                             np.argmin(abs(grids_abs[0, 0, :, 2]-lims_xb[5]))]
+            (xmin, xmax) = (min([xmin, xGrid.min()]), max([xmax, xGrid.max()]))
+            (ymin, ymax) = (min([ymin, yGrid.min()]), max([ymax, yGrid.max()]))
+            (zmin, zmax) = (min([zmin, zGrid.min()]), max([zmax, zGrid.max()]))
         if outtimes is None:
             times2 = times
             outtimes = times2
         else:
             times2 = outtimes
-        writeVtkTimeSeries(namespace, grid_combo, series_data, times2, lXB, lXB, binary=binary, dtype=dtype)
+        if ftype == 'RectilinearGrid':
+            writeVtkTimeSeries(namespace, grid_combo, series_data, times2, lXB, lXB, binary=binary, dtype=dtype)
+        elif ftype == 'ImageData':
+            writeVtkImageTimeSeries(namespace, grid_combo, series_data, times2, lXB, lXB, binary=binary, dtype=dtype)
         pieces[namespace] = defaultdict(bool)
         pieces[namespace]['source'] = namespace
         pieces[namespace]['times'] = times2
         pieces[namespace]['lims'] = lXB
     
+    x = np.array(grid_combo[:, 0, 0, 0], dtype='float64')
+    y = np.array(grid_combo[0, :, 0, 1], dtype='float64')
+    z = np.array(grid_combo[0, 0, :, 2], dtype='float64')
+    dx = np.median(x[1:]-x[:-1])
+    dy = np.median(y[1:]-y[:-1])
+    dz = np.median(z[1:]-z[:-1])
+    spacing = (dx, dy, dz)
+    origin = (xmin, ymin, zmin)
     wrapper_namespace = outDir + os.sep + chid + '_sl3d_out'
     for time in outtimes:
         fname = wrapper_namespace + '_%08d'%(time*1e3)
-        with open(fname + '.pvtr', 'w') as f:
+        with open(fname + pext, 'w') as f:
             f.write('<?xml version="1.0"?>\n')
-            f.write('<VTKFile type="PRectilinearGrid">\n')
-            f.write('    <PRectilinearGrid WholeExtent="%d %d %d %d %d %d" GhostLevel="0">\n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
+            f.write('<VTKFile type="%s">\n'%(pftype))
+            if pftype == 'PRectilinearGrid':
+                f.write('    <PRectilinearGrid WholeExtent="%d %d %d %d %d %d" GhostLevel="0">\n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
+            elif pftype == 'PImageData':
+                f.write('    <PImageData WholeExtent="%d %d %d %d %d %d" GhostLevel="0" \n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
+                f.write('                Origin="%0.4f %0.4f %0.4f" Spacing="%0.4f %0.4f %0.4f">\n'%(origin[0], origin[1], origin[2], dx, dy, dz))
             f.write('        <PPointData>\n')
-            for qty in list(set(threeD_quantities)):
+            for qty in sorted(list(set(threeD_quantities))):
                 f.write('            <PDataArray type="%s" Name="%s" NumberOfComponents="1"/>\n'%(dtype, qty))
             f.write('        </PPointData>\n')
             f.write('        <PCellData></PCellData>\n')
@@ -498,12 +578,166 @@ def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
             f.write('            <PDataArray type="Float64" Name="Array Y-Axis" NumberOfComponents="1"/>\n')
             f.write('            <PDataArray type="Float64" Name="Array Z-Axis" NumberOfComponents="1"/>\n')
             f.write('        </PCoordinates>\n')
-            for piece in list(pieces.keys()):
+            for piece in sorted(list(pieces.keys())):
                 lXB = pieces[piece]['lims']
                 ext = "%d %d %d %d %d %d"%(lXB[0], lXB[1], lXB[2], lXB[3], lXB[4], lXB[5])
-                f.write('         <Piece Extent="%s" Source="%s_%08d.vtr"/>\n'%(ext, piece.split(os.sep)[-1], time*1e3))
-            f.write('    </PRectilinearGrid>\n')
+                f.write('         <Piece Extent="%s" Source="%s_%08d%s"/>\n'%(ext, piece.split(os.sep)[-1], time*1e3, fext))
+            f.write('    </%s>\n'%(pftype))
             f.write('</VTKFile>\n')
+
+def exportSl2dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True, dtype=None, ftype='ImageData'):
+    if outDir is None: outDir = resultDir
+    quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
+    twoDslice = [True if (dim[0] == dim[1]) or (dim[2] == dim[3]) or (dim[4] == dim[5]) else False for dim in dimensions]
+    slcfs = getFileList(resultDir, chid, 'sf')
+    if len(slcfs) == 0:
+        print("No sf files found in %s with chid %s"%(resultDir, chid))
+        return None
+    if ~np.any(twoDslice):
+        print("No 2d sf files found in %s with chid %s"%(resultDir, chid))
+        return None
+    if dtype is None:
+        if binary:
+            dtype='Float64'
+        else:
+            dtype='Float32'
+            
+    if ftype == 'ImageData':
+        ftype = 'ImageData'
+        pftype = 'PImageData'
+        fext = '.vti'
+        pext = '.pvti'
+    elif ftype == 'RectilinearGrid':
+        ftype = 'RectilinearGrid'
+        pftype = 'PRectilinearGrid'
+        fext = '.vtr'
+        pext = '.pvtr'
+    
+    xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
+    grids = getGridsFromXyzFiles(xyzFiles, chid)
+    grids_abs = getAbsoluteGrid(grids)
+    
+    outFiles = defaultdict(bool)
+    for i in range(len(slcfFiles)):
+        if twoDslice[i]:
+            dim = dimensions[i]
+            grid = grids[str(meshes[i])]
+            if (dim[0] == dim[1]): axis = 1; value = grid['xGrid'][dim[0],0,0]
+            if (dim[2] == dim[3]): axis = 2; value = grid['yGrid'][0,dim[2],0]
+            if (dim[4] == dim[5]): axis = 3; value = grid['zGrid'][0,0,dim[4]]
+            if outFiles[axis] is False:
+                outFiles[axis] = defaultdict(bool)
+            if outFiles[axis][value] is False:
+                outFiles[axis][value] = defaultdict(bool)
+            if outFiles[axis][value][meshes[i]] is False:
+                outFiles[axis][value][meshes[i]] = defaultdict(bool)
+            outFiles[axis][value][meshes[i]][quantities[i]] = slcfFiles[i]
+    
+    gXB2 = [0, grids_abs.shape[0]-1, 0, grids_abs.shape[1]-1, 0, grids_abs.shape[2]-1]
+    (xmin,xmax,ymin,ymax,zmin,zmax) = (1e12,-1e12,1e12,-1e12,1e12,-1e12)
+    for axis in sorted(list(outFiles.keys())):
+        for value in sorted(list(outFiles[axis].keys())):
+            pieces=defaultdict(bool)
+            quantities = []
+            gXB = [x for x in gXB2]
+            if axis == 1: gXB[0] = 1; gXB[1] = 1
+            if axis == 2: gXB[2] = 1; gXB[3] = 1
+            if axis == 3: gXB[4] = 1; gXB[5] = 1
+            for mesh in sorted(list(outFiles[axis][value].keys())):
+                xyzFile = False
+                namespace = (outDir + os.sep + chid +'slcf_%d_%.6f_%06d'%(axis,value, int(mesh))).replace('.','_')
+                for qty in sorted(list(outFiles[axis][value][mesh].keys())):
+                    slcfFile = outFiles[axis][value][mesh][qty]
+                    quantities.append(qty)
+                    #print(axis, value, mesh, os.path.basename(file))
+                    
+                    lims, datas, times = readSingleSlcfFile(slcfFile)
+                    if dtype == 'Float64':
+                        datas = np.array(datas, dtype='float64')
+                    elif dtype == 'Float32':
+                        datas = np.array(datas, dtype='float32')
+                    elif dtype == 'UInt8':
+                        datas = np.array(datas, dtype='uint8')
+                    if xyzFile is False:
+                        xyzFile = '_'.join(slcfFile.split('_')[:-1]) + '.xyz'
+                        grid, gridHeader = readXYZfile(xyzFile)
+                        xGrid, yGrid, zGrid = rearrangeGrid(grid)
+                        
+                        grid_combo = np.zeros((xGrid.shape[0], xGrid.shape[1], xGrid.shape[2],3))
+                        grid_combo[:, :, :, 0] = xGrid
+                        grid_combo[:, :, :, 1] = yGrid
+                        grid_combo[:, :, :, 2] = zGrid
+                        series_data = defaultdict(bool)
+                    if series_data[qty] is False:
+                        series_data[qty] = defaultdict(bool)
+                        series_data[qty]['data'] = datas
+                        series_data[qty]['times'] = times
+                        
+                        lims_xb = [xGrid[lims[0], 0, 0], xGrid[lims[1], 0, 0],
+                                   yGrid[0, lims[2], 0], yGrid[0, lims[3], 0],
+                                   zGrid[0, 0, lims[4]], zGrid[0, 0, lims[5]]]
+                        lXB     = [np.argmin(abs(grids_abs[:, 0, 0, 0]-lims_xb[0])),
+                                    np.argmin(abs(grids_abs[:, 0, 0, 0]-lims_xb[1])),
+                                    np.argmin(abs(grids_abs[0, :, 0, 1]-lims_xb[2])),
+                                    np.argmin(abs(grids_abs[0, :, 0, 1]-lims_xb[3])),
+                                    np.argmin(abs(grids_abs[0, 0, :, 2]-lims_xb[4])),
+                                    np.argmin(abs(grids_abs[0, 0, :, 2]-lims_xb[5]))]
+                        (xmin, xmax) = (min([xmin, grids_abs[lXB[0],0,0,0]]), max([xmax, grids_abs[lXB[1],0,0,0]]))
+                        (ymin, ymax) = (min([ymin, grids_abs[0,lXB[2],0,1]]), max([ymax, grids_abs[0,lXB[3],0,1]]))
+                        (zmin, zmax) = (min([zmin, grids_abs[0,0, lXB[4],2]]), max([zmax, grids_abs[0,0, lXB[5],2]]))
+                        if axis == 1: lXB[0] = 1; lXB[1] = 1
+                        if axis == 2: lXB[2] = 1; lXB[3] = 1
+                        if axis == 3: lXB[4] = 1; lXB[5] = 1
+                
+                if outtimes is None:
+                    times2 = times
+                    outtimes = times2
+                else:
+                    times2 = outtimes
+                if ftype == 'RectilinearGrid':
+                    writeVtkTimeSeries(namespace, grid_combo, series_data, times2, lXB, lXB, binary=binary, dtype=dtype)
+                elif ftype == 'ImageData':
+                    writeVtkImageTimeSeries(namespace, grid_combo, series_data, times2, lXB, lXB, binary=binary, dtype=dtype)
+                pieces[namespace] = defaultdict(bool)
+                pieces[namespace]['source'] = namespace
+                pieces[namespace]['times'] = times2
+                pieces[namespace]['lims'] = lXB
+                
+        x = np.array(grid_combo[:, 0, 0, 0], dtype='float64')
+        y = np.array(grid_combo[0, :, 0, 1], dtype='float64')
+        z = np.array(grid_combo[0, 0, :, 2], dtype='float64')
+        dx = np.median(x[1:]-x[:-1])
+        dy = np.median(y[1:]-y[:-1])
+        dz = np.median(z[1:]-z[:-1])
+        spacing = (dx, dy, dz)
+        origin = (xmin, ymin, zmin)
+        wrapper_namespace = (outDir + os.sep + chid + '_slcf_out_%d_%.6f'%(axis,value)).replace('.','_')
+        for time in outtimes:
+            fname = wrapper_namespace + '_%08d'%(time*1e3)
+            with open(fname + pext, 'w') as f:
+                f.write('<?xml version="1.0"?>\n')
+                f.write('<VTKFile type="%s">\n'%(pftype))
+                if pftype == 'PRectilinearGrid':
+                    f.write('    <PRectilinearGrid WholeExtent="%d %d %d %d %d %d" GhostLevel="0">\n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
+                elif pftype == 'PImageData':
+                    f.write('    <PImageData WholeExtent="%d %d %d %d %d %d" GhostLevel="0" \n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
+                    f.write('                Origin="%0.4f %0.4f %0.4f" Spacing="%0.4f %0.4f %0.4f">\n'%(origin[0], origin[1], origin[2], dx, dy, dz))
+                f.write('        <PPointData>\n')
+                for qty in sorted(list(set(quantities))):
+                    f.write('            <PDataArray type="%s" Name="%s" NumberOfComponents="1"/>\n'%(dtype, qty))
+                f.write('        </PPointData>\n')
+                f.write('        <PCellData></PCellData>\n')
+                f.write('        <PCoordinates>\n')
+                f.write('            <PDataArray type="Float64" Name="Array X-Axis" NumberOfComponents="1"/>\n')
+                f.write('            <PDataArray type="Float64" Name="Array Y-Axis" NumberOfComponents="1"/>\n')
+                f.write('            <PDataArray type="Float64" Name="Array Z-Axis" NumberOfComponents="1"/>\n')
+                f.write('        </PCoordinates>\n')
+                for piece in sorted(list(pieces.keys())):
+                    lXB = pieces[piece]['lims']
+                    ext = "%d %d %d %d %d %d"%(lXB[0], lXB[1], lXB[2], lXB[3], lXB[4], lXB[5])
+                    f.write('         <Piece Extent="%s" Source="%s_%08d%s"/>\n'%(ext, piece.split(os.sep)[-1], time*1e3, fext))
+                f.write('    </%s>\n'%(pftype))
+                f.write('</VTKFile>\n')
 
 def exportBndfDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True):
     if outDir is None: outDir = resultDir
@@ -990,7 +1224,7 @@ if __name__ == '__main__':
     times_out = np.linspace(tmin, tmax, nt)
     '''
     
-    #exportSl3dDataToVtk(chid, resultDir, outtimes=None)
+    exportSl3dDataToVtk(chid, resultDir, outtimes=None)
     #exportBndfDataToVtk(chid, resultDir, outtimes=None)
     #exportPrt5DataToVtk(chid, resultDir, outtimes=None)
     #exportBndeDataToVtk(chid, resultDir, outtimes=None)

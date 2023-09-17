@@ -617,6 +617,8 @@ def exportSl2dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
     grids = getGridsFromXyzFiles(xyzFiles, chid)
     grids_abs = getAbsoluteGrid(grids)
     
+    outs = parseSMVFile(os.path.join(resultDir, chid + '.smv'))
+    terrainHeight = 0
     outFiles = defaultdict(bool)
     for i in range(len(slcfFiles)):
         if twoDslice[i]:
@@ -625,6 +627,12 @@ def exportSl2dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
             if (dim[0] == dim[1]): axis = 1; value = grid['xGrid'][dim[0],0,0]
             if (dim[2] == dim[3]): axis = 2; value = grid['yGrid'][0,dim[2],0]
             if (dim[4] == dim[5]): axis = 3; value = grid['zGrid'][0,0,dim[4]]
+            slice_type = outs['files']['SLICES'][os.path.basename(slcfFiles[i])]['LINETEXT'].split()[0]
+            if slice_type == 'SLCT':
+                if terrainHeight == 0:
+                    terrainHeight = value
+                else:
+                    value = terrainHeight
             if outFiles[axis] is False:
                 outFiles[axis] = defaultdict(bool)
             if outFiles[axis][value] is False:
@@ -632,6 +640,8 @@ def exportSl2dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
             if outFiles[axis][value][meshes[i]] is False:
                 outFiles[axis][value][meshes[i]] = defaultdict(bool)
             outFiles[axis][value][meshes[i]][quantities[i]] = slcfFiles[i]
+            #print(os.path.basename(slcfFiles[i]), axis, value, slice_type)
+            #assert False, "Stopped"
     
     gXB2 = [0, grids_abs.shape[0]-1, 0, grids_abs.shape[1]-1, 0, grids_abs.shape[2]-1]
     (xmin,xmax,ymin,ymax,zmin,zmax) = (1e12,-1e12,1e12,-1e12,1e12,-1e12)
@@ -703,41 +713,41 @@ def exportSl2dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
                 pieces[namespace]['times'] = times2
                 pieces[namespace]['lims'] = lXB
                 
-        x = np.array(grid_combo[:, 0, 0, 0], dtype='float64')
-        y = np.array(grid_combo[0, :, 0, 1], dtype='float64')
-        z = np.array(grid_combo[0, 0, :, 2], dtype='float64')
-        dx = np.median(x[1:]-x[:-1])
-        dy = np.median(y[1:]-y[:-1])
-        dz = np.median(z[1:]-z[:-1])
-        spacing = (dx, dy, dz)
-        origin = (xmin, ymin, zmin)
-        wrapper_namespace = (outDir + os.sep + chid + '_slcf_out_%d_%.6f'%(axis,value)).replace('.','_')
-        for time in outtimes:
-            fname = wrapper_namespace + '_%08d'%(time*1e3)
-            with open(fname + pext, 'w') as f:
-                f.write('<?xml version="1.0"?>\n')
-                f.write('<VTKFile type="%s">\n'%(pftype))
-                if pftype == 'PRectilinearGrid':
-                    f.write('    <PRectilinearGrid WholeExtent="%d %d %d %d %d %d" GhostLevel="0">\n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
-                elif pftype == 'PImageData':
-                    f.write('    <PImageData WholeExtent="%d %d %d %d %d %d" GhostLevel="0" \n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
-                    f.write('                Origin="%0.4f %0.4f %0.4f" Spacing="%0.4f %0.4f %0.4f">\n'%(origin[0], origin[1], origin[2], dx, dy, dz))
-                f.write('        <PPointData>\n')
-                for qty in sorted(list(set(quantities))):
-                    f.write('            <PDataArray type="%s" Name="%s" NumberOfComponents="1"/>\n'%(dtype, qty))
-                f.write('        </PPointData>\n')
-                f.write('        <PCellData></PCellData>\n')
-                f.write('        <PCoordinates>\n')
-                f.write('            <PDataArray type="Float64" Name="Array X-Axis" NumberOfComponents="1"/>\n')
-                f.write('            <PDataArray type="Float64" Name="Array Y-Axis" NumberOfComponents="1"/>\n')
-                f.write('            <PDataArray type="Float64" Name="Array Z-Axis" NumberOfComponents="1"/>\n')
-                f.write('        </PCoordinates>\n')
-                for piece in sorted(list(pieces.keys())):
-                    lXB = pieces[piece]['lims']
-                    ext = "%d %d %d %d %d %d"%(lXB[0], lXB[1], lXB[2], lXB[3], lXB[4], lXB[5])
-                    f.write('         <Piece Extent="%s" Source="%s_%08d%s"/>\n'%(ext, piece.split(os.sep)[-1], time*1e3, fext))
-                f.write('    </%s>\n'%(pftype))
-                f.write('</VTKFile>\n')
+            x = np.array(grid_combo[:, 0, 0, 0], dtype='float64')
+            y = np.array(grid_combo[0, :, 0, 1], dtype='float64')
+            z = np.array(grid_combo[0, 0, :, 2], dtype='float64')
+            dx = np.median(x[1:]-x[:-1])
+            dy = np.median(y[1:]-y[:-1])
+            dz = np.median(z[1:]-z[:-1])
+            spacing = (dx, dy, dz)
+            origin = (xmin, ymin, zmin)
+            wrapper_namespace = (outDir + os.sep + chid + '_slcf_out_%d_%.6f'%(axis,value)).replace('.','_')
+            for time in outtimes:
+                fname = wrapper_namespace + '_%08d'%(time*1e3)
+                with open(fname + pext, 'w') as f:
+                    f.write('<?xml version="1.0"?>\n')
+                    f.write('<VTKFile type="%s">\n'%(pftype))
+                    if pftype == 'PRectilinearGrid':
+                        f.write('    <PRectilinearGrid WholeExtent="%d %d %d %d %d %d" GhostLevel="0">\n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
+                    elif pftype == 'PImageData':
+                        f.write('    <PImageData WholeExtent="%d %d %d %d %d %d" GhostLevel="0" \n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
+                        f.write('                Origin="%0.4f %0.4f %0.4f" Spacing="%0.4f %0.4f %0.4f">\n'%(origin[0], origin[1], origin[2], dx, dy, dz))
+                    f.write('        <PPointData>\n')
+                    for qty in sorted(list(set(quantities))):
+                        f.write('            <PDataArray type="%s" Name="%s" NumberOfComponents="1"/>\n'%(dtype, qty))
+                    f.write('        </PPointData>\n')
+                    f.write('        <PCellData></PCellData>\n')
+                    f.write('        <PCoordinates>\n')
+                    f.write('            <PDataArray type="Float64" Name="Array X-Axis" NumberOfComponents="1"/>\n')
+                    f.write('            <PDataArray type="Float64" Name="Array Y-Axis" NumberOfComponents="1"/>\n')
+                    f.write('            <PDataArray type="Float64" Name="Array Z-Axis" NumberOfComponents="1"/>\n')
+                    f.write('        </PCoordinates>\n')
+                    for piece in sorted(list(pieces.keys())):
+                        lXB = pieces[piece]['lims']
+                        ext = "%d %d %d %d %d %d"%(lXB[0], lXB[1], lXB[2], lXB[3], lXB[4], lXB[5])
+                        f.write('         <Piece Extent="%s" Source="%s_%08d%s"/>\n'%(ext, piece.split(os.sep)[-1], time*1e3, fext))
+                    f.write('    </%s>\n'%(pftype))
+                    f.write('</VTKFile>\n')
 
 def exportBndfDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True):
     if outDir is None: outDir = resultDir

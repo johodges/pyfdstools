@@ -488,6 +488,13 @@ def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
     gXB = [0, grids_abs.shape[0]-1, 0, grids_abs.shape[1]-1, 0, grids_abs.shape[2]-1]
     pieces=defaultdict(bool)
     threeD_quantities = []
+    
+    # Need to fix 3-d slices that do not fill the mesh
+    
+    #for g in sorted(list(grids.keys())):
+    #    print(grids[g]['zGrid'].shape)
+    #print(gXB)
+    #assert False, "Stopped"
     (xmin,xmax,ymin,ymax,zmin,zmax) = (1e12,-1e12,1e12,-1e12,1e12,-1e12)
     for i in range(0, len(uniqueMeshes)):
         mesh = uniqueMeshes[i]
@@ -1197,7 +1204,8 @@ def exportS3dDataToVtk(chid, resultDir, outtimes=None, binary=False, decode=Fals
         pieces[namespace]['source'] = namespace
         pieces[namespace]['times'] = times2
         pieces[namespace]['lims'] = lXB
-    
+    if outtimes is None:
+        return
     wrapper_namespace = resultDir + os.sep + chid + '_s3d_out'
     for time in outtimes:
         fname = wrapper_namespace + '_%08d'%(time*1e3)

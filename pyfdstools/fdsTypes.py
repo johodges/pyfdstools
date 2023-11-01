@@ -600,6 +600,7 @@ class fdsLineTypes(object):
     def getPROFtypes(self, version="6.7.4"):
         profTypes = defaultdict(bool)
         profTypes['ID'] = 'string'
+        profTypes['CELL_CENTERED'] = 'bool'
         profTypes['XYZ'] = 'listfloat'
         profTypes['QUANTITY'] = 'string'
         profTypes['IOR'] = 'int'

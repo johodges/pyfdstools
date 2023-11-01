@@ -610,9 +610,17 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
         xs = grids[key]['xGrid'][:, 0, 0]
         ys = grids[key]['yGrid'][0, :, 0]
         zs = grids[key]['zGrid'][0, 0, :]        
+        d = np.zeros_like(data_abs[xi[0]:xi[1]+1, yi[0]:yi[1]+1, zi[0]:zi[1]+1, 0])
         for t in range(0, tInd):
+            d[:, :, :] = np.nan
             if t < grids[key]['datas3D'][0].shape[3]:
-                d2 = scpi.interpn((xs, ys, zs), grids[key]['datas3D'][0][:, :, :, t], p, method='linear', fill_value=None, bounds_error=False)
+                lims3D = grids[key]['lims3D']
+                iX, eX, iY, eY, iZ, eZ = lims3D[0]
+                d[iX:eX+1,iY:eY+1,iZ:eZ+1] = grids[key]['datas3D'][0][:, :, :, t]
+                #print(xs.shape, ys.shape, zs.shape, grids[key]['datas3D'][0][:, :, :, t].shape)
+                #print(grids[key]['lims3D'])
+                #d2 = scpi.interpn((xs, ys, zs), grids[key]['datas3D'][0][:, :, :, t], p, method='linear', fill_value=None, bounds_error=False)
+                d2 = scpi.interpn((xs, ys, zs), d, p, method='linear', fill_value=None, bounds_error=False)
                 d2r = np.reshape(d2, xg.shape)
                 data_abs[xi[0]:xi[1]+1, yi[0]:yi[1]+1, zi[0]:zi[1]+1, t] = d2r
     

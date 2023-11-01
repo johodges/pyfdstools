@@ -21,6 +21,14 @@ from collections import defaultdict
 from .utilities import zopen, getFileList, zreadlines
 from .smokeviewParser import parseSMVFile
 
+def getBingeoms(resultDir, chid):
+    bingeomFiles = getFileList(resultDir, chid, 'bingeom')
+    for bingeomFile in bingeomFiles:
+        f = zopen(bingeomFile, 'rb')
+        data = f.read()
+        f.close()
+        
+
 def getBndeQuantities(smvFile):
     smvData = parseSMVFile(smvFile)
     (grid, obst) = (smvData['grids'], smvData['obsts'])

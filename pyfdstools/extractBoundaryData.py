@@ -41,6 +41,8 @@ class fdspatch(object):
         Z_min, Z_max coordinates
     orientation : int
         Integer specifying the orientation of the patch
+    times : float array(NT)
+        array containing the timestamps of the patch
     x : array(NX, NY)
         array containing x-coordinates of the patch
     y : array(NX, NY)
@@ -81,6 +83,15 @@ class fdspatch(object):
         self.data = np.zeros((NX, NY, NT))
         self.lims = DS
         self.orientation = OR
+        if abs(OR) == 1:
+            self.dx = (DS[3]-DS[2])/(NX-1)
+            self.dz = (DS[5]-DS[4])/(NY-1)
+        elif abs(OR) == 2:
+            self.dx = (DS[1]-DS[0])/(NX-1)
+            self.dz = (DS[5]-DS[4])/(NY-1)
+        elif abs(OR) == 3:
+            self.dx = (DS[1]-DS[0])/(NX-1)
+            self.dz = (DS[3]-DS[2])/(NY-1)
         
         
     def append(self, data, iT):
@@ -265,6 +276,7 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
     allPatches = []
     for i in range(0, len(patches)):
         patches[i].data[patches[i].data < -1e10] = np.nan
+        #print(patches[i].lims, patchIors[i])
         lims = patches[i].lims
         if patches[i].data.shape[0]*patches[i].data.shape[1] > -1:
             check = False
@@ -286,6 +298,7 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
                 zmin = min([zmin, lims[4]])
                 zmax = max([zmax, lims[5]])
                 NX, NZ, NT = patches[i].data.shape
+                '''
                 if abs(axis) == 1:
                     dx = np.round((lims[3]-lims[2])/(NX-1), decimals=decimals+2)
                     dz = np.round((lims[5]-lims[4])/(NZ-1), decimals=decimals+2)
@@ -295,7 +308,9 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
                 elif abs(axis) == 3:
                     dx = np.round((lims[1]-lims[0])/(NX-1), decimals=decimals+2)
                     dz = np.round((lims[3]-lims[2])/(NZ-1), decimals=decimals+2)
-                    
+                '''
+                dx = patches[i].dx
+                dz = patches[i].dz
                 allPatches.append(patches[i])
     return times, allPatches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz
 
@@ -336,20 +351,29 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
     array(NXZ, NZA, NT)
         Array containing data in global coordinates for each timestamp
     """
-    
     if abs(axis) == 1:
-        x_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dx)+1))
-        z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
+        if patches[0].cell_centered == True:
+            x_abs = np.linspace(ymin, ymax-dx, int(np.round((ymax-ymin)/dx)))
+            z_abs = np.linspace(zmin, zmax-dz, int(np.round((zmax-zmin)/dz)))
+        else:
+            x_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dx)+1))
+            z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
     if abs(axis) == 2:
-        x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
-        z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
+        if patches[0].cell_centered == True:
+            x_abs = np.linspace(xmin, xmax-dx, int(np.round((xmax-xmin)/dx)))
+            z_abs = np.linspace(zmin, zmax-dz, int(np.round((zmax-zmin)/dz)))
+        else:
+            x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
+            z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
     if abs(axis) == 3:
-        x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
-        z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
+        if patches[0].cell_centered == True:
+            x_abs = np.linspace(xmin, xmax-dx, int(np.round((xmax-xmin)/dx)))
+            z_abs = np.linspace(ymin, ymax-dz, int(np.round((ymax-ymin)/dz)))
+        else:
+            x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
+            z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
     x_abs = np.round(x_abs, decimals=decimals)
     z_abs = np.round(z_abs, decimals=decimals)
-    #print(xmin, xmax, dx, x_abs)
-    #print(zmin, zmax, dz, z_abs)
     x_grid_abs, z_grid_abs = np.meshgrid(x_abs, z_abs)
     NXA, NZA = x_grid_abs.shape
     NX, NZ, NT = patches[0].data.shape
@@ -369,31 +393,22 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         else:
             estr = "Axis %0.0f not in [-1, -2, -3, 1, 2, 3]."%(axis)
             assert False, estr
-        #print(x_grid_abs[0, :])
-        #print(xMin, xMax)
-        #print(x_grid_abs.shape)
-        #print(x_grid_abs)
-        #print(xMin, xMax)
-        #print(z_grid_abs)
-        #print(zMin)
         xInd1 = np.argwhere(np.isclose(x_grid_abs, xMin, atol=10**(-1*decimals)))[0][1]
-        xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
+        if xInd1 == 0:
+            xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
+        else:
+            xInd1 = xInd1 - 1
+            xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax-dx, atol=10**(-1*decimals)))[0][1]
         zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin, atol=10**(-1*decimals)))[1][0]
-        zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax, atol=10**(-1*decimals)))[1][0]
-        #print("LIMS")
-        #print(lims)
-        #print("X_GRID")
-        #print(x_grid_abs[zInd1:zInd2, xInd1:xInd2])
-        #print("Z_GRID")
-        #print(z_grid_abs[zInd1:zInd2, xInd1:xInd2])
-        #print("Patch Shape: ", patch.data.shape)
-        #print("Abs Shape: ", data_abs[zInd1:zInd2, xInd1:xInd2, :].shape)
+        if zInd1 == 0:
+            zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax, atol=10**(-1*decimals)))[1][0]
+        else:
+            zInd1 = zInd1 - 1
+            zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax-dz, atol=10**(-1*decimals)))[1][0]
         NT = min([patch.data.shape[2], data_abs[zInd1:zInd2, xInd1:xInd2, :].shape[2]])
         for t in range(0, NT):
             pdata = patch.data[:, :, t].T
             if pdata.shape[0] != data_abs[zInd1:zInd2, xInd1:xInd2, t].shape[0]:
-                #mult = pdata.shape[0]/data_abs[zInd1:zInd2, xInd1:xInd2, t].shape[0]
-                #print(pdata.shape, data_abs[zInd1:zInd2, xInd1:xInd2, t].shape)
                 tmp = data_abs[zInd1:zInd2, xInd1:xInd2, t].shape
                 tmp2 = (tmp[1], tmp[0])
                 pdata2 = cv2.resize(pdata, dsize=tmp2, interpolation=cv2.INTER_LINEAR)
@@ -588,6 +603,31 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
         return None, None
     times, patches = buildPatches(
             patchPts, patchDs, patchIors, data, grid[gridNum])
+    fname2 = fname.split('.zip')[-1].split(os.sep)[-1]
+    bndf_extract = [[x[1], x[4]] for x in bndfs]
+    bnd_type = [x[1] for x in bndf_extract if x[0] == fname2][0]
+    
+    for i in range(0, len(patches)):
+        if bnd_type == 'BNDC':
+            patches[i].data = patches[i].data[:-1,:-1, :]
+            patches[i].cell_centered = True
+            XB = patches[i].lims
+            IOR = patches[i].orientation
+            (dx, dz) = (patches[i].dx, patches[i].dz)
+            #print("PRE", IOR, XB, dx, dy)
+            if abs(IOR) == 1:
+                (XB[2], XB[3]) = (XB[2]+dx/2, XB[3]+dx/2)
+                (XB[4], XB[5]) = (XB[5]+dz/2, XB[4]+dz/2)
+            elif abs(IOR) == 2:
+                (XB[0], XB[1]) = (XB[0]+dx/2, XB[1]+dx/2)
+                (XB[4], XB[5]) = (XB[4]+dz/2, XB[5]+dz/2)
+            elif abs(IOR) == 3:
+                (XB[0], XB[1]) = (XB[0]+dx/2, XB[1]+dx/2)
+                (XB[2], XB[3]) = (XB[2]+dz/2, XB[3]+dz/2)
+            #print("POST", IOR, XB)
+            patches[i].lims = XB
+        else:
+            patches[i].cell_centered = False
     return times, patches
 
 
@@ -646,6 +686,8 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid):
                 patches[k].append(patchData,i-1)
             else:
                 patches[k].append(patchData,i-1)
+    for k in range(0, len(patches)):
+        patches[k].times = times
     return times, patches
 
 
@@ -1186,8 +1228,21 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
     fdsFile.importFile(fdsFilePath)
     meshes = list(fdsFile.meshes.keys())
     if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
-    numberOfMeshes = len(meshes)
-    print(numberOfMeshes)
+    numberOfMeshes = 0
+    for mesh in meshes:
+        if fdsFile.meshes[mesh]['MULT_ID'] is not False:
+            mult_id = fdsFile.meshes[mesh]['MULT_ID']
+            mult = fdsFile.mult[mult_id]
+            (I_UPPER, J_UPPER, K_UPPER) = (0, 0, 0)
+            if mult['I_UPPER'] is not False: I_UPPER = mult['I_UPPER']
+            if mult['J_UPPER'] is not False: J_UPPER = mult['J_UPPER']
+            if mult['K_UPPER'] is not False: K_UPPER = mult['K_UPPER']
+            numberOfMeshes += (I_UPPER+1)*(J_UPPER+1)*(K_UPPER+1)
+        else:
+            numberOfMeshes += 1
+    
+    #numberOfMeshes = len(meshes)
+    #print(numberOfMeshes)
     
     for qty, unit in zip(fdsQuantities, fdsUnits):
         allPatches = []
@@ -1208,7 +1263,10 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
             if quantity == qty:
                 ts, ps, x1, x2, y1, y2, z1, z2, dx1, dz1 = getPatches(
                         file, smvFile, axis, value, meshNumber, decimals=decimals)
-                #print(x1, x2, y1, y2, z1, z2)
+                #print(file, dx1, dz1)
+                #print(file, meshNumber, x1, x2, y1, y2, z1, z2)
+                #print(file.split('_')[-2], numberOfMeshes)
+                #print(quantity, qty, shortName, units, npatch)
                 (xmin, xmax) = (min([xmin, x1]), max([xmax, x2]))
                 (ymin, ymax) = (min([ymin, y1]), max([ymax, y2]))
                 (zmin, zmax) = (min([zmin, z1]), max([zmax, z2]))
@@ -1216,6 +1274,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                 for patch in ps:
                     allPatches.append(patch)
                     qtyFound = True
+                #print(len(allPatches))
         if len(allPatches) == 0:
             for file in bndfFiles:
                 quantity, shortName, units, npatch = readBoundaryHeader(
@@ -1239,7 +1298,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                         if option[1] == axis:
                             print(option[0])
         #print("ABS INFO: ")
-        #print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
+        print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
         if qtyFound:
             x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
                     allPatches, xmin, xmax, ymin, ymax, zmin, zmax,

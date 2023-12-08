@@ -163,11 +163,11 @@ def parseBNDF(lines, i):
         Variable number
     """
     
-    (_,mesh,vNum) = lines[i-1].split()
+    (bndtype,mesh,vNum) = lines[i-1].split()
     bndfName = lines[i].split(' ')[1].replace('\n','')
     vID = ' '.join(lines[i+1].split(' ')[1:]).replace('\n','')
     (mesh, vNum) = (float(mesh), float(vNum))
-    return mesh, bndfName, vID, vNum
+    return mesh, bndfName, vID, vNum, bndtype
 
 
 def parseBNDE(lines, i):
@@ -248,8 +248,8 @@ def parseSMVFile(smvFile):
                 else:
                     obsts = np.append(obsts, smvObj, axis=0)
         if (".bf" in line2):
-            mesh, bndfName, vID, vNum = parseBNDF(linesSMV, i)
-            bndfs.append([mesh, bndfName, vID, vNum])
+            mesh, bndfName, vID, vNum, bndtype = parseBNDF(linesSMV, i)
+            bndfs.append([mesh, bndfName, vID, vNum, bndtype])
         if ("BNDE" in line2[:6]):
             mesh, bndeName, gbfName, vID, vNum = parseBNDE(linesSMV, i)
             bndes.append([mesh, bndeName, gbfName, vID, vNum])

@@ -30,6 +30,87 @@ import struct
 from collections import defaultdict
 from .colorSchemes import getVTcolors
 
+def timeAverage2(data, times, window):
+    # Reshape data into array for time averaging
+    sz = data.shape
+    pts = np.product(sz[:-1])
+    data2 = np.reshape(data, (pts,sz[-1]))
+    
+    # Time average the array
+    data3 = np.zeros_like(data2) #data2.copy()
+    dt = window/2
+    tmax = len(times)
+    tind = np.where(times-window > 0)[0][0]
+    data3[:, 0] = np.nanmean(data2[:, :tind], axis=1)
+    for i in range(1, tmax):
+        data_dt = times[i]-times[i-1]
+        data3[:,i] = (data3[:, i-1]*(dt-data_dt)+ data2[:, i]*data_dt)/dt
+    data4 = np.reshape(data3, sz)
+    return data4
+
+def timeAverage(data, times, window, outdt=-1, smoothEnds=False, queryTime=-1):
+    tmax = np.nanmax(times)
+    tmin = np.nanmin(times)
+    if window > (tmax-tmin):
+        print("Warning, windowSize > time interval. Not time averaging.")
+        return data, times
+    
+    dts = times[1:] - times[:-1]
+    dt = np.nanmin(dts[dts > 0])
+    
+    if queryTime > 0:
+        tmin = np.floor((queryTime-window/2)/dt)*dt
+        tmax = np.ceil((queryTime+window/2)/dt)*dt
+        data2 = np.zeros((data.shape[0], data.shape[1], 1))
+        t1 = np.linspace(tmin, tmax, int((tmax-tmin)/dt + 1))
+        for i in range(0, data.shape[0]):
+            for j in range(0, data.shape[1]):
+                v1 = np.interp(t1, times, data[i, j, :])
+                data2[i, j, 0] = np.nanmean(v1)
+        return data2, queryTime
+    
+    tmin = np.floor(tmin/dt)*dt
+    tmax = np.ceil(tmax/dt)*dt
+    
+    t1 = np.linspace(tmin, tmax, int((tmax-tmin)/dt + 1))
+    N = int(np.round(window/dt))
+    N2 = int(N/2)
+    f = np.zeros((N)) + 1
+    f = f/f.sum()
+    
+    if data.shape[-1] < times.shape[-1]:
+        print("Warning, data shape is less than timesteps, truncating.")
+        times = times[:data.shape[-1]]
+    
+    data2 = np.zeros((data.shape[0], data.shape[1], int(len(t1)-N+1)))
+    for i in range(0, data.shape[0]):
+        for j in range(0, data.shape[1]):
+            v1 = np.interp(t1, times, data[i, j, :])
+            data2[i, j, :] = np.convolve(v1, f, mode='valid')
+            if smoothEnds:
+                for k in range(0, N2):
+                    data2[i,j,k] = np.nanmean(v1[k:k+N2])
+                for k in range(data2.shape[2]-N, data2.shape[2]):
+                    data2[i,j,k] = np.nanmean(v1[k:k+N2])
+            else:
+                data2[i, j, :N2] = v1[:N2]
+                data2[i ,j,-N2:] = v1[-N2:]
+    
+    if outdt > 0:
+        tmin = np.floor(tmin/outdt)*outdt
+        tmax = np.ceil(tmax/outdt)*outdt
+        t2 = np.linspace(tmin, tmax, int((tmax-tmin)/outdt + 1))
+        data3 = np.zeros((data.shape[0], data.shape[1], t2.shape[0]))
+        for i in range(0, data.shape[0]):
+            for j in range(0, data.shape[1]):
+                data3[i, j, :] = np.interp(t2, t1[:data2.shape[2]], data2[i, j, :])
+        return data3, t2
+    else:
+        return data2, t1[:data2.shape[2]]
+        
+    
+    return data2, t1[:data2.shape[2]]
+
 def kalmanFilter(z, Q=1e-5, R=0.5**2):
     # This subroutine applies a kalman filter to an input set of data.
     #

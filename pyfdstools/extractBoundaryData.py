@@ -360,8 +360,8 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
             z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
     if abs(axis) == 2:
         if patches[0].cell_centered == True:
-            x_abs = np.linspace(xmin, xmax-dx, int(np.round((xmax-xmin)/dx)))
-            z_abs = np.linspace(zmin, zmax-dz, int(np.round((zmax-zmin)/dz)))
+            x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
+            z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
         else:
             x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
             z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
@@ -397,14 +397,12 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         if xInd1 == 0:
             xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
         else:
-            xInd1 = xInd1 - 1
-            xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax-dx, atol=10**(-1*decimals)))[0][1]
+            xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
         zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin, atol=10**(-1*decimals)))[1][0]
         if zInd1 == 0:
             zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax, atol=10**(-1*decimals)))[1][0]
         else:
-            zInd1 = zInd1 - 1
-            zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax-dz, atol=10**(-1*decimals)))[1][0]
+            zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax, atol=10**(-1*decimals)))[1][0]
         NT = min([patch.data.shape[2], data_abs[zInd1:zInd2, xInd1:xInd2, :].shape[2]])
         for t in range(0, NT):
             pdata = patch.data[:, :, t].T
@@ -563,7 +561,7 @@ def readBoundaryQuantities(dataDir, chid):
     return quantities
 
 
-def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
+def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
     """Import patches from a single boundary file
     
     Parameters
@@ -575,6 +573,8 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
     gridNum : int, optional
         Grid corresponding to the patch. Must be specified if multiple
         meshes are used.
+    smvData : dict, optional
+        Previously imported smvData
     
     Returns
     -------
@@ -593,14 +593,14 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, grid=None):
     patchInfo, data = parseBndfPatches(f, npatch)
     f.close()
     (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
-    if (grid is None) and (smvFile is not None):
+    if (smvData is None) and (smvFile is not None):
         smvData = parseSMVFile(smvFile)
-        (grid, obst) = (smvData['grids'], smvData['obsts'])
-        (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
-        (files, bndes) = (smvData['files'], smvData['bndes'])
-    elif (grid is None) and (smvFile is None):
-        print("Either smokeview file or grid must be provided.")
+    elif (smvData is None) and (smvFile is None):
+        print("Either smokeview file or smokeview data must be provided.")
         return None, None
+    (grid, obst) = (smvData['grids'], smvData['obsts'])
+    (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
+    (files, bndes) = (smvData['files'], smvData['bndes'])
     times, patches = buildPatches(
             patchPts, patchDs, patchIors, data, grid[gridNum])
     fname2 = fname.split('.zip')[-1].split(os.sep)[-1]
@@ -1186,7 +1186,7 @@ def timeAverageBndfs(resultDir, chid, fdsFilePath, fdsQuantity, dt):
             
     
 
-def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
+def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, 
               axis, value, decimals=4):
     """Query boundary files
     
@@ -1200,8 +1200,6 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
         String containing path to fds file or achive
     fdsQuantities : list
         List containing quantities to query from boundary file
-    fdsUnits : list
-        List containing units for fds quantities
     axis : int
         Integer specifying axis to query
     value : float
@@ -1244,7 +1242,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
     #numberOfMeshes = len(meshes)
     #print(numberOfMeshes)
     
-    for qty, unit in zip(fdsQuantities, fdsUnits):
+    for qty in fdsQuantities:
         allPatches = []
         (xmin, xmax) = (999, -999)
         (ymin, ymax) = (999, -999)
@@ -1298,7 +1296,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
                         if option[1] == axis:
                             print(option[0])
         #print("ABS INFO: ")
-        print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
+        #print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
         if qtyFound:
             x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
                     allPatches, xmin, xmax, ymin, ymax, zmin, zmax,
@@ -1313,6 +1311,12 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits,
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['X'] = x_grid_abs
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['Z'] = z_grid_abs
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['DATA'] = data_abs
+    tmax = len(ts)
+    for qty in list(datas.keys()):
+        tmax = min([datas[qty]['DATA'].shape[2], tmax])
+    for qty in list(datas.keys()):
+        datas[qty]['DATA'] = datas[qty]['DATA'][:, :, :tmax]
+    ts = ts[:tmax]
     return datas, ts
 
 

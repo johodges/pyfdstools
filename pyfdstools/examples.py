@@ -146,7 +146,7 @@ def exampleImportBndf(resultDir=None, chid=None, fdsFile=None,
     
     if fdsFile is None: fdsFilePath = fds.getFileList(resultDir, chid, 'fds')[0]
     
-    datas, times = fds.queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, fdsUnits, axis, value)
+    datas, times = fds.queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, axis, value)
     tStartInd = np.argwhere(times >= tStart)[0][0]
     tEndInd = np.argwhere(times <= tEnd)[-1][0]
     

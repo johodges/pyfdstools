@@ -790,7 +790,7 @@ def parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0]):
     return polygons
 
 
-def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts,
+def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvData,
                  orientations, polygons):
     """Loads maximum boundary data versus time from boundary files
     
@@ -809,10 +809,8 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts,
         Time averaging window to include in extracted data
     bndfs : list
         List containing string names of boundary files to be loaded
-    smvGrids : list
-        List containing grid arrays from smokeview input
-    smvObsts : list
-        List containing obstruction definitinos from smokeview input
+    smvData : dict
+        Dictionary containing data imported from smokeview
     orientations : list
         List containing plane orientations to include in loading
     polygons : list
@@ -829,7 +827,7 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvGrids, smvObsts,
     """
     
     coords2, pts2, times, orients2 = getPointsFromFiles(
-            bndfs, smvGrids, smvObsts, tStart, tEnd, tBand, tInt)
+            bndfs, smvData, tStart, tEnd, tBand, tInt)
     #import pandas as pd
     #pd.DataFrame(coords2).to_csv('E:\\projects\\kansas_city_fire_modeling\\fromcluster\\coords.csv')
     #pd.DataFrame(pts2).to_csv('E:\\projects\\kansas_city_fire_modeling\\fromcluster\\pts.csv')
@@ -1064,17 +1062,15 @@ def extractPoints(patches):
     return allCoords, allPoints, allOrients
 
 
-def getPointsFromFiles(bndfs, grids, obsts, tStart, tEnd, tBand, tInt):
+def getPointsFromFiles(bndfs, smvData, tStart, tEnd, tBand, tInt):
     """Extracts a timestamp interval from a patch time series
     
     Parameters
     ----------
     bndfs : list
         List of filenames for boundary files
-    grids : list
-        List of arrays containing grid coordinates
-    obsts : list
-        List of obstructions from smokeview file
+    smvData : dict
+        Dictionary containing data from smokeview file
     tStart : float
         Timestamp to start extracting data
     tEnd : float
@@ -1102,7 +1098,7 @@ def getPointsFromFiles(bndfs, grids, obsts, tStart, tEnd, tBand, tInt):
     for file, mesh in bndfs:
         mesh = int(mesh)
         times, patches = importBoundaryFile(
-                file, gridNum=mesh, grid=grids)
+                file, gridNum=mesh, smvData=smvData)
         if len(times) > 1:
             newTimes, newPatches = extractTime(
                     tStart, tEnd, tBand, tInt, patches, times)
@@ -1421,7 +1417,7 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
         datas[qty] = defaultdict(bool)
         times, mPts, orients = loadBNDFdata(
                 tStart, tEnd, tInt, tBand, bndf_dic[qty], 
-                smvGrids, smvObsts, orientations, polygons)
+                smvData, orientations, polygons)
         datas[qty]['TIMES'] = times
         datas[qty]['NAMES'] = names
         datas[qty]['DATA'] = mPts

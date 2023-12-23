@@ -790,7 +790,7 @@ def exportBndfDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
                 continue
             file = bndfs[j]
             qty, shortName, units, npatch = readBoundaryHeader(file)
-            times, patches = importBoundaryFile(file, gridNum=int(mesh)-1, grid=smvGrids)
+            times, patches = importBoundaryFile(file, gridNum=int(mesh)-1, smvData=smvData)
             NT = len(times)
             pieces = []
             for patch in patches:

@@ -828,6 +828,7 @@ class fdsLineTypes(object):
         surfTypes['GEOMETRY'] = 'string'
         surfTypes['HEAT_TRANSFER_COEFFICIENT'] = 'float'
         surfTypes['HEAT_TRANSFER_COEFFICIENT_BACK'] = 'float'
+        surfTypes['HEAT_TRANSFER_MODEL'] = 'string'
         surfTypes['HEAT_OF_VAPORIZATION'] = 'float'
         surfTypes['HRRPUA'] = 'float'
         surfTypes['HT3D'] = 'bool'

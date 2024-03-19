@@ -23,10 +23,18 @@ import os
 from .utilities import zopen, getFileList
 
 def findHeaderLength(lines):
+    replacements =[
+        [b'kW/m\xb2',b'kW/m2'],
+        [b'\xb0C',b'C']
+        ]
     counter = 0
     headerCheck = True
     while headerCheck and counter < 100:
-        line = (lines[counter].decode('utf-8')).replace('\r\n','')
+        linetmp = lines[counter]
+        for replacement in replacements:
+            linetmp = linetmp.replace(replacement[0],replacement[1])
+        lines[counter] = linetmp
+        line = (linetmp.decode('utf-8')).replace('\r\n','')
         while line[-1] == ',': line = line[:-1]
         try:
             [float(y) for y in line.split(',')]

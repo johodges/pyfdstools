@@ -252,14 +252,15 @@ def findSliceLocation(grid, data, axis, value, plot3d=False):
 
 def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
               cmap=None, figsize=None, fs=16, figsizeMult=4,
-              qnty_mn=None, qnty_mx=None,
+              qnty_mn=None, qnty_mx=None, cbarnumticks=10,
+              tickDecimals=None,
               levels=None, cbarticks=None, clabel=None,
               highlightValue=None, highlightWidth=None,
               reverseXY=False, percentile=None,
               xmn=None, xmx=None, zmn=None, zmx=None,
               xlabel=None, zlabel=None,
               addCbar=True, fixXLims=True, fixZLims=True,
-              title=None, contour=True):
+              title=None, contour=True, extend='both'):
     if qnty_mn == None:
         qnty_mn = np.nanmin(data_slc)
     if qnty_mx == None:
@@ -282,7 +283,15 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
     if levels == None:
         levels = 100
     if cbarticks is None:
-        cbarticks = np.linspace(qnty_mn, qnty_mx, 10)
+        cbarticks = np.linspace(qnty_mn, qnty_mx, cbarnumticks)
+        if highlightValue is not None:
+            cx = cbarticks[1] - cbarticks[0]
+            cbarticks = list(cbarticks)
+            cbarticks = [x for x in cbarticks if abs(highlightValue-x) > 0.25*cx]
+            cbarticks.append(highlightValue)
+            cbarticks = sorted(cbarticks)
+            
+            
     if reverseXY:
         (x1 , z1, d1) = (z, x, data_slc[:, :])
         zrange = xmx-xmn #x.max()-x.min()
@@ -301,11 +310,16 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
     if contour:
         im = ax.contourf(
             x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
-            levels=np.linspace(qnty_mn, qnty_mx, levels), extend='both')
+            levels=np.linspace(qnty_mn, qnty_mx, levels), extend=extend)
     else:
         im = ax.imshow(d1[::-1, :], cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, extent=[x1.min(), x1.max(),z1.min(), z1.max()])
     if addCbar:
-        cbar = fig.colorbar(im, cmap=cmap, extend='both', ticks=cbarticks)
+        if tickDecimals is not None:
+            fmt = "%"+".%d"%(tickDecimals)+"f"
+            #fmt = FormatScalarFormatter("%"+fmtStr+"f")
+        else:
+            fmt = None
+        cbar = fig.colorbar(im, cmap=cmap, extend=extend, ticks=cbarticks, format=fmt)
         cbar.ax.tick_params(labelsize=fs)
         if clabel is not None:
             cbar.set_label(clabel, fontsize=fs)

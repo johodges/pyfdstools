@@ -34,3 +34,4 @@ from .utilities import *
 from .colorSchemes import *
 from .paraview import *
 from .examples import *
+from _version import __version__

@@ -503,9 +503,8 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
     if '.zip' in resultDir:
         xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
     else:
-        xyzFiles = glob.glob("%s%s*.xyz"%(resultDir, chid))
+        xyzFiles = glob.glob("%s%s%s*.xyz"%(resultDir,os.sep, chid))
     grids = defaultdict(bool)
-    
     for xyzFile in xyzFiles:
         grid, gridHeader = readXYZfile(xyzFile)
         xGrid, yGrid, zGrid = rearrangeGrid(grid)
@@ -516,7 +515,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
             slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
             slcfFiles = [x for x in slcfFiles if '%s'%(meshStr) in x]
         else:
-            slcfFiles = glob.glob("%s%s*.sf"%(resultDir, meshStr))
+            slcfFiles = glob.glob("%s%s%s*.sf"%(resultDir, os.sep, meshStr))
         
         grids[meshStr] = defaultdict(bool)
         grids[meshStr]['xGrid'] = xGrid
@@ -748,7 +747,7 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
     if '.zip' in resultDir:
         xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
     else:
-        xyzFiles = glob.glob("%s%s*.xyz"%(resultDir, chid))
+        xyzFiles = glob.glob("%s%s%s*.xyz"%(resultDir, os.sep, chid))
     grids = defaultdict(bool)
     endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
@@ -763,7 +762,7 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
             slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
             slcfFiles = [x for x in slcfFiles if '%s'%(meshStr) in x]
         else:
-            slcfFiles = glob.glob("%s%s_*.sf"%(resultDir, meshStr))
+            slcfFiles = glob.glob("%s%s%s_*.sf"%(resultDir, os.sep, meshStr))
         
         grids[meshStr] = defaultdict(bool)
         grids[meshStr]['xGrid'] = xGrid

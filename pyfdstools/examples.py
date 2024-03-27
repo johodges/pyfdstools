@@ -490,8 +490,8 @@ def runExamples():
     print("Time-averaging a boundary file example.", flush=True)
     exampleBndfTimeAverage(dt=30, quantity='WALL TEMPERATURE')
     
-    print("Read SL3D with stretched mesh example", flush=True)
-    stretchedMeshExample()
+    #print("Read SL3D with stretched mesh example", flush=True)
+    #stretchedMeshExample()
     
     print("Add Occupant FED calculation example", flush=True)
     exampleAddOccupantFedDevices(os.path.join(systemPath, "examples"),

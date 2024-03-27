@@ -40,7 +40,21 @@ The package can be installed through pip or source.
     cd pyfdstools
     python pyfdstools/examples.py
     ```
-
+* (Option 3) Installing from source in edit mode. The advantage of this mode is python will import modules from the source directly. This allows you to modify scripts as needed or update with a git pull.
+  - Navigate to desired installation location
+  - Clone the repository
+    ```
+    git clone https://github.com/johodges/pyfdstools
+    ```
+  - Install with pip
+    ```
+    pip install -e pyfdstools/
+    ```
+  - Run the example cases
+    ```
+    cd pyfdstools
+    python pyfdstools/examples.py
+    ```
 
 <!---
 # Integration with BlenderFDS

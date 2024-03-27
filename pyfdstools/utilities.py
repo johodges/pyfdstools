@@ -31,15 +31,20 @@ from collections import defaultdict
 from .colorSchemes import getVTcolors
 
 def timeAverage2(data, times, window):
-    # Reshape data into array for time averaging
     sz = data.shape
-    pts = np.product(sz[:-1])
-    data2 = np.reshape(data, (pts,sz[-1]))
+    dt = window/2
+    tmax = len(times)
+    if len(sz) == 1:
+        data2 = np.zeros((1,sz[0]))
+        data2[0, :] = data
+    else:
+        # Reshape data into array for time averaging
+        pts = np.product(sz[:-1])
+        data2 = np.reshape(data, (pts,sz[-1]))
     
     # Time average the array
     data3 = np.zeros_like(data2) #data2.copy()
-    dt = window/2
-    tmax = len(times)
+
     tind = np.where(times-window > 0)[0][0]
     data3[:, 0] = np.nanmean(data2[:, :tind], axis=1)
     for i in range(1, tmax):

@@ -44,9 +44,13 @@ def timeAverage2(data, times, window):
     
     # Time average the array
     data3 = np.zeros_like(data2) #data2.copy()
-
-    tind = np.where(times-window > 0)[0][0]
+    
+    if (times[-1]-times[0]) > window:
+        tind = np.where(times-window > 0)[0][0]
+    else:
+        tind = -1
     data3[:, 0] = np.nanmean(data2[:, :tind], axis=1)
+    tmax = min([tmax, data2.shape[-1], data3.shape[-1]])
     for i in range(1, tmax):
         data_dt = times[i]-times[i-1]
         data3[:,i] = (data3[:, i-1]*(dt-data_dt)+ data2[:, i]*data_dt)/dt

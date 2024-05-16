@@ -550,7 +550,7 @@ def readBoundaryQuantities(dataDir, chid):
         Dictionary containing the quantities available in the files
     """
     
-    files = glob.glob("%s%s*.bf"%(dataDir, chid))
+    files = getFileList(dataDir, chid, 'bf')
     quantities = defaultdict(bool)
     for file in files:
         quantity, shortName, units, npatch = readBoundaryHeader(file)
@@ -1303,6 +1303,10 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
             datas[qty]['DATA'] = data_abs
         else:
             print("Quantity %s not found in boundary data"%(qty))
+            quantities = readBoundaryQuantities(resultDir, chid)
+            print("Available quantites are:")
+            for q in quantities:
+                print("\t%s"%(q))
         #datas[qty]["MESH-%04.0f"%(meshNumber)] = defaultdict(bool)
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['X'] = x_grid_abs
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['Z'] = z_grid_abs

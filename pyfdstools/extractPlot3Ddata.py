@@ -260,7 +260,8 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
               xmn=None, xmx=None, zmn=None, zmx=None,
               xlabel=None, zlabel=None,
               addCbar=True, fixXLims=True, fixZLims=True,
-              title=None, contour=True, extend='both'):
+              title=None, contour=True, extend='both',
+              returnIm=False):
     if qnty_mn == None:
         qnty_mn = np.nanmin(data_slc)
     if qnty_mx == None:
@@ -306,7 +307,7 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
         else:
             figsize = (figsizeMult * xrange / zrange, figsizeMult)
     if fig == None or ax == None:
-        fig, ax = plt.subplots(1, 1, figsize=figsize)
+        fig, ax = plt.subplots(1, 1, figsize=figsize, constrained_layout=True)
     if contour:
         im = ax.contourf(
             x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
@@ -340,8 +341,11 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
     if title is not None:
         ax.set_title(title, fontsize=fs)
     ax.tick_params(labelsize=fs)
-    fig.tight_layout()
-    return fig, ax
+    #fig.tight_layout()
+    if returnIm:
+        return fig, ax, im
+    else:
+        return fig, ax
 
 def readPlot3Ddata(chid, resultDir, time):
     xyzFiles = glob.glob("%s%s*.xyz"%(resultDir, chid))
@@ -504,6 +508,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
         xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
     else:
         xyzFiles = glob.glob("%s%s%s*.xyz"%(resultDir,os.sep, chid))
+    print(xyzFiles)
     grids = defaultdict(bool)
     for xyzFile in xyzFiles:
         grid, gridHeader = readXYZfile(xyzFile)
@@ -629,7 +634,8 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
             if t < grids[key]['datas3D'][0].shape[3]:
                 lims3D = grids[key]['lims3D']
                 iX, eX, iY, eY, iZ, eZ = lims3D[0]
-                d[iX:eX+1,iY:eY+1,iZ:eZ+1] = grids[key]['datas3D'][0][:, :, :, t]
+                #d[iX:eX+1,iY:eY+1,iZ:eZ+1] = grids[key]['datas3D'][0][:, :, :, t]
+                d = grids[key]['datas3D'][0][:, :, :, t] #hybrid meshing
                 #print(xs.shape, ys.shape, zs.shape, grids[key]['datas3D'][0][:, :, :, t].shape)
                 #print(grids[key]['lims3D'])
                 #d2 = scpi.interpn((xs, ys, zs), grids[key]['datas3D'][0][:, :, :, t], p, method='linear', fill_value=None, bounds_error=False)
@@ -821,6 +827,7 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
                                  yGrid[iX, iY, iZ],
                                  zGrid[iX, iY, iZ]])
                 times2D.append(np.array(times))
+                timesOut = np.array(times)
             f.close()
         grids[meshStr]['datas2D'] = datas2D
         grids[meshStr]['lims2D'] = lims2D
@@ -830,7 +837,14 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
     xGrid_abs = grid_abs[:, :, :, 0]
     yGrid_abs = grid_abs[:, :, :, 1]
     zGrid_abs = grid_abs[:, :, :, 2]
-    tInd = grids[list(grids.keys())[0]]['datas2D'][0].shape[3]
+    tInds = [] 
+    for i, key in enumerate(list(grids.keys())):
+        try:
+            tInd = grids[key]['datas2D'][0].shape[3]
+            tInds.append(tInd)
+        except:
+            pass
+    tInd = np.min(tInds)
     data_abs = np.zeros((xGrid_abs.shape[0],
                          xGrid_abs.shape[1],
                          xGrid_abs.shape[2],
@@ -852,12 +866,13 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
             zloc = np.where(np.isclose(
                     abs(zGrid_abs - coord[2]), 0, atol=1e-04))[2][0]
             (NX, NY, NZ, NT) = np.shape(data)
+            NT = min([NT, data_abs.shape[3]])
             data_abs[xloc:xloc+NX,
                      yloc:yloc+NY,
                      zloc:zloc+NZ,
-                     :NT] = data
+                     :NT] = data[:, :, :, :NT]
         
-    return grid_abs, data_abs, times2D[0]
+    return grid_abs, data_abs, timesOut
 
 
 
@@ -1174,7 +1189,7 @@ def getAxisAndValueFromXB(XB, grid, cen):
         value = -1
     return axis, value
 
-def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None, atol=1e-8):
+def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None, atol=1e-8, printInfo=False):
     xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
     grids = getGridsFromXyzFiles(xyzFiles, chid)
     grids_abs = getAbsoluteGrid(grids)
@@ -1188,8 +1203,9 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
         xAbs = grids_abs[:, :, 0, 0]
         zAbs = grids_abs[:, :, 0, 1]
     quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
-    print(quantities)
-    print(slcfFiles)
+    if printInfo:
+        print(quantities)
+        print(slcfFiles)
     datas = defaultdict(bool)
     foundSlice = False
     available_slices = []
@@ -1208,7 +1224,8 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
             
             available_slices.append([slcf_axis, slcf_value])
             if np.isclose(axis, abs(slcf_axis)) and np.isclose(slcf_value, value, atol=atol):
-                print("Reading %s"%(slcfFile), time, dt)
+                if printInfo:
+                    print("Reading %s"%(slcfFile), time, dt)
                 x, z, d, times, coords = read2dSliceFile(slcfFile, chid, time=time, dt=dt)
                 slcfName = '%s_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f'%(qty, coords[0], coords[1], coords[2], coords[3], coords[4], coords[5])
                 datas[slcfName] = defaultdict(bool)

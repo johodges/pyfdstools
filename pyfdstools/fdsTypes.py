@@ -664,6 +664,8 @@ class fdsLineTypes(object):
     def getRADItypes(self, version="6.7.4"):
         radiTypes = defaultdict(bool)
         radiTypes['ANGLE_INCREMENT'] = 'int'
+        radiTypes['C_MIN'] = 'float'
+        radiTypes['C_MAX'] = 'float'
         radiTypes['INITIAL_RADIATION_ITERATIONS'] = 'int'
         radiTypes['KAPPA0'] = 'float'
         radiTypes['MIE_MINIMUM_DIAMETER'] = 'float'
@@ -672,6 +674,7 @@ class fdsLineTypes(object):
         radiTypes['NMIEANG'] = 'int'
         radiTypes['NUMBER_RADIATION_ANGLES'] = 'int'
         radiTypes['PATH_LENGTH'] = 'float'
+        radiTypes['QR_CLIP'] = 'float'
         radiTypes['RADIATION'] = 'bool'
         radiTypes['RADIATIVE_FRACTION'] = 'float'
         radiTypes['RADIATION_ITERATIONS'] = 'int'

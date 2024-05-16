@@ -1100,9 +1100,13 @@ def getPointsFromFiles(bndfs, smvData, tStart, tEnd, tBand, tInt):
         times, patches = importBoundaryFile(
                 file, gridNum=mesh, smvData=smvData)
         if len(times) > 1:
-            newTimes, newPatches = extractTime(
-                    tStart, tEnd, tBand, tInt, patches, times)
-            buildSpace(newPatches)
+            if (tInt != None) and (tBand != None):
+                newTimes, newPatches = extractTime(
+                        tStart, tEnd, tBand, tInt, patches, times)
+                buildSpace(newPatches)
+            else:
+                newTimes, newPatches = times, patches
+                buildSpace(newPatches)
             coords, pts, orients = extractPoints(newPatches)
             
             if len(allCoords) == 0:

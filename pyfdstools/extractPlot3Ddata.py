@@ -945,11 +945,24 @@ def readSLCFtimes(file, timesFile=None, endianness=None):
     return times
 
 def readSLCFquantities(chid, resultDir):
-    smvFile = os.path.join(resultDir, '%s.smv'%(chid))
-    smvData = parseSMVFile(smvFile)
+    try:
+        smvFile = os.path.join(resultDir, '%s.smv'%(chid))
+        smvData = parseSMVFile(smvFile)
+    except:
+        smvDir = os.sep.join(os.path.abspath(resultDir).split(os.sep)[:-1])
+        smvFile = os.path.join(smvDir, '%s.smv'%(chid))
+        smvData = parseSMVFile(smvFile)
+        files = smvData['files']
+        files2 = defaultdict(bool)
+        files2['SLICES'] = defaultdict(bool)
+        for key in list(files['SLICES'].keys()):
+            n = os.path.basename(key)
+            files2['SLICES'][n] = files['SLICES'][key]
+        smvData['files'] = files2
     (grid, obst) = (smvData['grids'], smvData['obsts'])
     (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
     (files, bndes) = (smvData['files'], smvData['bndes'])
+    
     if '.zip' in resultDir:
         slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
         zip = zipfile.ZipFile(resultDir, 'r')
@@ -1191,6 +1204,11 @@ def getAxisAndValueFromXB(XB, grid, cen):
 
 def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None, atol=1e-8, printInfo=False):
     xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
+    if len(xyzFiles) == 0:
+        xyzFiles = getFileListFromResultDir(resultDir+'*'+os.sep, chid, 'xyz')
+        resultDir2 = os.path.dirname(xyzFiles[0]) + os.sep 
+    else:
+        resultDir2 = resultDir
     grids = getGridsFromXyzFiles(xyzFiles, chid)
     grids_abs = getAbsoluteGrid(grids)
     if abs(axis) == 1:
@@ -1202,7 +1220,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
     elif abs(axis) == 3:
         xAbs = grids_abs[:, :, 0, 0]
         zAbs = grids_abs[:, :, 0, 1]
-    quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
+    quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir2)
     if printInfo:
         print(quantities)
         print(slcfFiles)

@@ -95,6 +95,7 @@ class fdsLineTypes(object):
         combTypes['CHECK_REALIZABILITY'] = 'bool'
         combTypes['EXTINCTION_MODEL'] = 'string'
         combTypes['FIXED_MIX_TIME'] = 'float'
+        combTypes['FREE_BURN_TEMPERATURE'] = 'float'
         combTypes['ID'] = 'ignore'
         combTypes['INITIAL_UNMIXED_FRACTION'] = 'float'
         combTypes['MAX_CHEMISTRY_SUBSTEPS'] = 'int'
@@ -275,6 +276,7 @@ class fdsLineTypes(object):
     def getHVACtypes(self, version="6.7.4"):
         hvacTypes = defaultdict(bool)
         hvacTypes['AIRCOIL_ID'] = 'string'
+        hvacTypes['AMBIENT'] = 'bool'
         hvacTypes['AREA'] = 'float'
         hvacTypes['CLEAN_LOSS'] = 'float'
         hvacTypes['COOLANT_MASS_FLOW'] = 'float'
@@ -300,6 +302,7 @@ class fdsLineTypes(object):
         hvacTypes['NODE_ID'] = 'liststring'
         hvacTypes['RAMP_ID'] = 'string'
         hvacTypes['REVERSE'] = 'bool'
+        hvacTypes['ROUGHNESS'] = 'float'
         hvacTypes['SPEC_ID'] = 'string'
         hvacTypes['TAU_FAN'] = 'float'
         hvacTypes['TAU_VF'] = 'float'

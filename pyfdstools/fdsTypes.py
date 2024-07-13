@@ -284,6 +284,7 @@ class fdsLineTypes(object):
         hvacTypes['COOLANT_TEMPERATURE'] = 'float'
         hvacTypes['DAMPER'] = 'bool'
         hvacTypes['DEVC_ID'] = 'string'
+        hvacTypes['DIAMETER'] = 'float'
         hvacTypes['DISCHARGE_COEFFICIENT'] = 'float'
         hvacTypes['DUCT_ID'] = 'liststring'
         hvacTypes['EFFICIENCY'] = 'float'
@@ -300,6 +301,7 @@ class fdsLineTypes(object):
         hvacTypes['MAX_PRESSURE'] = 'float'
         hvacTypes['N_CELLS'] = 'int'
         hvacTypes['NODE_ID'] = 'liststring'
+        hvacTypes['PERIMETER'] = 'float'
         hvacTypes['RAMP_ID'] = 'string'
         hvacTypes['REVERSE'] = 'bool'
         hvacTypes['ROUGHNESS'] = 'float'
@@ -450,6 +452,7 @@ class fdsLineTypes(object):
         miscTypes['GVEC'] = 'listind1float'
         miscTypes['HUMIDITY'] = 'float'
         miscTypes['HVAC_MASS_TRANSPORT_CELL_L'] = 'float'
+        miscTypes['HVAC_PRES_RELAX'] = 'float'
         miscTypes['HVAC_QFAN'] = 'bool'
         miscTypes['IBLANK_SMV'] = 'bool'
         miscTypes['ID'] = 'ignore'
@@ -1028,7 +1031,7 @@ class fdsLineTypes(object):
 
     def getZONEtypes(self, version="6.7.4"):
         zoneTypes = defaultdict(bool)
-        zoneTypes['ID'] = 'ignore'
+        zoneTypes['ID'] = 'string'
         zoneTypes['XB'] = 'listfloat'
         zoneTypes['XYZ'] = 'listfloat'
         zoneTypes['LEAK_AREA'] = 'listind0float'

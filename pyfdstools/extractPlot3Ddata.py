@@ -1217,6 +1217,10 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
     elif abs(axis) == 2:
         xAbs = grids_abs[:, 0, :, 0]
         zAbs = grids_abs[:, 0, :, 2]
+        xAbs_c = (xAbs[1:, :] + xAbs[:-1, :])/2
+        xAbs_c = xAbs_c[:, :-1]
+        zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
+        zAbs_c = zAbs_c[:-1,:]
     elif abs(axis) == 3:
         xAbs = grids_abs[:, :, 0, 0]
         zAbs = grids_abs[:, :, 0, 1]
@@ -1224,6 +1228,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
     if printInfo:
         print(quantities)
         print(slcfFiles)
+    
     datas = defaultdict(bool)
     foundSlice = False
     available_slices = []
@@ -1245,6 +1250,13 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
                 if printInfo:
                     print("Reading %s"%(slcfFile), time, dt)
                 x, z, d, times, coords = read2dSliceFile(slcfFile, chid, time=time, dt=dt)
+                if cen:
+                    x = (x[1:, :]+x[:-1, :])/2
+                    z = (z[:,1:]+z[:,:-1])/2
+                    x = x[:,:-1]
+                    z = z[:-1,:]
+                    d = d[1:,1:]
+                #print(x.shape, z.shape, d.shape)
                 slcfName = '%s_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f'%(qty, coords[0], coords[1], coords[2], coords[3], coords[4], coords[5])
                 datas[slcfName] = defaultdict(bool)
                 datas[slcfName]['limits'] = coords
@@ -1252,6 +1264,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
                 datas[slcfName]['datas'] = d.copy()
                 datas[slcfName]['x'] = x.copy()
                 datas[slcfName]['z'] = z.copy()
+                datas[slcfName]['center'] = cen
                 foundSlice = True
     if not foundSlice:
         print("Warning did not find a 2-D slice of %s on axis %d at value %0.4f"%(quantity, axis, value))
@@ -1262,23 +1275,35 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
         print("Note an axis of -1 indicates a 3-D slice which is not currently supported in this function.")
         return None        
     data_abs = np.zeros((xAbs.shape[0], xAbs.shape[1], len(times)), dtype=np.float32)
+    data_abs_c = np.zeros((xAbs_c.shape[0], xAbs_c.shape[1], len(times)), dtype=np.float32)
     for slcfName in list(datas.keys()):
         x = datas[slcfName]['x']
         z = datas[slcfName]['z']
         d = datas[slcfName]['datas']
+        c = datas[slcfName]['center']
         
-        xloc_mn = np.where(np.isclose(abs(xAbs - np.nanmin(x)), 0, atol=1e-04))[0][0]
-        xloc_mx = np.where(np.isclose(abs(xAbs - np.nanmax(x)), 0, atol=1e-04))[0][0]
-        zloc_mn = np.where(np.isclose(abs(zAbs - np.nanmin(z)), 0, atol=1e-04))[1][0]
-        zloc_mx = np.where(np.isclose(abs(zAbs - np.nanmax(z)), 0, atol=1e-04))[1][0]
-        
+        if c:
+            xloc_mn = np.where(np.isclose(abs(xAbs_c - np.nanmin(x)), 0, atol=1e-04))[0][0]
+            xloc_mx = np.where(np.isclose(abs(xAbs_c - np.nanmax(x)), 0, atol=1e-04))[0][0]
+            zloc_mn = np.where(np.isclose(abs(zAbs_c - np.nanmin(z)), 0, atol=1e-04))[1][0]
+            zloc_mx = np.where(np.isclose(abs(zAbs_c - np.nanmax(z)), 0, atol=1e-04))[1][0]
+        else:
+            xloc_mn = np.where(np.isclose(abs(xAbs - np.nanmin(x)), 0, atol=1e-04))[0][0]
+            xloc_mx = np.where(np.isclose(abs(xAbs - np.nanmax(x)), 0, atol=1e-04))[0][0]
+            zloc_mn = np.where(np.isclose(abs(zAbs - np.nanmin(z)), 0, atol=1e-04))[1][0]
+            zloc_mx = np.where(np.isclose(abs(zAbs - np.nanmax(z)), 0, atol=1e-04))[1][0]
+            
         (NX, NZ, NT) = np.shape(d)
         ANX = xloc_mx-xloc_mn + 1
         ANZ = zloc_mx-zloc_mn + 1
         
         if (NX != ANX) or (NZ != ANZ):
-            xi = xAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
-            zi = zAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
+            if c:
+                xi = xAbs_c[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
+                zi = zAbs_c[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
+            else:
+                xi = xAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
+                zi = zAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
             
             x = np.round(x, decimals=4)
             z = np.round(z, decimals=4)
@@ -1296,12 +1321,20 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
                 interpolator = scpi.RegularGridInterpolator((x[:, 0], z[0, :]), d[:, :, i])
                 data2 = interpolator(tmpGrid)
                 data2 = np.reshape(data2, (ANX, ANZ), order='C')
-                try:
-                    data_abs[xloc_mn:xloc_mx+1,
-                             zloc_mn:zloc_mx+1,
-                             i] = data2
-                except:
-                    print("Error loading %s at time %0.0f"%(slcfName, i))
+                if c:
+                    try:
+                        data_abs_c[xloc_mn:xloc_mx+1,
+                                 zloc_mn:zloc_mx+1,
+                                 i] = data2
+                    except:
+                        print("Error loading %s at time %0.0f"%(slcfName, i))
+                else:
+                    try:
+                        data_abs[xloc_mn:xloc_mx+1,
+                                 zloc_mn:zloc_mx+1,
+                                 i] = data2
+                    except:
+                        print("Error loading %s at time %0.0f"%(slcfName, i))
         else:
             try:
                 data_abs[xloc_mn:xloc_mx+1,

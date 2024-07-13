@@ -1430,7 +1430,7 @@ def writeSlice(outFile, resultDir, chid, data, times, axis, val,
 
 def writeSliceToSmv(file, meshNum, X, outQty, outFile, sName, uts):
     with open(file, 'a') as f:
-        f.write('SLCF     %0.0f # STRUCTURED &     %0.0f    %0.0f     %0.0f    %0.0f     %0.0f    %0.0f !      %0.0f\n'%(meshNum, X[0], X[1], X[2], X[3], X[4], X[5], meshNum))
+        f.write('SLCF     %0.0f # STRUCTURED &     %0.0f    %0.0f     %0.0f    %0.0f     %0.0f    %0.0f !      %0.0f\n'%(meshNum, X[0], X[1], X[2], X[3], X[4], X[5], 1))
         f.write(' %s\n'%(outFile))
         f.write(' %s\n'%(outQty))
         f.write(' %s\n'%(sName))

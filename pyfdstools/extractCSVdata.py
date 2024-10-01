@@ -34,7 +34,7 @@ def findHeaderLength(lines):
         for replacement in replacements:
             linetmp = linetmp.replace(replacement[0],replacement[1])
         lines[counter] = linetmp
-        line = (linetmp.decode('utf-8')).replace('\r\n','')
+        line = (linetmp.decode('utf-8',errors='ignore')).replace('\r\n','')
         while line[-1] == ',': line = line[:-1]
         try:
             [float(y) for y in line.split(',')]

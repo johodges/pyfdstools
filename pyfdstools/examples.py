@@ -609,10 +609,11 @@ def runExamples():
     
     #print("Example to parse Smoke 3D files")
     #exampleParseS3dFiles()
-
+    
+    print("Example add heat flux slice")
+    exampleAddGasPhaseHeatFluxSlice()
 
 
 if __name__ == '__main__':
-    #runExamples()
-    exampleAddGasPhaseHeatFluxSlice()
-    #examplePostProcessVisibility()
+    runExamples()
+    

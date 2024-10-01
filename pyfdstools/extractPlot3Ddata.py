@@ -24,6 +24,7 @@ import struct
 import scipy.interpolate as scpi
 import pandas as pd
 from collections import defaultdict
+from .fdsFileOperations import fdsFileOperations
 from .utilities import getDatatypeByEndianness, getEndianness
 from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
 from .utilities import getFileListFromResultDir
@@ -750,10 +751,16 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
 
 def readSLCF2Ddata(chid, resultDir, quantityToExport,
                    time=None, dt=None):
+    fdsFile = fdsFileOperations()
+    fdsFile.importFile(resultDir+os.sep+chid+'.fds')
+    slcfDir = resultDir
+    if fdsFile.dump['ID'] is not False:
+        if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
+            slcfDir = resultDir + os.sep + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep
     if '.zip' in resultDir:
-        xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
+        xyzFiles = getFileListFromZip(slcfDir, chid, 'xyz')
     else:
-        xyzFiles = glob.glob("%s%s%s*.xyz"%(resultDir, os.sep, chid))
+        xyzFiles = glob.glob("%s%s%s*.xyz"%(slcfDir, os.sep, chid))
     grids = defaultdict(bool)
     endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
@@ -764,11 +771,11 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
         
         mesh = xyzFile.split(chid)[-1].split('.xyz')[0].replace('_','')
         meshStr = "%s"%(chid) if mesh == '' else "%s_%s"%(chid, mesh)
-        if '.zip' in resultDir:
-            slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
+        if '.zip' in slcfDir:
+            slcfFiles = getFileListFromZip(slcfDir, chid, 'sf')
             slcfFiles = [x for x in slcfFiles if '%s'%(meshStr) in x]
         else:
-            slcfFiles = glob.glob("%s%s%s_*.sf"%(resultDir, os.sep, meshStr))
+            slcfFiles = glob.glob("%s%s%s_*.sf"%(slcfDir, os.sep, meshStr))
         
         grids[meshStr] = defaultdict(bool)
         grids[meshStr]['xGrid'] = xGrid
@@ -859,19 +866,22 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
         coords2D = grids[key]['coords2D']
         
         for data, coord in zip(datas2D, coords2D):
+            print(coord)
             xloc = np.where(np.isclose(
-                    abs(xGrid_abs - coord[0]), 0, atol=1e-04))[0][0]
+                    abs(xGrid_abs - coord[0]), 0, atol=1e-06))[0][0]
             yloc = np.where(np.isclose(
-                    abs(yGrid_abs - coord[1]), 0, atol=1e-04))[1][0]
+                    abs(yGrid_abs - coord[1]), 0, atol=1e-06))[1][0]
             zloc = np.where(np.isclose(
-                    abs(zGrid_abs - coord[2]), 0, atol=1e-04))[2][0]
+                    abs(zGrid_abs - coord[2]), 0, atol=1e-06))[2][0]
             (NX, NY, NZ, NT) = np.shape(data)
             NT = min([NT, data_abs.shape[3]])
             data_abs[xloc:xloc+NX,
                      yloc:yloc+NY,
                      zloc:zloc+NZ,
                      :NT] = data[:, :, :, :NT]
-        
+            if (coord[0] == 0.0) and (coord[2] == 0.3514):
+                print(xloc, xloc+NX, yloc, yloc+NY, zloc, zloc+NZ )
+                plt.imshow(data[:, 0, :, 0])
     return grid_abs, data_abs, timesOut
 
 
@@ -1214,6 +1224,10 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
     if abs(axis) == 1:
         xAbs = grids_abs[0, :, :, 1]
         zAbs = grids_abs[0, :, :, 2]
+        xAbs_c = (xAbs[1:, :] + xAbs[:-1, :])/2
+        xAbs_c = xAbs_c[:, :-1]
+        zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
+        zAbs_c = zAbs_c[:-1,:]
     elif abs(axis) == 2:
         xAbs = grids_abs[:, 0, :, 0]
         zAbs = grids_abs[:, 0, :, 2]
@@ -1224,6 +1238,10 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
     elif abs(axis) == 3:
         xAbs = grids_abs[:, :, 0, 0]
         zAbs = grids_abs[:, :, 0, 1]
+        xAbs_c = (xAbs[1:, :] + xAbs[:-1, :])/2
+        xAbs_c = xAbs_c[:, :-1]
+        zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
+        zAbs_c = zAbs_c[:-1,:]
     quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir2)
     if printInfo:
         print(quantities)

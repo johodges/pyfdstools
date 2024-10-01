@@ -180,7 +180,7 @@ class fdspatch(object):
         return coords, pts, orients
     
     
-def getPatchOptions(bndfFile, smvFile, meshNum):
+def getPatchOptions(bndfFile, smvFile, meshNum, smvData=None):
     """Read patches from boundary file and return options for each axis
     """
     f = zopen(bndfFile)
@@ -190,7 +190,7 @@ def getPatchOptions(bndfFile, smvFile, meshNum):
     (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
     
     times, patches = importBoundaryFile(
-            bndfFile, smvFile, gridNum=meshNum)
+            bndfFile, smvFile, gridNum=meshNum, smvData=smvData)
     xoptions = []
     yoptions = []
     zoptions = []
@@ -206,7 +206,7 @@ def getPatchOptions(bndfFile, smvFile, meshNum):
 def getPatches(bndfFile, smvFile, axis, value, meshNum,
                xmin=999, xmax=-999, ymin=999, ymax=-999,
                zmin=999, zmax=-999, dx=999, dz=999,
-               decimals=4,
+               decimals=4, smvData=None,
                showOptions=False):
     """Read patches from boundary file
     
@@ -272,8 +272,10 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
     (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
     
     times, patches = importBoundaryFile(
-            bndfFile, smvFile, gridNum=meshNum)
+            bndfFile, smvFile, gridNum=meshNum, smvData=smvData)
     allPatches = []
+    if patches is None:
+        return None, None, None, None, None, None, None, None, None, None
     for i in range(0, len(patches)):
         patches[i].data[patches[i].data < -1e10] = np.nan
         #print(patches[i].lims, patchIors[i])
@@ -367,8 +369,10 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
             z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
     if abs(axis) == 3:
         if patches[0].cell_centered == True:
-            x_abs = np.linspace(xmin, xmax-dx, int(np.round((xmax-xmin)/dx)))
-            z_abs = np.linspace(ymin, ymax-dz, int(np.round((ymax-ymin)/dz)))
+            #x_abs = np.linspace(xmin, xmax-dx, int(np.round((xmax-xmin)/dx)))
+            #z_abs = np.linspace(ymin, ymax-dz, int(np.round((ymax-ymin)/dz)))
+            x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
+            z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
         else:
             x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
             z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
@@ -397,6 +401,9 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         if xInd1 == 0:
             xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
         else:
+            #print(patch.cell_centered)
+            #print(x_grid_abs)
+            #print(xMax)
             xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
         zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin, atol=10**(-1*decimals)))[1][0]
         if zInd1 == 0:
@@ -604,8 +611,15 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
     times, patches = buildPatches(
             patchPts, patchDs, patchIors, data, grid[gridNum])
     fname2 = fname.split('.zip')[-1].split(os.sep)[-1]
+    #print(bndfs)
     bndf_extract = [[x[1], x[4]] for x in bndfs]
-    bnd_type = [x[1] for x in bndf_extract if x[0] == fname2][0]
+    print(bndf_extract)
+    bnd_types = [x[1] for x in bndf_extract if x[0] == fname2]
+    print('bnd_types')
+    print(fname2)
+    print(bnd_types)
+    if len(bnd_types) == 0: return None, None
+    bnd_type = bnd_types[0]
     
     for i in range(0, len(patches)):
         if bnd_type == 'BNDC':
@@ -1217,13 +1231,24 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
     
     datas = defaultdict(bool)
     
-    bndfFiles = getFileList(resultDir, chid, 'bf')
-    # print('bndfFiles',bndfFiles)
-    #print(resultDir, chid)
-    smvFile = getFileList(resultDir, chid, 'smv')[0]
-    
     fdsFile = fdsFileOperations()
     fdsFile.importFile(fdsFilePath)
+    smvFile = getFileList(resultDir, chid, 'smv')[0]
+    smvData = parseSMVFile(smvFile)
+    bndfDir = resultDir
+    if fdsFile.dump['ID'] is not False:
+        if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
+            bndfDir = resultDir + os.sep + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep
+            for i in range(0, len(smvData['bndfs'])):
+                f = smvData['bndfs'][i][1]
+                f = os.path.abspath(f)
+                f = f.split(os.sep)[-1]
+                smvData['bndfs'][i][1] = f
+    #print(bndfDir)
+    bndfFiles = getFileList(bndfDir, chid, 'bf')
+    #print('bndfFiles',bndfFiles)
+    #print(resultDir, chid)
+    
     meshes = list(fdsFile.meshes.keys())
     if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
     numberOfMeshes = 0
@@ -1241,7 +1266,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
     
     #numberOfMeshes = len(meshes)
     #print(numberOfMeshes)
-    
+    ts_out = None
     for qty in fdsQuantities:
         allPatches = []
         (xmin, xmax) = (999, -999)
@@ -1260,9 +1285,11 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
             #print(file, meshNumber)
             if quantity == qty:
                 ts, ps, x1, x2, y1, y2, z1, z2, dx1, dz1 = getPatches(
-                        file, smvFile, axis, value, meshNumber, decimals=decimals)
+                        file, smvFile, axis, value, meshNumber, decimals=decimals, smvData=smvData)
                 #print(file, dx1, dz1)
-                #print(file, meshNumber, x1, x2, y1, y2, z1, z2)
+                if ts is None: continue
+                ts_out = ts  
+                print(file, meshNumber, x1, x2, y1, y2, z1, z2)
                 #print(file.split('_')[-2], numberOfMeshes)
                 #print(quantity, qty, shortName, units, npatch)
                 (xmin, xmax) = (min([xmin, x1]), max([xmax, x2]))
@@ -1283,7 +1310,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                     meshNumber = int(file.split('_')[-2]) - 1
                 if quantity == qty:
                     xoptions, yoptions, zoptions = getPatchOptions(
-                            file, smvFile, meshNumber)
+                            file, smvFile, meshNumber, smvData=smvData)
                     print("Queried axis and value not found.")
                     print("Options for IOR %0.0f in %s"%(axis, file))
                     for option in xoptions:
@@ -1296,7 +1323,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                         if option[1] == axis:
                             print(option[0])
         #print("ABS INFO: ")
-        #print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
+        print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
         if qtyFound:
             x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
                     allPatches, xmin, xmax, ymin, ymax, zmin, zmax,

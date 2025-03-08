@@ -355,8 +355,10 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
     """
     if abs(axis) == 1:
         if patches[0].cell_centered == True:
-            x_abs = np.linspace(ymin, ymax-dx, int(np.round((ymax-ymin)/dx)))
-            z_abs = np.linspace(zmin, zmax-dz, int(np.round((zmax-zmin)/dz)))
+            #x_abs = np.linspace(ymin, ymax-dx, int(np.round((ymax-ymin)/dx)))
+            #z_abs = np.linspace(zmin, zmax-dz, int(np.round((zmax-zmin)/dz)))
+            x_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dx)+1))
+            z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
         else:
             x_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dx)+1))
             z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
@@ -613,11 +615,11 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
     fname2 = fname.split('.zip')[-1].split(os.sep)[-1]
     #print(bndfs)
     bndf_extract = [[x[1], x[4]] for x in bndfs]
-    print(bndf_extract)
+    #print(bndf_extract)
     bnd_types = [x[1] for x in bndf_extract if x[0] == fname2]
-    print('bnd_types')
-    print(fname2)
-    print(bnd_types)
+    #print('bnd_types')
+    #print(fname2)
+    #print(bnd_types)
     if len(bnd_types) == 0: return None, None
     bnd_type = bnd_types[0]
     
@@ -631,7 +633,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
             #print("PRE", IOR, XB, dx, dy)
             if abs(IOR) == 1:
                 (XB[2], XB[3]) = (XB[2]+dx/2, XB[3]+dx/2)
-                (XB[4], XB[5]) = (XB[5]+dz/2, XB[4]+dz/2)
+                (XB[4], XB[5]) = (XB[4]+dz/2, XB[5]+dz/2)
             elif abs(IOR) == 2:
                 (XB[0], XB[1]) = (XB[0]+dx/2, XB[1]+dx/2)
                 (XB[4], XB[5]) = (XB[4]+dz/2, XB[5]+dz/2)
@@ -1289,7 +1291,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                 #print(file, dx1, dz1)
                 if ts is None: continue
                 ts_out = ts  
-                print(file, meshNumber, x1, x2, y1, y2, z1, z2)
+                #print(file, meshNumber, x1, x2, y1, y2, z1, z2)
                 #print(file.split('_')[-2], numberOfMeshes)
                 #print(quantity, qty, shortName, units, npatch)
                 (xmin, xmax) = (min([xmin, x1]), max([xmax, x2]))
@@ -1323,7 +1325,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                         if option[1] == axis:
                             print(option[0])
         #print("ABS INFO: ")
-        print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
+        #print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
         if qtyFound:
             x_grid_abs, z_grid_abs, data_abs = buildAbsPatch(
                     allPatches, xmin, xmax, ymin, ymax, zmin, zmax,

@@ -1344,12 +1344,12 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['X'] = x_grid_abs
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['Z'] = z_grid_abs
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['DATA'] = data_abs
-    tmax = len(ts)
+    tmax = len(ts_out)
     for qty in list(datas.keys()):
         tmax = min([datas[qty]['DATA'].shape[2], tmax])
     for qty in list(datas.keys()):
         datas[qty]['DATA'] = datas[qty]['DATA'][:, :, :tmax]
-    ts = ts[:tmax]
+    ts = ts_out[:tmax]
     return datas, ts
 
 
@@ -1446,6 +1446,8 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     points = parseFDSforPts(fdsObsts, smvObsts, names, extend=extend)
     polygons, numberOfGroups = pts2polygons(points)
     
+    print(polygons)
+    print(points)
     bndfs = getFileList(resultDir, chid, 'bf')
     bndf_dic = linkBndfFileToMesh(meshes, bndfs, quantities)
     #pd.DataFrame(names).to_csv('test_names.csv')

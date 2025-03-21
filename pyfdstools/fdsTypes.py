@@ -495,6 +495,7 @@ class fdsLineTypes(object):
         miscTypes['TMPA'] = 'float'
         miscTypes['TURBULENCE_MODEL'] = 'string'
         miscTypes['TURBULENT_DEPOSITION'] = 'bool'
+        miscTypes['UNFREEZE_TIME'] = 'float'
         miscTypes['UVW_FILE'] = 'string'
         miscTypes['VERBOSE'] = 'bool'
         miscTypes['VISIBILITY_FACTOR'] = 'float'

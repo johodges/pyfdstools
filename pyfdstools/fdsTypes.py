@@ -541,6 +541,7 @@ class fdsLineTypes(object):
         obstTypes['MATL_ID'] = 'string'
         obstTypes['MULT_ID'] = 'string'
         obstTypes['ORIENTATION'] = 'listfloat'
+        obstTypes['OUTLINE'] = 'bool'
         obstTypes['PERMIT_HOLE'] = 'bool'
         obstTypes['RADIUS'] = 'float'
         obstTypes['RGB'] = 'listint'

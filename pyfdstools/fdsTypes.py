@@ -440,6 +440,7 @@ class fdsLineTypes(object):
     def getMISCtypes(self, version="6.7.4"):
         miscTypes = defaultdict(bool)
         miscTypes['AEROSOL_SCRUBBING'] = 'bool'
+        miscTypes['AGGLOMERATION'] = 'bool'
         miscTypes['ALLOW_UNDERSIDE_PARTICLES'] = 'bool'
         miscTypes['BNDF_DEFAULT'] = 'bool'
         miscTypes['C_SMAGORINSKY'] = 'float'

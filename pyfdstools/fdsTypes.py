@@ -693,6 +693,7 @@ class fdsLineTypes(object):
         radiTypes['MIE_NDG'] = 'float'
         radiTypes['NMIEANG'] = 'int'
         radiTypes['NUMBER_RADIATION_ANGLES'] = 'int'
+        radiTypes['OPTICALLY_THIN'] = 'bool'
         radiTypes['PATH_LENGTH'] = 'float'
         radiTypes['QR_CLIP'] = 'float'
         radiTypes['RADIATION'] = 'bool'

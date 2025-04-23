@@ -53,7 +53,10 @@ def timeAverage2(data, times, window):
     tmax = min([tmax, data2.shape[-1], data3.shape[-1]])
     for i in range(1, tmax):
         data_dt = times[i]-times[i-1]
-        data3[:,i] = (data3[:, i-1]*(dt-data_dt)+ data2[:, i]*data_dt)/dt
+        if dt < data_dt:
+            data3[:, i] = data2[:, i]
+        else:
+            data3[:,i] = (data3[:, i-1]*(dt-data_dt)+ data2[:, i]*data_dt)/dt
     data4 = np.reshape(data3, sz)
     return data4
 

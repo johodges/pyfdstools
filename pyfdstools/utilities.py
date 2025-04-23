@@ -30,6 +30,25 @@ import struct
 from collections import defaultdict
 from .colorSchemes import getVTcolors
 
+def astFromGhf(ghf, h, e, Tgauge=20):
+    # h in kW/m2K
+    sigma = 5.67e-11
+    if type(h) is float:
+        if (h > 1): print("Warning h > 1 kW/m2-K")
+    else:
+        if np.any(h>1): print("Warning h > 1 kW/m2-K")
+    a = e*sigma
+    b = h
+    c = -e*sigma*(Tgauge+273.15)**4 - h*Tgauge - ghf
+    
+    alpha = ((3**0.5)*(27*(a**2)*(b**4)-256*(a**3)*(c**3))**0.5 + 9*a*(b**2))**(1/3)
+    beta = 4*((2/3)**(1/3))*c
+    gamma = (18**(1/3))*a
+    M = ((beta/alpha) + (alpha/gamma))**0.5
+    
+    Tast = (1/2)*(-M + ((2*b)/(a*M) - M**2)**0.5)
+    return Tast
+
 def timeAverage2(data, times, window):
     sz = data.shape
     dt = window/2
@@ -39,7 +58,7 @@ def timeAverage2(data, times, window):
         data2[0, :] = data
     else:
         # Reshape data into array for time averaging
-        pts = np.product(sz[:-1])
+        pts = np.prod(sz[:-1])
         data2 = np.reshape(data, (pts,sz[-1]))
     
     # Time average the array
@@ -49,12 +68,15 @@ def timeAverage2(data, times, window):
         tind = np.where(times-window > 0)[0][0]
     else:
         tind = -1
-    data3[:, 0] = np.nanmean(data2[:, :tind], axis=1)
+    #data3[:, 0] = np.nanmean(data2[:, :tind], axis=1)
+    data3[:, 0] = data2[:, 0]
     tmax = min([tmax, data2.shape[-1], data3.shape[-1]])
     for i in range(1, tmax):
         data_dt = times[i]-times[i-1]
-        if dt < data_dt:
+        if data_dt > dt:
             data3[:, i] = data2[:, i]
+        elif (times[i]-times[0]) < dt:
+            data3[:,i] = (np.nanmean(data2[:,:i], axis=1)*(times[i-1]-times[0]) + data2[:,i]*data_dt)/(times[i]-times[0])
         else:
             data3[:,i] = (data3[:, i-1]*(dt-data_dt)+ data2[:, i]*data_dt)/dt
     data4 = np.reshape(data3, sz)
@@ -508,7 +530,7 @@ def readXYZfile(file):
     return grid, header[1:-1]
     
 
-def getAbsoluteGrid(grids, makeUniform=False):
+def getAbsoluteGrid(grids, makeUniform=False, decimals=4):
     """Builds absolute grid from defaultdict of local grids
     
     Parameters
@@ -534,9 +556,9 @@ def getAbsoluteGrid(grids, makeUniform=False):
             zGrid = grids[key]['zGrid']
             mins.append([xGrid.min(), yGrid.min(), zGrid.min()])
             maxs.append([xGrid.max(), yGrid.max(), zGrid.max()])
-            dx = np.round(xGrid[1, 0, 0] - xGrid[0, 0, 0], decimals=4)
-            dy = np.round(yGrid[0, 1, 0] - yGrid[0, 0, 0], decimals=4)
-            dz = np.round(zGrid[0, 0, 1] - zGrid[0, 0, 0], decimals=4)
+            dx = np.round(xGrid[1, 0, 0] - xGrid[0, 0, 0], decimals=decimals)
+            dy = np.round(yGrid[0, 1, 0] - yGrid[0, 0, 0], decimals=decimals)
+            dz = np.round(zGrid[0, 0, 1] - zGrid[0, 0, 0], decimals=decimals)
             deltas.append([dx, dy, dz])
         absMins = np.min(mins, axis=0)
         absMaxs = np.max(maxs, axis=0)
@@ -570,9 +592,9 @@ def getAbsoluteGrid(grids, makeUniform=False):
             xs = grids[key]['xGrid'][:, 0, 0]
             ys = grids[key]['yGrid'][0, :, 0]
             zs = grids[key]['zGrid'][0, 0, :]
-            all_xs.extend(xs)
-            all_ys.extend(ys)
-            all_zs.extend(zs)
+            all_xs.extend(np.round(xs, decimals=decimals))
+            all_ys.extend(np.round(ys, decimals=decimals))
+            all_zs.extend(np.round(zs, decimals=decimals))
         
         abs_xs = np.unique(all_xs)
         abs_ys = np.unique(all_ys)

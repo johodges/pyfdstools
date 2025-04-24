@@ -27,6 +27,7 @@ def runExamples():
     files = ["read_and_write_input_files.py",
              "error_calculation.py",
              "dump_2d_slice_to_csv.py",
+             "dump_3d_slice_to_csv.py",
              "extract_2d_slice_from_3d_slice.py",
              "extract_boundary_data.py",
              "extract_boundary_max.py"]

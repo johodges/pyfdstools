@@ -1304,7 +1304,7 @@ class fdsFileOperations(object):
             #print(key)
             keyID, keyID2, keyType, keyValue = self.interpretKey(key, lineType, types)
             #print(i, keyID)
-            #if lineType == 'MATL':
+            #if lineType == 'SURF':
             #    print(i, keyID, keyID2, keyType, keyValue)
             if keyType == 'string':
                 keyValue = keyValue.split("'")[1]
@@ -1408,14 +1408,16 @@ class fdsFileOperations(object):
                     t1_l = len(t1.replace(':','').strip())
                     t2_l = len(t2.replace(':','').strip())
                     if (':' in t1) and (':' in t2):
-                        if (t1_l > 1) and (t2_l) > 1:
-                            print("Warning, matrix input on both axes not implemented.")
+                        ar1 = int(t1.split(':')[0])-1
+                        ar2 = int(t1.split(':')[1])
+                        ar3 = int(t2.split(':')[0])-1
+                        ar4 = int(t2.split(':')[1])
+                        if (t1_l > 1) and (t2_l > 1):
+                            matrix[ar1:ar2, ar3:ar4] = np.reshape(keyValues, matrix[ar1:ar2, ar3:ar4].shape, order='F')
                         elif (t1_l > 1):
-                            ar1 = int(t1.split(':')[0])
-                            ar2 = int(t1.split(':')[1])
                             matrix[ar1:ar2,:] = keyValues
                         elif (t2_l > 1):
-                            matrix[:, ar1:ar2] = keyValues
+                            matrix[:, ar3:ar4] = keyValues
                     elif (':' in t1):
                         if (t1_l > 1):
                             ar1 = int(t1.split(':')[0])-1
@@ -2557,7 +2559,7 @@ class fdsFileOperations(object):
                                     precision=precision)
         with open(location, 'w') as f:
             f.write(text)
-        print("Input file written to: %s"%(location))
+        
         
         
     def splitLineIntoKeys(self, line2):

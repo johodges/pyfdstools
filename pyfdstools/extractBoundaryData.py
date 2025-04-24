@@ -189,7 +189,7 @@ def getPatchOptions(bndfFile, smvFile, meshNum, smvData=None):
     f.close()
     (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
     
-    times, patches = importBoundaryFile(
+    times, patches, units = importBoundaryFile(
             bndfFile, smvFile, gridNum=meshNum, smvData=smvData)
     xoptions = []
     yoptions = []
@@ -271,7 +271,7 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
     f.close()
     (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
     
-    times, patches = importBoundaryFile(
+    times, patches, units = importBoundaryFile(
             bndfFile, smvFile, gridNum=meshNum, smvData=smvData)
     allPatches = []
     if patches is None:
@@ -597,7 +597,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
         f = zopen(fname)
     except:
         print("Unable to open file %s."%(fname))
-        return None, None
+        return None, None, None
     quantity, shortName, units, npatch = parseBndfHeader(f)
     patchInfo, data = parseBndfPatches(f, npatch)
     f.close()
@@ -606,7 +606,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
         smvData = parseSMVFile(smvFile)
     elif (smvData is None) and (smvFile is None):
         print("Either smokeview file or smokeview data must be provided.")
-        return None, None
+        return None, None, None
     (grid, obst) = (smvData['grids'], smvData['obsts'])
     (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
     (files, bndes) = (smvData['files'], smvData['bndes'])
@@ -620,7 +620,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
     #print('bnd_types')
     #print(fname2)
     #print(bnd_types)
-    if len(bnd_types) == 0: return None, None
+    if len(bnd_types) == 0: return None, None, None
     bnd_type = bnd_types[0]
     
     for i in range(0, len(patches)):
@@ -644,7 +644,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
             patches[i].lims = XB
         else:
             patches[i].cell_centered = False
-    return times, patches
+    return times, patches, units
 
 
 def buildPatches(patchPts, patchDs, patchIors, data, grid):
@@ -842,7 +842,7 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvData,
         Array containing orientations
     """
     
-    coords2, pts2, times, orients2 = getPointsFromFiles(
+    coords2, pts2, times, orients2, units = getPointsFromFiles(
             bndfs, smvData, tStart, tEnd, tBand, tInt)
     #import pandas as pd
     #pd.DataFrame(coords2).to_csv('E:\\projects\\kansas_city_fire_modeling\\fromcluster\\coords.csv')
@@ -879,7 +879,7 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvData,
         mPts = np.delete(mPts,mPts.shape[0]-1,axis=0)
         times = np.delete(times,times.shape[0]-1,axis=0)
         
-    return times, mPts, orients
+    return times, mPts, orients, units
 
 
 def readBoundaryFile(fname):
@@ -1113,7 +1113,7 @@ def getPointsFromFiles(bndfs, smvData, tStart, tEnd, tBand, tInt):
     newTimes = []
     for file, mesh in bndfs:
         mesh = int(mesh)
-        times, patches = importBoundaryFile(
+        times, patches, units = importBoundaryFile(
                 file, gridNum=mesh, smvData=smvData)
         if len(times) > 1:
             if (tInt != None) and (tBand != None):
@@ -1137,7 +1137,7 @@ def getPointsFromFiles(bndfs, smvData, tStart, tEnd, tBand, tInt):
     if len(newTimes) == 0:
         print(bndfs)
         assert False, "No valid patches found."
-    return allCoords, allPts, newTimes, allOrients
+    return allCoords, allPts, newTimes, allOrients, units
 
 
 def getCoordinateMasks(coords, polygons):
@@ -1195,7 +1195,7 @@ def timeAverageBndfs(resultDir, chid, fdsFilePath, fdsQuantity, dt):
             meshNumber = int(file.split('_')[-2]) - 1
             
         if quantity == fdsQuantity:
-            times, patches = importBoundaryFile(
+            times, patches, units = importBoundaryFile(
                 file, smvFile, gridNum=meshNumber)
             
             
@@ -1286,6 +1286,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
             #print(quantity, qty, shortName, units, npatch)
             #print(file, meshNumber)
             if quantity == qty:
+                #print(axis, value)
                 ts, ps, x1, x2, y1, y2, z1, z2, dx1, dz1 = getPatches(
                         file, smvFile, axis, value, meshNumber, decimals=decimals, smvData=smvData)
                 #print(file, dx1, dz1)
@@ -1302,6 +1303,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                     allPatches.append(patch)
                     qtyFound = True
                 #print(len(allPatches))
+                outUnits = units
         if len(allPatches) == 0:
             for file in bndfFiles:
                 quantity, shortName, units, npatch = readBoundaryHeader(
@@ -1324,6 +1326,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                     for option in zoptions:
                         if option[1] == axis:
                             print(option[0])
+                    
         #print("ABS INFO: ")
         #print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
         if qtyFound:
@@ -1334,6 +1337,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
             datas[qty]['X'] = x_grid_abs
             datas[qty]['Z'] = z_grid_abs
             datas[qty]['DATA'] = data_abs
+            datas[qty]['UNITS'] = outUnits
         else:
             print("Quantity %s not found in boundary data"%(qty))
             quantities = readBoundaryQuantities(resultDir, chid)
@@ -1433,7 +1437,7 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
         #print(fdsFile.obsts)
         names = fdsFile.getPolygonNamesFromFdsFile()
     
-    print(names)
+    #print(names)
     
     #names = ['CE212319', 'CE210006', 'CE212298']
 
@@ -1452,12 +1456,13 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     datas = defaultdict(bool)
     for qty in quantities:
         datas[qty] = defaultdict(bool)
-        times, mPts, orients = loadBNDFdata(
+        times, mPts, orients, units = loadBNDFdata(
                 tStart, tEnd, tInt, tBand, bndf_dic[qty], 
                 smvData, orientations, polygons)
         datas[qty]['TIMES'] = times
         datas[qty]['NAMES'] = names
         datas[qty]['DATA'] = mPts
+        datas[qty]['UNITS'] = units
     return datas
 
 

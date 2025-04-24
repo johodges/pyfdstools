@@ -960,6 +960,7 @@ class fdsLineTypes(object):
         timeTypes['RESTRICT_TIME_STEP'] = 'bool'
         timeTypes['T_BEGIN'] = 'float'
         timeTypes['T_END'] = 'float'
+        timeTypes['T_END_CLOCK'] = 'float'
         timeTypes['WALL_INCREMENT'] = 'float'
         timeTypes['newline'] = 'ignore'
         return timeTypes

@@ -995,7 +995,7 @@ def readSLCFquantities(chid, resultDir):
         meshStr = n[-2]
         meshes.append(meshStr)
         #print(files['SLICES'][file.split(os.sep)[-1]])
-        #print(file)
+        print(file)
         centers.append(files['SLICES'][file.split(os.sep)[-1]]['CELL_CENTERED'])
         f.close()
     if '.zip' in resultDir:
@@ -1417,7 +1417,7 @@ def writeSLCFTime(f, time, data, endianness):
         f.write(struct.pack('%sI'%(endianness), data.shape[0]*4))
 
 def writeSlice(outFile, resultDir, chid, data, times, axis, val,
-                       outQty, sName, uts, meshnum, smvFile=None, endianness="<"):
+                       outQty, sName, uts, meshnum, smvFile=None, endianness="<", suffix=None):
     outPath = os.path.join(resultDir, outFile)
     smvPath = os.path.join(resultDir, smvFile)
     
@@ -1444,11 +1444,12 @@ def writeSlice(outFile, resultDir, chid, data, times, axis, val,
     f.close()
     
     if smvFile is not None:
-        writeSliceToSmv(smvPath, meshnum, X, outQty, outFile, sName, uts)
+        writeSliceToSmv(smvPath, meshnum, X, outQty, outPath, sName, uts, suffix=suffix)
 
-def writeSliceToSmv(file, meshNum, X, outQty, outFile, sName, uts):
+def writeSliceToSmv(file, meshNum, X, outQty, outFile, sName, uts, suffix):
+    if suffix is None: suffix = "1 \n"
     with open(file, 'a') as f:
-        f.write('SLCF     %0.0f # STRUCTURED &     %0.0f    %0.0f     %0.0f    %0.0f     %0.0f    %0.0f !      %0.0f\n'%(meshNum, X[0], X[1], X[2], X[3], X[4], X[5], 1))
+        f.write('SLCF     %0.0f # STRUCTURED &     %0.0f    %0.0f     %0.0f    %0.0f     %0.0f    %0.0f !      %s'%(meshNum, X[0], X[1], X[2], X[3], X[4], X[5], suffix))
         f.write(' %s\n'%(outFile))
         f.write(' %s\n'%(outQty))
         f.write(' %s\n'%(sName))

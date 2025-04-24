@@ -21,7 +21,7 @@ if __name__ == "__main__":
     systemPath = os.path.dirname(os.path.abspath(__file__))
     chid = "case001"
     path = os.path.join(systemPath, "data", chid+".fds")
-    resultDir = os.path.join(systemPath, "data", "%s.zip"%(chid))
+    working_dir = os.path.join(systemPath, "data", "%s.zip"%(chid))
     outdir = os.path.join(systemPath, "generated")
     axis, value = 1, 2.55
     time, dt = 30, 60
@@ -37,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument('--time', help='time to query, if -1 output all times', type=float, default=time)
     parser.add_argument('--dt', help='averaging window to apply, if -1 do not average', type=float, default=dt)
     parser.add_argument('--outdir', help='path to output directory', type=str, default=outdir)
+    parser.add_argument('--working_dir', help='path to output directory', type=str, default=working_dir)
     
     args = parser.parse_args()
     
@@ -46,11 +47,12 @@ if __name__ == "__main__":
     value = args.value
     time = args.time
     dt = args.dt
+    working_dir = args.working_dir
     
     if time == -1: time = None
     if dt == -1: dt = None
     
-    data, unit = fds.query2dAxisValue(resultDir, chid, quantity, axis, value, time=time, dt=dt)
+    data, unit = fds.query2dAxisValue(working_dir, chid, quantity, axis, value, time=time, dt=dt)
     
     fds.renderSliceCsvs(data, chid, outdir)
     

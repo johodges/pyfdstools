@@ -289,7 +289,7 @@ def maxValueCSV(times, mPts, names, namespace):
     np.savetxt(csvName, data, delimiter=',', header=header)
     return '%s.csv'%(namespace)   
 
-def maxValuePlot(times, mPts, names, namespace, fs=16, lw=3, pcs=None, vName='',
+def maxValuePlot(times, mPts, names, figName, fs=16, lw=3, pcs=None, vName='',
                  yticks=None, xticks=None):
     '''  mPts rows correlated to times, columns correlated to different groups. '''
     numberOfGroups = mPts.shape[1]
@@ -306,8 +306,6 @@ def maxValuePlot(times, mPts, names, namespace, fs=16, lw=3, pcs=None, vName='',
     plt.ylabel('%s'%(vName),fontsize=fs)
     plt.tick_params(labelsize=fs)
     plt.tight_layout()
-    figName = '%s_maxTPlot.png'%(namespace)
-    print("Saving max value figure to %s"%(figName))
     plt.savefig(figName, dpi=300)
     plt.show()
     return fig

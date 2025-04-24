@@ -509,7 +509,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
         xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
     else:
         xyzFiles = glob.glob("%s%s%s*.xyz"%(resultDir,os.sep, chid))
-    print(xyzFiles)
+    #print(xyzFiles)
     grids = defaultdict(bool)
     for xyzFile in xyzFiles:
         grid, gridHeader = readXYZfile(xyzFile)
@@ -531,7 +531,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
         times3D = []
         datas3D = []
         lims3D = []
-        print("%s%s_*.sf"%(resultDir, meshStr))
+        #print("%s%s_*.sf"%(resultDir, meshStr))
         for slcfFile in slcfFiles:
             if saveTimesFile:
                 timesFile = slcfFile.replace('.sf','_times.csv')
@@ -585,6 +585,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
                 lims3D.append([iX, eX, iY, eY, iZ, eZ])
                 datas3D.append(datas2)
                 times3D.append(times)
+                outputUnits = uts
             f.close()
         grids[meshStr]['datas3D'] = datas3D
         grids[meshStr]['lims3D'] = lims3D
@@ -595,7 +596,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
     zGrid_abs = grid_abs[:, :, :, 2]
     if len(grids[list(grids.keys())[0]]['datas3D']) == 0:
         print("No 3D slice data found for qty %s"%(quantityToExport))
-        return False, False, False
+        return False, False, False, False
     tInd = grids[list(grids.keys())[0]]['datas3D'][0].shape[3]
     data_abs = np.zeros((xGrid_abs.shape[0],
                          xGrid_abs.shape[1],
@@ -743,7 +744,7 @@ def readSLCF3Ddata(chid, resultDir, quantityToExport,
                         print("Error loading mesh %s at all times"%(key))
                         print(data.shape, data_abs[xloc_mn:xloc_mx+1, yloc_mn:yloc_mx+1, zloc_mn:zloc_mx+1, :].shape, NTT)
     '''
-    return grid_abs, data_abs, times3D[0]
+    return grid_abs, data_abs, times3D[0], outputUnits
 
 
 
@@ -983,6 +984,7 @@ def readSLCFquantities(chid, resultDir):
     dimensions = []
     meshes = []
     centers = []
+    units = []
     for file in slcfFiles:
         if '.zip' in resultDir:
             f = zip.open(file.split("%s%s"%('.zip',os.sep))[1])
@@ -997,13 +999,14 @@ def readSLCFquantities(chid, resultDir):
         #print(files['SLICES'][file.split(os.sep)[-1]])
         print(file)
         centers.append(files['SLICES'][file.split(os.sep)[-1]]['CELL_CENTERED'])
+        units.append(uts)
         f.close()
     if '.zip' in resultDir:
         zip.close()
-    return quantities, slcfFiles, dimensions, meshes, centers
+    return quantities, slcfFiles, dimensions, meshes, centers, units
 
 def buildQTYstring(chid, resultDir, qty):
-    quantities, slcfFiles = readSLCFquantities(chid, resultDir)
+    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir)
     quantitiesCheck = [True if qty == x else False for x in quantities]
     inds = np.where(quantitiesCheck)[0]
     if len(inds) == 0:
@@ -1242,7 +1245,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
         xAbs_c = xAbs_c[:, :-1]
         zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
         zAbs_c = zAbs_c[:-1,:]
-    quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir2)
+    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir2)
     if printInfo:
         print(quantities)
         print(slcfFiles)
@@ -1250,7 +1253,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
     datas = defaultdict(bool)
     foundSlice = False
     available_slices = []
-    for qty, slcfFile, dim, cen in zip(quantities, slcfFiles, dimensions, centers):
+    for qty, slcfFile, dim, cen, uts in zip(quantities, slcfFiles, dimensions, centers, units):
         if qty == quantity:
             n = slcfFile.split(chid)[-1].split('_')
             meshStr = n[-2]
@@ -1284,6 +1287,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
                 datas[slcfName]['z'] = z.copy()
                 datas[slcfName]['center'] = cen
                 foundSlice = True
+                outUnits = uts
     if not foundSlice:
         print("Warning did not find a 2-D slice of %s on axis %d at value %0.4f"%(quantity, axis, value))
         print("Available slices of qty %s:"%(quantity))
@@ -1291,7 +1295,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
         for slcf_axis, slcf_value in available_slices:
             print("\t%d\t%0.4f"%(slcf_axis, slcf_value))
         print("Note an axis of -1 indicates a 3-D slice which is not currently supported in this function.")
-        return None        
+        return None, None        
     data_abs = np.zeros((xAbs.shape[0], xAbs.shape[1], len(times)), dtype=np.float32)
     data_abs_c = np.zeros((xAbs_c.shape[0], xAbs_c.shape[1], len(times)), dtype=np.float32)
     for slcfName in list(datas.keys()):
@@ -1374,7 +1378,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
     data_abs_out['z'] = zAbs
     data_abs_out['datas'] = data_abs
     data_abs_out['times'] = times
-    return data_abs_out
+    return data_abs_out, outUnits
 
 def renderSliceCsvs(data, chid, outdir):
     times = data['times']
@@ -1383,7 +1387,7 @@ def renderSliceCsvs(data, chid, outdir):
     for i in range(0, len(times)):
         time = times[i]
         outFile = os.path.join(outdir, '%s_%0.4f.csv'%(chid, time))
-        print("Rendering time %0.4f to file %s"%(time, outFile))
+        print("\t%d/%d: Rendering time %0.4f to file %s"%(i, len(times), time, outFile))
         d = pd.DataFrame(data['datas'][:, :, i].T, index=zs, columns=xs)
         d.to_csv(outFile)
 

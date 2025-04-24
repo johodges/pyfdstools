@@ -117,6 +117,60 @@ ln -s /c/ProgramData/Anaconda3/envs/blenderfds /c/Program\ Files/Blender\ Founda
 * Start blender from the command line
 --->
 
+# Usage example
+
+This simple example demonstrates how to use pyfdstools to work with 2-D slice data. The example does the following:
+* Reads 2-D slice data from the examples directory
+* Dumps the output to a csv file in the current working directory
+* Visualizes the queried slice in a figure
+* Saves the figure to the current working directory
+
+```python
+import pyfdstools as fds
+import os
+
+# configure case information
+# sets the working directory to be the examples directory provided with pyfdstools.
+# Note that the working_dir is set here to a zip file
+working_dir = os.path.join(os.path.dirname(fds.__file__),'examples','data','case001.zip') 
+chid = 'case001' # sets the fds CHID for the case
+quantity = 'TEMPERATURE' # sets the quantity to be queried
+axis, value = 1, 2.55 # sets the axis (1 = x, 2 = y, 3 = z) and coordinate of the 2-D slice to query
+time, dt = 30, 60 # sets the query time and window
+qnty_mn, qnty_mx = 0, 1000
+cbarnumticks = 11
+outdir = os.getcwd() # sets the output directory to the current working directory
+
+# Read 2-D slice data
+data, unit = fds.query2dAxisValue(working_dir, chid, quantity, axis, value, time=time, dt=dt)
+
+# Dump 2-D slice data to a csv file
+fds.renderSliceCsvs(data, chid, outdir)
+
+# Visualize 2-D slice data and save to a file
+fig, ax = fds.plotSlice(data['x'], data['z'], data['datas'][:, :, -1], axis, clabel="%s (%s)"%(quantity, unit), qnty_mn=qnty_mn, qnty_mx=qnty_mx, cbarnumticks=cbarnumticks)
+
+fig.savefig(os.path.join(outdir, '%s_%s_%0.0f_%0.4f_final_frame.png'%(chid, quantity, axis, value)))
+fig.show()
+```
+
+# Additional examples
+
+The examples directory has a series of example files showing how a user can use pyfdstools to interact with FDS input files and results. All the examples can be run using the runExamples routine:
+
+```python
+import pyfdstools as fds
+fds.runExamples()
+```
+
+The outputs from these examples will be located in the pyfdstools/generated directory.
+
+The examples can also be run individually by running the individual files in the examples directory. The examples can be modified to work with different FDS results by editing the scripts, or by setting some of the parameters with command line arguments. The example below changes the dump_2d_slice_to_csv example to work with case002 instead of case001.
+
+```python
+python dump_2d_slice_to_csv.py --chid case002 --quantity TEMPERATURE --axis 3 --value 7.2 --time 30 --dt -1 --working_dir data/case002.zip
+```
+
 # Citation
 
 If you use this software in your research, please consider citing this project as:

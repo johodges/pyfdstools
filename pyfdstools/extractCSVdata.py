@@ -48,15 +48,19 @@ def findHeaderLength(lines):
         print("Unable to find header length, returning 0")
         return 0
 
-def cleanDataLines(lines2, headerLines):
+def cleanDataLines(lines2, headerLines, skipcols=None):
     lines = lines2[headerLines+1:]
     for i in range(0, len(lines)):
         line = (lines[i].decode('utf-8')).replace('\r\n','')
         while line[-1] == ',': line = line[:-1]
-        lines[i] = [float(y) for y in line.split(',')]
+        if skipcols is None:
+            lines[i] = [float(y) for y in line.split(',')]
+        else:
+            split = line.split(',')
+            lines[i] = [float(split[i]) for i in range(0, len(split)) if i not in skipcols]
     return lines
 
-def load_csv(modeldir, chid, suffix='_devc', labelRow=-1):
+def load_csv(modeldir, chid, suffix='_devc', labelRow=-1, skipcols=None):
     if 'zip' in modeldir:
         csv_files = getFileList(modeldir, chid, 'csv')
         suff_files = [x for x in csv_files if suffix in x]
@@ -67,13 +71,17 @@ def load_csv(modeldir, chid, suffix='_devc', labelRow=-1):
         f = open(file, 'rb')
     lines = f.readlines()
     f.close()
-    headerLines = findHeaderLength(lines)
     if labelRow == -1:
+        headerLines = findHeaderLength(lines)
         header = (lines[headerLines].decode('utf-8')).replace('\r\n','').replace('\n','').split(',')
     else:
+        headerLines = labelRow
         header = (lines[labelRow].decode('utf-8')).replace('\r\n','').replace('\n','').split(',')
-    dataLines = cleanDataLines(lines, headerLines)
-    data = pd.DataFrame(dataLines, columns=header,)
+    if skipcols is not None:
+        header1 = [header[i] for i in range(0, len(header)) if i not in skipcols]
+        header = header1
+    dataLines = cleanDataLines(lines, headerLines, skipcols)
+    data = pd.DataFrame(dataLines, columns=header)
     return data
 
 def load_hrr(file):

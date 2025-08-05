@@ -273,10 +273,14 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
     
     if time == None:
         time1 = unique_times[-1]
+    print("Reading one uvwts file")
     xs, ys, zs, xGrid1, yGrid1, zGrid1, Tf, Uf, Sf = greedy_uvwts_read(coarse_resultdir, coarse_chid, time1)
     
     if time == None:
-        for time2 in unique_times[:-1]:
+        numTimes = len(unique_times[:-1])
+        for t in range(0, numTimes):
+            time2 = unique_times[:-1][t]
+            print("Reading time %0.4f uvwts file %0.0f / %0.0f"%(time2, t, numTimes))
             xs, ys, zs, xGrid1, yGrid1, zGrid1, Tf1, Uf1, Sf1 = greedy_uvwts_read(coarse_resultdir, coarse_chid, time2)
             Tf = Tf + Tf1
             Uf = Uf + Uf1
@@ -297,12 +301,16 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
         xx, yy, dd3 = extract_contour(s_axis, s_value, Sf, xs, ys, zs, xGrid1, yGrid1, zGrid1, True, splot_ind)
         fig3, ax3 = fds.plotSlice(xx, yy, dd3, s_axis, qnty_mn=s_plot_mn, qnty_mx=s_plot_mx)
     
+    print("Finished reading uvwts files. Building interpolator functions.")
     Sf = fill_centered_ghost_cell(Sf)
     Tf = fill_centered_ghost_cell(Tf)
+    
+    Tf[Tf < 20.01] = np.nan
     
     T_interps, T_mns, T_mxs = get_interp(Tf, xs, ys, zs)
     U_interps, U_mns, U_mxs = get_interp(Uf, xs, ys, zs)
     S_interps, S_mns, S_mxs = get_interp(Sf, xs, ys, zs)
+    print("Finished building interpolator functions.")
     
     # Loop through fine meshes
     fine_fdsfile = os.path.join(fine_resultdir + os.sep + fine_chid + '.fds')
@@ -311,6 +319,32 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
     
     mesh_keys = fdsFile.meshes
     mesh_keys.pop('unknownCounter')
+    
+    # count meshes for printing
+    total_meshes = 0
+    for key in mesh_keys:
+        MULT_ID = fdsFile.meshes[key]["MULT_ID"]
+        if MULT_ID is not False:
+            mult = fdsFile.mult[MULT_ID]
+            I_LOWER, J_LOWER, K_LOWER = 0, 0, 0
+            if mult['I_LOWER'] is not False: I_LOWER = mult['I_LOWER']
+            if mult['J_LOWER'] is not False: J_LOWER = mult['J_LOWER']
+            if mult['K_LOWER'] is not False: K_LOWER = mult['K_LOWER']
+            I_UPPER, J_UPPER, K_UPPER = 0, 0, 0
+            if mult['I_UPPER'] is not False: I_UPPER = mult['I_UPPER']
+            if mult['J_UPPER'] is not False: J_UPPER = mult['J_UPPER']
+            if mult['K_UPPER'] is not False: K_UPPER = mult['K_UPPER']
+            DX, DY, DZ = 0, 0, 0
+            if mult['DX'] is not False: DX = mult['DX']
+            if mult['DY'] is not False: DY = mult['DY']
+            if mult['DZ'] is not False: DZ = mult['DZ']
+            
+            for K in range(K_LOWER, K_UPPER+1):
+                for J in range(J_LOWER, J_UPPER+1):
+                    for I in range(I_LOWER, I_UPPER+1):
+                        total_meshes += 1
+        else:
+            total_meshes += 1
     
     mesh_counter = 1
     for key in mesh_keys:
@@ -341,6 +375,7 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
             for K in range(K_LOWER, K_UPPER+1):
                 for J in range(J_LOWER, J_UPPER+1):
                     for I in range(I_LOWER, I_UPPER+1):
+                        print("Writing mesh number %0.0f/%0.0f."%(mesh_counter, total_meshes))
                         # Build fine grid
                         xGrid_fine1 = np.copy(xGrid_fine) + DX*I
                         yGrid_fine1 = np.copy(yGrid_fine) + DY*J
@@ -363,7 +398,7 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
                         fine_S_flat = interpolate(S_interps, fine_pts2, S_mns, S_mxs)
                         write_csv_data(fine_S_flat, namespace, 'spec', xGrid_fine2, True)
                         su = np.nansum(fine_S_flat,axis=1)
-                        print(su.max(), su.min())
+                        #print(su.max(), su.min())
                         mesh_counter += 1
         else:
             fine_pts1, fine_pts2 = get_pts_from_grid(xGrid_fine, yGrid_fine, zGrid_fine)
@@ -385,7 +420,7 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
             write_csv_data(fine_S_flat, namespace, 'spec', xGrid_fine2, True)
             
             mesh_counter += 1
-                            
+
 
 if __name__ == "__main__":
     
@@ -395,12 +430,12 @@ if __name__ == "__main__":
     fine_resultdir = "50kw_fine"
     fine_chid = "50kw_dns_methane_2mm_1024core"
 
-    coarse_resultdir = "50kw_02cm"
-    coarse_chid = "50kw_02cm"
+    coarse_resultdir = "E:\\1JLH-NIST2023\\marcos_plume\\Thermo_Only_0p5cm_Jon\\"
+    coarse_chid = "test"
 
     
-    fine_resultdir = "50kw_01cm_avg"
-    fine_chid = "50kw_01cm_avg"
+    fine_resultdir = "E:\\1JLH-NIST2023\\marcos_plume\\Thermo_Only_0p5cm_Jon\\fine_grid\\"
+    fine_chid = "test"
     
     greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, time=None,
                     show_uvw=True, uvw_axis=2, uvw_value=0.15, uvw_plot_mn=None, uvw_plot_mx=None, uplot_ind=2,

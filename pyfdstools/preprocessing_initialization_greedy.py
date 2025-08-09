@@ -291,21 +291,66 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
         tname = "avg"
     else:
         tname = "%d"%(unique_times[-1])
-    if (show_uvw):
-        xx, yy, dd1 = extract_contour(uvw_axis, uvw_value, Uf, xs, ys, zs, xGrid1, yGrid1, zGrid1, False, uplot_ind)
-        fig1, ax1 = fds.plotSlice(xx, yy, dd1, uvw_axis, qnty_mn=uvw_plot_mn, qnty_mx=uvw_plot_mx)
-    if (show_T):
-        xx, yy, dd2 = extract_contour(T_axis, T_value, Tf, xs, ys, zs, xGrid1, yGrid1, zGrid1, True, None)
-        fig2, ax2 = fds.plotSlice(xx, yy, dd2, T_axis, qnty_mn=T_plot_mn, qnty_mx=T_plot_mx)
-    if (show_s):
-        xx, yy, dd3 = extract_contour(s_axis, s_value, Sf, xs, ys, zs, xGrid1, yGrid1, zGrid1, True, splot_ind)
-        fig3, ax3 = fds.plotSlice(xx, yy, dd3, s_axis, qnty_mn=s_plot_mn, qnty_mx=s_plot_mx)
-    
-    print("Finished reading uvwts files. Building interpolator functions.")
+    print("Finished reading uvwts files. Cleaning data.")
     Sf = fill_centered_ghost_cell(Sf)
     Tf = fill_centered_ghost_cell(Tf)
     
-    Tf[Tf < 20.01] = np.nan
+    # Read smokeview file and fill each obst with nan
+    smvFilePath = fds.getFileList(coarse_resultdir, coarse_chid, 'smv')[0]
+    smvData = fds.parseSMVFile(smvFilePath)
+    (smvGrids, smvObsts) = (smvData['grids'], smvData['obsts'])
+    (smvBndfs, smvSurfs) = (smvData['bndfs'], smvData['surfs'])
+    (smvFiles, bndes) = (smvData['files'], smvData['bndes'])
+    for i in range(0, smvObsts.shape[0]):
+        xs1 = smvObsts[i, 13:15]
+        ys1 = smvObsts[i, 15:17]
+        zs1 = smvObsts[i, 17:19]
+        '''
+        xs1 = smvObsts[i, :2]
+        ys1 = smvObsts[i, 2:4]
+        zs1 = smvObsts[i, 4:6]
+        '''
+        try:
+            hull = make_hull(xs1, ys1, zs1)
+        except:
+            continue
+        
+        z1_ind = max([np.argmin(abs(zs-zs1[0]))-1,0])
+        z2_ind = min([np.argmin(abs(zs-zs1[1]))+1,zs.shape[0]])
+        
+        x1_ind = max([np.argmin(abs(xs-xs1[0]))-1,0])
+        x2_ind = min([np.argmin(abs(xs-xs1[1]))+1,xs.shape[0]])
+        
+        y1_ind = max([np.argmin(abs(ys-ys1[0]))-1,0])
+        y2_ind = min([np.argmin(abs(ys-ys1[1]))+1,ys.shape[0]])
+        
+        for k in range(z1_ind, z2_ind):
+            for j in range(y1_ind, y2_ind):
+                for i in range(x1_ind, x2_ind):
+                    p = [xs[i], ys[j], zs[k]]
+                    if in_hull(p, hull):
+                        Tf[i, j, k] = np.nan
+                        Uf[i, j, k] = np.nan
+                        Sf[i, j, k,:] = np.nan
+    
+    if (show_uvw):
+        print("Plotting visualization of UVW")
+        xx, yy, dd1 = extract_contour(uvw_axis, uvw_value, Uf, xs, ys, zs, xGrid1, yGrid1, zGrid1, False, uplot_ind)
+        fig1, ax1 = fds.plotSlice(xx, yy, dd1, uvw_axis, qnty_mn=uvw_plot_mn, qnty_mx=uvw_plot_mx)
+    if (show_T):
+        print("Plotting visualization of T")
+        xx, yy, dd2 = extract_contour(T_axis, T_value, Tf, xs, ys, zs, xGrid1, yGrid1, zGrid1, True, None)
+        fig2, ax2 = fds.plotSlice(xx, yy, dd2, T_axis, qnty_mn=T_plot_mn, qnty_mx=T_plot_mx)
+    if (show_s):
+        print("Plotting visualization of S")
+        xx, yy, dd3 = extract_contour(s_axis, s_value, Sf, xs, ys, zs, xGrid1, yGrid1, zGrid1, True, splot_ind)
+        fig3, ax3 = fds.plotSlice(xx, yy, dd3, s_axis, qnty_mn=s_plot_mn, qnty_mx=s_plot_mx)
+    
+    #assert False, "Stopped"
+    
+    #Tf[Tf < 20.01] = np.nan
+    
+    print("Finished cleaning data. Building interpolator functions.")
     
     T_interps, T_mns, T_mxs = get_interp(Tf, xs, ys, zs)
     U_interps, U_mns, U_mxs = get_interp(Uf, xs, ys, zs)
@@ -434,8 +479,9 @@ if __name__ == "__main__":
     coarse_chid = "test"
 
     
-    fine_resultdir = "E:\\1JLH-NIST2023\\marcos_plume\\Thermo_Only_0p5cm_Jon\\fine_grid\\"
+    fine_resultdir = "E:\\1JLH-NIST2023\\marcos_plume\\Thermo_Only_0p5cm_Jon\\fine_grid2\\"
     fine_chid = "test"
+    
     
     greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, time=None,
                     show_uvw=True, uvw_axis=2, uvw_value=0.15, uvw_plot_mn=None, uvw_plot_mx=None, uplot_ind=2,

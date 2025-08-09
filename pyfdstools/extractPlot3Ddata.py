@@ -32,6 +32,7 @@ from .utilities import getGridsFromXyzFiles, getAbsoluteGrid, rearrangeGrid
 from .utilities import readXYZfile
 from .colorSchemes import buildSMVcolormap
 from .smokeviewParser import parseSMVFile
+from collections.abc import Iterable
 
 def time2str(time, decimals=2):
     """Converts a timestamp to a string
@@ -262,6 +263,7 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
               xlabel=None, zlabel=None,
               addCbar=True, fixXLims=True, fixZLims=True,
               title=None, contour=True, extend='both',
+              linecontour=False,
               returnIm=False):
     if qnty_mn == None:
         qnty_mn = np.nanmin(data_slc)
@@ -284,6 +286,10 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
                 percentile=percentile, width=highlightWidth)
     if levels == None:
         levels = 100
+    elif isinstance(levels, Iterable):
+        levels = np.array(levels)
+    else:
+        levels = np.linspace(qnty_mn, qnty_mx, levels)
     if cbarticks is None:
         cbarticks = np.linspace(qnty_mn, qnty_mx, cbarnumticks)
         if highlightValue is not None:
@@ -310,9 +316,14 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
     if fig == None or ax == None:
         fig, ax = plt.subplots(1, 1, figsize=figsize, constrained_layout=True)
     if contour:
-        im = ax.contourf(
-            x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
-            levels=np.linspace(qnty_mn, qnty_mx, levels), extend=extend)
+        if linecontour:
+            im = ax.contour(
+                x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
+                levels=levels, extend=extend)
+        else:
+            im = ax.contourf(
+                x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
+                levels=levels, extend=extend)
     else:
         im = ax.imshow(d1[::-1, :], cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, extent=[x1.min(), x1.max(),z1.min(), z1.max()])
     if addCbar:
@@ -955,7 +966,7 @@ def readSLCFtimes(file, timesFile=None, endianness=None):
         np.savetxt(timesFile, times)
     return times
 
-def readSLCFquantities(chid, resultDir):
+def readSLCFquantities(chid, resultDir, printInfo=False):
     try:
         smvFile = os.path.join(resultDir, '%s.smv'%(chid))
         smvData = parseSMVFile(smvFile)
@@ -997,7 +1008,8 @@ def readSLCFquantities(chid, resultDir):
         meshStr = n[-2]
         meshes.append(meshStr)
         #print(files['SLICES'][file.split(os.sep)[-1]])
-        print(file)
+        if printInfo:
+            print(file)
         centers.append(files['SLICES'][file.split(os.sep)[-1]]['CELL_CENTERED'])
         units.append(uts)
         f.close()

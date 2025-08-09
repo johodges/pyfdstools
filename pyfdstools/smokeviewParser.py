@@ -41,7 +41,6 @@ def parseGRID(lines, i):
     array(K)
         Array containing z-coordinates of grid
     """
-    
     gridPts = [int(x) for x in lines[i+1].replace('\n','').split()]
     (gridTRNX, gridTRNY, gridTRNZ) = ([], [], [])
     (xind0, xind1) = (i+8, i+9+gridPts[0])
@@ -232,8 +231,7 @@ def parseSMVFile(smvFile):
     smvOutputs = defaultdict(bool)
     for i in range(0, len(linesSMV)):
         line2 = linesSMV[i]
-        
-        if ("GRID" in line2):
+        if ("GRID" in line2) and (line2[0] == "G"):
             gridTRNX, gridTRNY, gridTRNZ = parseGRID(linesSMV, i)
             grids.append([gridTRNX.copy(),
                           gridTRNY.copy(),

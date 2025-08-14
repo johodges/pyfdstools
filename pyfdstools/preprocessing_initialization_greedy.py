@@ -11,6 +11,7 @@ import glob, os
 import matplotlib.pyplot as plt
 import scipy.spatial as scsp
 import scipy.interpolate as scip
+import pandas as pd
 
 def in_hull(p, hull):
     return hull.find_simplex(p)>=0
@@ -79,7 +80,8 @@ def write_csv_data(data_flat1, namespace, varspace, grid, centered):
 
 def find_uvw_times(resultdir, chid):
     uvw_files = glob.glob(os.path.join(resultdir + os.sep + chid + '_uvw*.csv'))
-    uvw_times = [float(x.split('_')[-2].replace('t','')) for x in uvw_files]
+    uvw_times = [x.split('_')[-2].replace('t','') for x in uvw_files]
+    #uvw_times = [float(x.split('_')[-2].replace('t','')) for x in uvw_files]
     
     unique_times = list(set(uvw_times))
     unique_times.sort()
@@ -119,19 +121,19 @@ def greedy_uvwts_read(resultdir, chid, time):
         xGrid1, yGrid1, zGrid1 = np.meshgrid(xs1, ys1, zs1, indexing='ij')
         
         # Load UVW
-        last_file = resultdir + os.sep + chid + '_uvw_t%d_m%d.csv'%(time, unique_meshes[i])
+        last_file = resultdir + os.sep + chid + '_uvw_t%s_m%d.csv'%(time, unique_meshes[i])
         d = np.loadtxt(last_file, delimiter=',', skiprows=1)
         U = np.zeros((xGrid1.shape[0], xGrid1.shape[1], xGrid1.shape[2], d.shape[1]))
         for j in range(0, d.shape[1]):
             U[:, :, :, j] = np.reshape(d[:,j], shape=xGrid1.shape, order='F')
         
         # Load T
-        last_file = resultdir + os.sep + chid + '_tmp_t%d_m%d.csv'%(time, unique_meshes[i])
+        last_file = resultdir + os.sep + chid + '_tmp_t%s_m%d.csv'%(time, unique_meshes[i])
         d = np.loadtxt(last_file, delimiter=',', skiprows=1)
         T = np.reshape(d, shape=xGrid1[1:,1:,1:].shape, order='F')
         
         # Load Spec
-        last_file = resultdir + os.sep + chid + '_spec_t%d_m%d.csv'%(time, unique_meshes[i])
+        last_file = resultdir + os.sep + chid + '_spec_t%s_m%d.csv'%(time, unique_meshes[i])
         d = np.loadtxt(last_file, delimiter=',', skiprows=1)
         S = np.zeros((T.shape[0], T.shape[1], T.shape[2], d.shape[1]))
         for j in range(0, d.shape[1]):
@@ -280,7 +282,7 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
         numTimes = len(unique_times[:-1])
         for t in range(0, numTimes):
             time2 = unique_times[:-1][t]
-            print("Reading time %0.4f uvwts file %0.0f / %0.0f"%(time2, t, numTimes))
+            print("Reading time %s uvwts file %0.0f / %0.0f"%(time2, t, numTimes))
             xs, ys, zs, xGrid1, yGrid1, zGrid1, Tf1, Uf1, Sf1 = greedy_uvwts_read(coarse_resultdir, coarse_chid, time2)
             Tf = Tf + Tf1
             Uf = Uf + Uf1
@@ -290,7 +292,7 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
         Sf = Sf/len(unique_times)
         tname = "avg"
     else:
-        tname = "%d"%(unique_times[-1])
+        tname = "%s"%(unique_times[-1])
     print("Finished reading uvwts files. Cleaning data.")
     Sf = fill_centered_ghost_cell(Sf)
     Tf = fill_centered_ghost_cell(Tf)
@@ -345,6 +347,29 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
         print("Plotting visualization of S")
         xx, yy, dd3 = extract_contour(s_axis, s_value, Sf, xs, ys, zs, xGrid1, yGrid1, zGrid1, True, splot_ind)
         fig3, ax3 = fds.plotSlice(xx, yy, dd3, s_axis, qnty_mn=s_plot_mn, qnty_mx=s_plot_mx)
+    
+    interp = np.copy(Tf)
+    for i in range(0, interp.shape[0]):
+        d1 = pd.DataFrame(interp[i, :, :])
+        d1.interpolate(limit_direction='both', inplace=True, axis=1, method='nearest')
+        interp[i, :, :] = d1.values
+    Tf = np.copy(interp)
+    
+    interp = np.copy(Uf)
+    for j in range(0, interp.shape[-1]):
+        for i in range(0, interp.shape[0]):
+            d1 = pd.DataFrame(interp[i, :, :, j])
+            d1.interpolate(limit_direction='both', inplace=True, axis=1, method='nearest')
+            interp[i, :, :, j] = d1.values
+    Uf = np.copy(interp)
+    
+    interp = np.copy(Sf)
+    for j in range(0, interp.shape[-1]):
+        for i in range(0, interp.shape[0]):
+            d1 = pd.DataFrame(interp[i, :, :, j])
+            d1.interpolate(limit_direction='both', inplace=True, axis=1, method='nearest')
+            interp[i, :, :, j] = d1.values
+    Sf = np.copy(interp)
     
     #assert False, "Stopped"
     
@@ -487,5 +512,6 @@ if __name__ == "__main__":
                     show_uvw=True, uvw_axis=2, uvw_value=0.15, uvw_plot_mn=None, uvw_plot_mx=None, uplot_ind=2,
                     show_T=True, T_axis=2, T_value=0.15, T_plot_mn=None, T_plot_mx=None,
                     show_s=True, s_axis=2, s_value=0.15, s_plot_mn=None, s_plot_mx=None, splot_ind=0)
+    
     
     

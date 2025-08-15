@@ -458,14 +458,20 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
                         
                         # Write temperature
                         fine_T_flat = interpolate(T_interps, fine_pts2, T_mns, T_mxs)
+                        inds = np.isnan(fine_T_flat)
+                        if len(inds) > 0:
+                            print("%d, %d, %d, number of nans is > 0"%(I, J, K))
+                        fine_T_flat[np.isnan(fine_T_flat)] = 293.15
                         write_csv_data(fine_T_flat, namespace, 'tmp', xGrid_fine2, True)
                         
                         # Write velocity
                         fine_U_flat = interpolate(U_interps, fine_pts1, U_mns, U_mxs)
+                        fine_U_flat[np.isnan(fine_U_flat)] = 0.0
                         write_csv_data(fine_U_flat, namespace, 'uvw', xGrid_fine2, False)
                         
                         # Write species
                         fine_S_flat = interpolate(S_interps, fine_pts2, S_mns, S_mxs)
+                        fine_S_flat[np.isnan(fine_S_flat)] = 0.0
                         write_csv_data(fine_S_flat, namespace, 'spec', xGrid_fine2, True)
                         su = np.nansum(fine_S_flat,axis=1)
                         #print(su.max(), su.min())
@@ -479,14 +485,19 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
             
             # Write temperature
             fine_T_flat = interpolate(T_interps, fine_pts2, T_mns, T_mxs)
+            if len(inds) > 0:
+                print("%d, %d, %d, number of nans is > 0"%(I, J, K))
+            fine_T_flat[np.isnan(fine_T_flat)] = 293.15
             write_csv_data(fine_T_flat, namespace, 'tmp', xGrid_fine2, True)
             
             # Write velocity
             fine_U_flat = interpolate(U_interps, fine_pts1, U_mns, U_mxs)
+            fine_U_flat[np.isnan(fine_U_flat)] = 0.0
             write_csv_data(fine_U_flat, namespace, 'uvw', xGrid_fine2, False)
             
             # Write species
             fine_S_flat = interpolate(S_interps, fine_pts2, S_mns, S_mxs)
+            fine_S_flat[np.isnan(fine_S_flat)] = 0.0
             write_csv_data(fine_S_flat, namespace, 'spec', xGrid_fine2, True)
             
             mesh_counter += 1

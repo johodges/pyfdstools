@@ -472,6 +472,10 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
                         # Write species
                         fine_S_flat = interpolate(S_interps, fine_pts2, S_mns, S_mxs)
                         fine_S_flat[np.isnan(fine_S_flat)] = 0.0
+                        fine_S_sum = 1-np.nansum(fine_S_flat, axis=1)
+                        fine_S_sum[fine_S_sum < 0] = 0.0
+                        fine_S_flat[:, 0] = fine_S_flat[:, 0] + fine_S_sum
+                        
                         write_csv_data(fine_S_flat, namespace, 'spec', xGrid_fine2, True)
                         su = np.nansum(fine_S_flat,axis=1)
                         #print(su.max(), su.min())
@@ -498,6 +502,9 @@ def greedy_upsample(coarse_resultdir, coarse_chid, fine_resultdir, fine_chid, ti
             # Write species
             fine_S_flat = interpolate(S_interps, fine_pts2, S_mns, S_mxs)
             fine_S_flat[np.isnan(fine_S_flat)] = 0.0
+            fine_S_sum = 1-np.nansum(fine_S_flat, axis=1)
+            fine_S_sum[fine_S_sum < 0] = 0.0
+            fine_S_flat[:, 0] = fine_S_flat[:, 0] + fine_S_sum
             write_csv_data(fine_S_flat, namespace, 'spec', xGrid_fine2, True)
             
             mesh_counter += 1
@@ -511,11 +518,11 @@ if __name__ == "__main__":
     fine_resultdir = "50kw_fine"
     fine_chid = "50kw_dns_methane_2mm_1024core"
 
-    coarse_resultdir = "E:\\1JLH-NIST2023\\marcos_plume\\Thermo_Only_0p5cm_Jon\\"
+    coarse_resultdir = "D:\\1JLH-NIST2023\\marcos_plume\\Thermo_Only_0p5cm_Jon\\"
     coarse_chid = "test"
 
     
-    fine_resultdir = "E:\\1JLH-NIST2023\\marcos_plume\\Thermo_Only_0p5cm_Jon\\fine_grid2\\"
+    fine_resultdir = "D:\\1JLH-NIST2023\\marcos_plume\\Thermo_Only_0p5cm_Jon\\fine_grid2\\"
     fine_chid = "test"
     
     

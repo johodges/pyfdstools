@@ -405,7 +405,7 @@ def readPlot3Ddata(chid, resultDir, time):
         
         printExtents(grid, data)
         
-        xGrid, yGrid, zGrid = rearrangeGrid(grid, swap=True)#, dataHeader)
+        xGrid, yGrid, zGrid = rearrangeGrid(grid)
 
         grids[meshStr] = defaultdict(bool)
         grids[meshStr]['xGrid'] = xGrid

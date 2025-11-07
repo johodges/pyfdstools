@@ -1203,7 +1203,7 @@ def timeAverageBndfs(resultDir, chid, fdsFilePath, fdsQuantity, dt):
     
 
 def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, 
-              axis, value, decimals=4):
+              axis, value, decimals=4, limits=None):
     """Query boundary files
     
     Parameters
@@ -1222,7 +1222,9 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
         Axis value to query
     decimals : int
         Number of decimals to include in rounding
-    
+    limits : list
+        Sets limits on patch dimensions to read
+        
     Returns
     -------
     dict
@@ -1289,6 +1291,13 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                 #print(axis, value)
                 ts, ps, x1, x2, y1, y2, z1, z2, dx1, dz1 = getPatches(
                         file, smvFile, axis, value, meshNumber, decimals=decimals, smvData=smvData)
+                if limits is not None:
+                    if x1 < limits[0]: continue
+                    if x2 > limits[1]: continue
+                    if y1 < limits[2]: continue
+                    if y2 > limits[3]: continue
+                    if z1 < limits[4]: continue
+                    if z2 > limits[5]: continue
                 #print(file, dx1, dz1)
                 if ts is None: continue
                 ts_out = ts  

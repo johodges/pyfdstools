@@ -29,6 +29,7 @@ import glob
 import struct
 from collections import defaultdict
 from .colorSchemes import getVTcolors
+import warnings
 
 def astFromGhf(ghf, h, e, Tgauge=20):
     # h in kW/m2K
@@ -76,7 +77,9 @@ def timeAverage2(data, times, window):
         if data_dt > dt:
             data3[:, i] = data2[:, i]
         elif (times[i]-times[0]) < dt:
-            data3[:,i] = (np.nanmean(data2[:,:i], axis=1)*(times[i-1]-times[0]) + data2[:,i]*data_dt)/(times[i]-times[0])
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                data3[:,i] = (np.nanmean(data2[:,:i], axis=1)*(times[i-1]-times[0]) + data2[:,i]*data_dt)/(times[i]-times[0])
         else:
             data3[:,i] = (data3[:, i-1]*(dt-data_dt)+ data2[:, i]*data_dt)/dt
     data4 = np.reshape(data3, sz)

@@ -24,8 +24,9 @@ if __name__ == "__main__":
     working_dir = os.path.join(systemPath, "data", "%s.zip"%(chid))
     outdir = os.path.join(systemPath, "generated")
     axis, value = 2, 4.4
-    time, dt = 30, 60
+    time, dt = 30, None
     quantity ='TEMPERATURE'
+    qntymn, qntymx = 20, 200
     
     parser = argparse.ArgumentParser(prog='Dump 2D slice to csv',
                                      description='Example routine to dump a 2D slice to a csv',
@@ -38,8 +39,8 @@ if __name__ == "__main__":
     parser.add_argument('--time', help='time to query, if -1 output all times', type=float, default=time)
     parser.add_argument('--dt', help='averaging window to apply, if -1 do not average', type=float, default=dt)
     parser.add_argument('--outdir', help='path to output directory', type=str, default=outdir)
-    parser.add_argument('--qntymn', help='minimum value for plot', type=float, default=None)
-    parser.add_argument('--qntymx', help='minimum value for plot', type=float, default=None)
+    parser.add_argument('--qntymn', help='minimum value for plot', type=float, default=qntymn)
+    parser.add_argument('--qntymx', help='minimum value for plot', type=float, default=qntymx)
     
     args = parser.parse_args()
     

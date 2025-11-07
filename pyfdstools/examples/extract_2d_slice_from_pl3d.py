@@ -27,6 +27,7 @@ if __name__ == "__main__":
     time = 30
     quantity ='TEMPERATURE'
     unit = ''
+    qntymn, qntymx = 20, 200
     
     parser = argparse.ArgumentParser(prog='Dump 2D slice to csv',
                                      description='Example routine to dump a 2D slice from a pl3d to a csv',
@@ -39,8 +40,8 @@ if __name__ == "__main__":
     parser.add_argument('--value', help='axis value to query', type=float, default=value)
     parser.add_argument('--time', help='time to query, if -1 output all times', type=float, default=time)
     parser.add_argument('--outdir', help='path to output directory', type=str, default=outdir)
-    parser.add_argument('--qntymn', help='minimum value for plot', type=float, default=None)
-    parser.add_argument('--qntymx', help='minimum value for plot', type=float, default=None)
+    parser.add_argument('--qntymn', help='minimum value for plot', type=float, default=qntymn)
+    parser.add_argument('--qntymx', help='minimum value for plot', type=float, default=qntymx)
     parser.add_argument('--pl3dind', help='plot3d index to extract', type=int, default=None)
     
     args = parser.parse_args()

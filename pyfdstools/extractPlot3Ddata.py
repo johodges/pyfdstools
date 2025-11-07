@@ -98,12 +98,16 @@ def readP3Dfile(file):
         Array containing header information from plot3D file
     """
     
-    with open(file,'rb') as f:
-        header = np.fromfile(f, dtype=np.int32, count=5)
-        _ = np.fromfile(f, dtype=np.float32, count=7)
-        (nx, ny, nz) = (header[1], header[2], header[3])
-        data = np.fromfile(f, dtype=np.float32, count=nx*ny*nz*5)
-        data = np.reshape(data, (int(data.shape[0]/5),5), order='F')
+    f = zopen(file)
+    data1 = f.read()
+    f.close()
+    print(file)
+    #with open(file,'rb') as f:
+    header = np.frombuffer(data1, dtype=np.int32, count=5)
+    _ = np.frombuffer(data1, dtype=np.float32, count=7)
+    (nx, ny, nz) = (header[1], header[2], header[3])
+    data = np.frombuffer(data1, dtype=np.float32, count=nx*ny*nz*5)
+    data = np.reshape(data, (int(data.shape[0]/5),5), order='F')
     return data, header[1:-1]
 
 def writeP3Dfile(file, data):
@@ -360,26 +364,37 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
         return fig, ax
 
 def readPlot3Ddata(chid, resultDir, time):
-    xyzFiles = glob.glob("%s%s*.xyz"%(resultDir, chid))
-    tFiles = glob.glob(xyzFiles[0].replace('.xyz','*.q'))
+    if '.zip' in resultDir:
+        xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
+    else:
+        xyzFiles = glob.glob("%s%s%s*.xyz"%(resultDir,os.sep, chid))
+    if '.zip' in resultDir:
+        tFiles = getFileListFromZip(resultDir, chid, 'q')
+    else:
+        tFiles = glob.glob(xyzFiles[0].replace('.xyz','*.q'))
     
     tNames = [x.split(chid)[-1] for x in tFiles]
-    timeNameLength = len(tNames[0].split('_')[-2])
+    timeNameLength = len(tNames[0].split('_')[-1])
     
+    print(tNames)
+    print(timeNameLength)
     if timeNameLength == 8:
-        times = [x.split('.q')[0].split('_') for x in tNames]
+        times = [x.split('.q')[0].replace('p','_').split('_') for x in tNames]
         times = [float(x[2])+float(x[3])/100 for x in times]
     elif timeNameLength == 2:
         times = [x.split('.q')[0].split('_') for x in tNames]
         times = [round(float(x[2])+float(x[3])/100,2) for x in times]
     
-    grids = []
-    datas = []
+    grids = dict()
+    datas = dict()
     
     ind = np.argmin(abs(np.array(times) - time))
     dataFile = tFiles[ind]
     
     for xyzFile in xyzFiles:
+        mesh = xyzFile.split(chid)[-1].split('.xyz')[0].replace('_','')
+        meshStr = "%s"%(chid) if mesh == '' else "%s_%s_"%(chid, mesh)
+        
         #dataFile = buildDataFile(xyzFile, time)
         
         grid, gridHeader = readXYZfile(xyzFile)
@@ -390,10 +405,18 @@ def readPlot3Ddata(chid, resultDir, time):
         
         printExtents(grid, data)
         
-        xGrid, yGrid, zGrid = rearrangeGrid(grid, dataHeader)
+        xGrid, yGrid, zGrid = rearrangeGrid(grid, swap=True)#, dataHeader)
+
+        grids[meshStr] = defaultdict(bool)
+        grids[meshStr]['xGrid'] = xGrid
+        grids[meshStr]['yGrid'] = yGrid
+        grids[meshStr]['zGrid'] = zGrid
+        
+        datas[meshStr] = defaultdict(bool)
+        
         data = np.reshape(data, (nx, ny, nz, 5), order='F')
-        grids.append([xGrid, yGrid, zGrid])
-        datas.append(data)
+        #grids.append([xGrid, yGrid, zGrid])
+        datas[meshStr] = data
         
     grid_abs = getAbsoluteGrid(grids)
     xGrid_abs = grid_abs[:, :, :, 0]
@@ -405,8 +428,8 @@ def readPlot3Ddata(chid, resultDir, time):
                          5))
     data_abs[:,:,:,:] = np.nan
     
-    for grid, data in zip(grids, datas):
-        (xGrid, yGrid, zGrid) = (grid[0], grid[1], grid[2])
+    for key in list(grids.keys()):
+        (xGrid, yGrid, zGrid) = (grids[key]['xGrid'], grids[key]['yGrid'], grids[key]['zGrid'])
         
         xloc = np.where(abs(xGrid_abs-xGrid[0,0,0]) == 0)[0][0]
         yloc = np.where(abs(yGrid_abs-yGrid[0,0,0]) == 0)[1][0]
@@ -414,7 +437,8 @@ def readPlot3Ddata(chid, resultDir, time):
         
         (NX, NY, NZ) = np.shape(xGrid)
         
-        data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:] = data
+        data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:] = datas[key]
+    
     return grid_abs, data_abs
 
 def extractResultDirAndChidFromSlcfName(slcfFile):
@@ -1010,6 +1034,7 @@ def readSLCFquantities(chid, resultDir, printInfo=False):
         #print(files['SLICES'][file.split(os.sep)[-1]])
         if printInfo:
             print(file)
+            print(files['SLICES'][file.split(os.sep)[-1]])
         centers.append(files['SLICES'][file.split(os.sep)[-1]]['CELL_CENTERED'])
         units.append(uts)
         f.close()
@@ -1257,7 +1282,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
         xAbs_c = xAbs_c[:, :-1]
         zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
         zAbs_c = zAbs_c[:-1,:]
-    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir2)
+    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir2, printInfo=False)
     if printInfo:
         print(quantities)
         print(slcfFiles)

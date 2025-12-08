@@ -2485,7 +2485,7 @@ class fdsFileOperations(object):
             print("WARNING: Unknown line in input file.\n")
             print("%s\n"%(line))
             check = False
-            assert False, "Stopped"
+            #assert False, "Stopped"
         if check:
             tmp = getattr(self, key)
             mergeType = self.mergeTypeFromLineType(lineType)

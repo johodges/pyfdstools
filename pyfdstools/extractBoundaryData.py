@@ -5,7 +5,7 @@
 #
 #-----------------------------------------------------------------------
 #=======================================================================
-# 
+#
 # DESCRIPTION:
 # This software is part of a python library to assist in developing and
 # analyzing simulation results from Fire Dynamics Simulator (FDS).
@@ -62,7 +62,7 @@ class fdspatch(object):
     extractPoints()
         Extracts points from data array
     """
-    
+
     def __init__(self, NX, NY, NT, DS, OR):
         """
         Parameters
@@ -79,7 +79,7 @@ class fdspatch(object):
         OR : int
             Integer specifying the orientation of the patch
         """
-        
+
         self.data = np.zeros((NX, NY, NT))
         self.lims = DS
         self.orientation = OR
@@ -92,11 +92,11 @@ class fdspatch(object):
         elif abs(OR) == 3:
             self.dx = (DS[1]-DS[0])/(NX-1)
             self.dz = (DS[3]-DS[2])/(NY-1)
-        
-        
+
+
     def append(self, data, iT):
         """Adds data from one time stamp to the data attribute
-        
+
         Parameters
         ----------
         data : int array(NX, NY, NT)
@@ -104,37 +104,37 @@ class fdspatch(object):
         iT : int
             time index
         """
-        
+
         if len(data.shape) == 3:
             self.data[:, :, iT] = data[:, :, 0]
         else:
             self.data[:, :, iT] = data
-        
-        
+
+
     def average(self, inds):
         """Averages data from multiple time stamps
-        
+
         Parameters
         ----------
         inds : list
             List of indices to include in average
-        
+
         Returns
         -------
         array(NX, NY)
             Array containing time-averaged data
         """
-        
+
         return np.mean(self.data[:, :, inds], axis=2)
-    
-    
+
+
     def buildSpace(self):
         """Builds x, y, z coordinates
-        
+
         This function builds an array of the x, y, and z coordinates and
         stores them in the x, y, and z attributes
         """
-        
+
         (NX, NY) = (self.data.shape[0]+1, self.data.shape[1]+1)
         if self.lims[0] == self.lims[1]:
             xGrid = np.zeros((NX, NY)) + self.lims[0]
@@ -152,11 +152,11 @@ class fdspatch(object):
             y = np.linspace(self.lims[2], self.lims[3], NY)
             xGrid, yGrid = np.meshgrid(x, y)
         (self.x, self.y, self.z) = (xGrid, yGrid, zGrid)
-        
-        
+
+
     def extractPoints(self):
         """Extracts points from patches
-        
+
         Returns
         -------
         array(NX*NY, 3)
@@ -166,7 +166,7 @@ class fdspatch(object):
         array(NX*NY, 1)
             Array containing orientation for each point
         """
-        
+
         NX, NY, NT = self.data.shape
         pts = np.zeros((NX*NY, NT))
         #coords = np.zeros((NX*NY, 3))
@@ -178,8 +178,8 @@ class fdspatch(object):
         coords[:, 2] = self.z.flatten() #((self.z[:-1,:-1]+self.z[1:,1:])/2).flatten() #self.z.flatten()
         orients = np.zeros((NX*NY,)) + self.orientation
         return coords, pts, orients
-    
-    
+
+
 def getPatchOptions(bndfFile, smvFile, meshNum, smvData=None):
     """Read patches from boundary file and return options for each axis
     """
@@ -188,7 +188,7 @@ def getPatchOptions(bndfFile, smvFile, meshNum, smvData=None):
     patchInfo, data = parseBndfPatches(f, npatch)
     f.close()
     (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
-    
+
     times, patches, units = importBoundaryFile(
             bndfFile, smvFile, gridNum=meshNum, smvData=smvData)
     xoptions = []
@@ -202,14 +202,14 @@ def getPatchOptions(bndfFile, smvFile, meshNum, smvData=None):
         if lims[4] == lims[5]: zoptions.append([lims, patchIors[i]])
     return xoptions, yoptions, zoptions
 
-        
+
 def getPatches(bndfFile, smvFile, axis, value, meshNum,
                xmin=999, xmax=-999, ymin=999, ymax=-999,
                zmin=999, zmax=-999, dx=999, dz=999,
                decimals=4, smvData=None,
                showOptions=False):
     """Read patches from boundary file
-    
+
     Parameters
     ----------
     bndfFile : str
@@ -240,7 +240,7 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
         Initialized z-delta of the patch (default 999)
     decimals : int, optional
         Number of decimals to use in rounding (default 4)
-    
+
     Returns
     -------
     list
@@ -264,13 +264,13 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
     float
         Z-axis delta of the patches
     """
-    
+
     f = zopen(bndfFile)
     quantity, shortName, units, npatch = parseBndfHeader(f)
     patchInfo, data = parseBndfPatches(f, npatch)
     f.close()
     (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
-    
+
     times, patches, units = importBoundaryFile(
             bndfFile, smvFile, gridNum=meshNum, smvData=smvData)
     allPatches = []
@@ -320,7 +320,7 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
 def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
                   dx, dz, axis, decimals=4):
     """Converts local patches to absolute patches
-    
+
     Parameters
     ----------
     patches : list
@@ -343,7 +343,7 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         Z-axis delta of the patches
     decimals : int, optional
         Number of decimals to round (default 4)
-    
+
     Returns
     -------
     array(NXA, NZA)
@@ -427,12 +427,12 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
 
 def parseBndfHeader(f):
     """Parse header from boundary file
-    
+
     Parameters
     ----------
     f : file
         Binary file open for reading
-    
+
     Returns
     -------
     str
@@ -444,16 +444,16 @@ def parseBndfHeader(f):
     int
         Number of patches
     """
-    
+
     data = f.read(130)
     header = data[:110]
     patchInfo = data[110:]
     tmp = header.split(b'\x1e')
-    
+
     quantity = tmp[1].decode('utf-8').replace('\x00','').strip(' ')
     shortName = tmp[3].decode('utf-8').replace('\x00','').strip(' ')
     units = tmp[5].decode('utf-8').replace('\x00','').strip(' ')
-    
+
     data = np.frombuffer(patchInfo, dtype=np.int32, count=5)
     npatch = data[2]
     return quantity, shortName, units, npatch
@@ -461,14 +461,14 @@ def parseBndfHeader(f):
 
 def parseBndfPatches(f, npatch):
     """Parse patches from boundary file
-    
+
     Parameters
     ----------
     f : file
         Binary file open for reading
     npatch : int
         Number of patches in boundary file
-    
+
     Returns
     -------
     tuple
@@ -477,7 +477,7 @@ def parseBndfPatches(f, npatch):
     float array(NX*NZ*NT)
         Array containing data from patches
     """
-    
+
     pts = 0
     patchPts = []
     patchDs = []
@@ -516,12 +516,12 @@ def parseBndfPatches(f, npatch):
 
 def readBoundaryHeader(file):
     """Read boundary header from boundary file
-    
+
     Parameters
     ----------
     file : str
         Path to boundary file to read
-    
+
     Returns
     -------
     str
@@ -533,7 +533,7 @@ def readBoundaryHeader(file):
     int
         Number of patches
     """
-    
+
     f = zopen(file)
     quantity, shortName, units, npatch = parseBndfHeader(f)
     f.close()
@@ -542,23 +542,23 @@ def readBoundaryHeader(file):
 
 def readBoundaryQuantities(dataDir, chid):
     """Returns quantities available in boundary files
-    
+
     This function searches through a data directory or archive and
     determines which QUANTITIES are available in all files.
-    
+
     Parameters
     ----------
     dataDir : str
         Path to data file
     chid : str
         CHID of simulation to check
-    
+
     Returns
     -------
     defaultdict
         Dictionary containing the quantities available in the files
     """
-    
+
     files = getFileList(dataDir, chid, 'bf')
     quantities = defaultdict(bool)
     for file in files:
@@ -572,7 +572,7 @@ def readBoundaryQuantities(dataDir, chid):
 
 def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
     """Import patches from a single boundary file
-    
+
     Parameters
     ----------
     fname : str
@@ -584,7 +584,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
         meshes are used.
     smvData : dict, optional
         Previously imported smvData
-    
+
     Returns
     -------
     list
@@ -592,7 +592,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
     list
         List of patches
     """
-    
+
     try:
         f = zopen(fname)
     except:
@@ -622,7 +622,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
     #print(bnd_types)
     if len(bnd_types) == 0: return None, None, None
     bnd_type = bnd_types[0]
-    
+
     for i in range(0, len(patches)):
         if bnd_type == 'BNDC':
             patches[i].data = patches[i].data[:-1,:-1, :]
@@ -649,7 +649,7 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
 
 def buildPatches(patchPts, patchDs, patchIors, data, grid):
     """Build spatial patches from patch points
-    
+
     Parameters
     ----------
     patchPts : list
@@ -662,7 +662,7 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid):
         Array containing data from the boundary file
     grid : list
         List of arrays containing the grid of the mesh
-        
+
     Returns
     -------
     float array(NT)
@@ -670,9 +670,9 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid):
     list
         List containing each patch
     """
-    
+
     pts = patchPts[-1][1]
-    
+
     timeSteps = int((data.shape[0]+1)/(pts+3))
     patches = []
     times = np.zeros((timeSteps-1,))
@@ -709,20 +709,20 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid):
 
 def getLimsFromGrid(data, grid):
     """Extracts limits from mesh grid and patch data
-    
+
     Parameters
     ----------
     data : list
         List containing limits from patch
     grid : list
         List of arrays containing the grid of the mesh
-        
+
     Returns
     -------
     float array(6)
         Array containing limit extents
     """
-    
+
     try:
         ind1 = np.argwhere(grid[0][:,0] == data[0])[0][0]
         #print("ind1 " + str(ind1))
@@ -736,7 +736,7 @@ def getLimsFromGrid(data, grid):
         #print("ind5 " + str(ind5))
         ind6 = np.argwhere(grid[2][:,0] == data[5])[0][0]
         #print("ind6 " + str(ind6))
-        
+
         lims = [grid[0][ind1,1], grid[0][ind2,1],
                 grid[1][ind3,1], grid[1][ind4,1],
                 grid[2][ind5,1], grid[2][ind6,1]]
@@ -753,16 +753,16 @@ def getLimsFromGrid(data, grid):
 
 def parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0]):
     """ Builds a list of polygons from an fds input file
-    
+
     This routine parses an FDS file looking for a list of names and
     stores a list of points defining polygons for each name which is
     found.
-    
+
     The extend argument allows the polygon to be extended by a number of
     grid cells. This is useful since FDS snaps obstructions to the grid
     which means the actual coordinate location of the data from FDS may
     not align exactly with the input file.
-    
+
     Parameters
     ----------
     fdsObsts : dict
@@ -773,13 +773,13 @@ def parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0]):
         List of obstruction names of interest
     extend : float array(3), optional
         Distance to extend polygon along each axis
-    
+
     Returns
     -------
     list
         List of polygons corresponding to each name
     """
-    
+
     polygons = []
     for name in names:
         linkedPolygons = []
@@ -809,10 +809,10 @@ def parseFDSforPts(fdsObsts, smvObsts, names, extend=[0,0,0]):
 def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvData,
                  orientations, polygons):
     """Loads maximum boundary data versus time from boundary files
-    
+
     This routine will read all boundary data from boundary files for
     a simulation.
-    
+
     Parameters
     ----------
     tStart : float
@@ -831,7 +831,7 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvData,
         List containing plane orientations to include in loading
     polygons : list
         List of polygons corresponding to each name
-    
+
     Returns
     -------
     float array(NT)
@@ -841,7 +841,7 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvData,
     float array(NT)
         Array containing orientations
     """
-    
+
     coords2, pts2, times, orients2, units = getPointsFromFiles(
             bndfs, smvData, tStart, tEnd, tBand, tInt)
     #import pandas as pd
@@ -854,44 +854,44 @@ def loadBNDFdata(tStart, tEnd, tInt, tBand, bndfs, smvData,
         orientations = [-3, -2, -1, 1, 2, 3]
     mask = [True if x in orientations else False for x in orients2]
     orientInds = np.where(mask)[0]
-    
+
     coords = coords2[orientInds,:]
     pts = pts2[orientInds,:]
     orients = orients2[orientInds]
-    
+
     # Generate point mask for polygons
     masks = getCoordinateMasks(coords, polygons)
-    
+
     #pd.DataFrame(coords).to_csv('test_points.csv')
     #pd.DataFrame(orients).to_csv('test_orients.csv')
     #pd.DataFrame(masks).to_csv('test_masks.csv')
     #pd.DataFrame(pts).to_csv('test_pts.csv')
-    
+
     mPts = np.zeros((pts.shape[1],masks.shape[1]))
     for i in range(0,masks.shape[1]):
         if np.where(masks[:,i] == 1)[0].shape[0] > 1:
             mPts[:,i] = np.nanmax(pts[masks[:,i] == 1],axis=0)
         else:
             mPts[:,i] = -1
-    
+
     # Remove last time if it is zero
     if times[-1] == 0:
         mPts = np.delete(mPts,mPts.shape[0]-1,axis=0)
         times = np.delete(times,times.shape[0]-1,axis=0)
-        
+
     return times, mPts, orients, units
 
 
 def readBoundaryFile(fname):
     """Loads data from a boundary file
-    
+
     This routine will read all boundary data from a boundary file
-    
+
     Parameters
     ----------
     fname : str
         Path to boundary file to import
-    
+
     Returns
     -------
     tuple
@@ -902,12 +902,12 @@ def readBoundaryFile(fname):
     float array(NX, NZ, NT)
         Array containing arranged data from boundary file
     """
-    
+
     try:
         f = zopen(fname)
     except:
         return None, None, None
-    
+
     with open(fname,'rb') as f:
         bytes_read = f.read(110)
         tmp = bytes_read.split(b'\x1e')
@@ -915,7 +915,7 @@ def readBoundaryFile(fname):
         quantity = tmp[1].decode('utf-8').replace('\x00','').strip(' ')
         shortName = tmp[3].decode('utf-8').replace('\x00','').strip(' ')
         units = tmp[5].decode('utf-8').replace('\x00','').strip(' ')
-        
+
         data = np.fromfile(f, dtype=np.int32, count=5)
         npatch = data[2]
         pts = 0
@@ -929,7 +929,7 @@ def readBoundaryFile(fname):
             dx = data[1] - data[0]
             dy = data[3] - data[2]
             dz = data[5] - data[4]
-            
+
             if abs(data[6]) == 1:
                 dy = dy+1
                 dz = dz+1
@@ -955,7 +955,7 @@ def readBoundaryFile(fname):
 
 def extractTime(tStart, tEnd, tBand, tInt, patches, times):
     """Extracts a timestamp interval from a patch time series
-    
+
     Parameters
     ----------
     tStart : float
@@ -970,7 +970,7 @@ def extractTime(tStart, tEnd, tBand, tInt, patches, times):
         List of patches
     times : list
         List of timestamps
-    
+
     Returns
     -------
     list
@@ -978,7 +978,7 @@ def extractTime(tStart, tEnd, tBand, tInt, patches, times):
     list
         List containing new patches
     """
-    
+
     NT = int((tEnd-tStart)/tInt + 1)
     newPatches = []
     for patch in patches:
@@ -1003,7 +1003,7 @@ def extractTime(tStart, tEnd, tBand, tInt, patches, times):
 
 def getPatchesFromMesh(grid, obst, bndfFile):
     """Extracts patches from a mesh
-    
+
     Parameters
     ----------
     grid : list
@@ -1012,7 +1012,7 @@ def getPatchesFromMesh(grid, obst, bndfFile):
         List of obstructions from smokeview file
     bndfFile : str
         String path to boundary file
-    
+
     Returns
     -------
     list
@@ -1020,7 +1020,7 @@ def getPatchesFromMesh(grid, obst, bndfFile):
     list
         List containing patches
     """
-    
+
     bndfInfo, patchInfo, data = readBoundaryFile(bndfFile)
     if bndfInfo == None:
         return [None], [None]
@@ -1033,25 +1033,25 @@ def getPatchesFromMesh(grid, obst, bndfFile):
 
 def buildSpace(patches):
     """Builds spatial grid for each patch in a list
-    
+
     Parameters
     ----------
     patches : list
         List of patches
     """
-    
+
     for i in range(0,len(patches)):
         patches[i].buildSpace()
-    
-    
+
+
 def extractPoints(patches):
     """Extracts points from a list of patches
-    
+
     Parameters
     ----------
     patches : list
         List of patches
-    
+
     Returns
     -------
     list
@@ -1061,7 +1061,7 @@ def extractPoints(patches):
     list
         List containing all orientations
     """
-    
+
     allCoords = []
     allPoints = []
     allOrients = []
@@ -1080,7 +1080,7 @@ def extractPoints(patches):
 
 def getPointsFromFiles(bndfs, smvData, tStart, tEnd, tBand, tInt):
     """Extracts a timestamp interval from a patch time series
-    
+
     Parameters
     ----------
     bndfs : list
@@ -1095,7 +1095,7 @@ def getPointsFromFiles(bndfs, smvData, tStart, tEnd, tBand, tInt):
         Timestamp interval to include in extracted data
     tBand : float
         Time averaging window to include in extracted data
-    
+
     Returns
     -------
     list
@@ -1124,7 +1124,7 @@ def getPointsFromFiles(bndfs, smvData, tStart, tEnd, tBand, tInt):
                 newTimes, newPatches = times, patches
                 buildSpace(newPatches)
             coords, pts, orients = extractPoints(newPatches)
-            
+
             if len(allCoords) == 0:
                 allCoords = coords
                 allPts = pts
@@ -1133,7 +1133,7 @@ def getPointsFromFiles(bndfs, smvData, tStart, tEnd, tBand, tInt):
                 allCoords = np.append(allCoords, coords, axis=0)
                 allPts = np.append(allPts, pts, axis=0)
                 allOrients = np.append(allOrients, orients, axis=0)
-                
+
     if len(newTimes) == 0:
         print(bndfs)
         assert False, "No valid patches found."
@@ -1142,20 +1142,20 @@ def getPointsFromFiles(bndfs, smvData, tStart, tEnd, tBand, tInt):
 
 def getCoordinateMasks(coords, polygons):
     """Returns a mask of coordinates contained in a polygon
-    
+
     Parameters
     ----------
     coords : list
         List of coordinates
     polygons : list
         List of polygons
-    
+
     Returns
     -------
     list
         List of coordinate masks
     """
-    
+
     masks = np.zeros((coords.shape[0], len(polygons)))
     for i in range(0,len(polygons)):
         linkedpolygons = polygons[i]
@@ -1166,7 +1166,7 @@ def getCoordinateMasks(coords, polygons):
 
 def timeAverageBndfs(resultDir, chid, fdsFilePath, fdsQuantity, dt):
     """Timev average boundary files
-    
+
     Parameters
     ----------
     resultDir : str
@@ -1180,32 +1180,32 @@ def timeAverageBndfs(resultDir, chid, fdsFilePath, fdsQuantity, dt):
     """
     bndfFiles = getFileList(resultDir, chid, 'bf')
     smvFile = getFileList(resultDir, chid, 'smv')[0]
-    
+
     fdsFile = fdsFileOperations()
     fdsFile.importFile(fdsFilePath)
     meshes = list(fdsFile.meshes.keys())
     if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
     numberOfMeshes = len(meshes)
-    
+
     for file in bndfFiles:
         quantity, shortName, units, npatch = readBoundaryHeader(file)
         if numberOfMeshes == 1:
             meshNumber = 0
         else:
             meshNumber = int(file.split('_')[-2]) - 1
-            
+
         if quantity == fdsQuantity:
             times, patches, units = importBoundaryFile(
                 file, smvFile, gridNum=meshNumber)
-            
-            
-            
-    
 
-def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities, 
+
+
+
+
+def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
               axis, value, decimals=4, limits=None):
     """Query boundary files
-    
+
     Parameters
     ----------
     resultDir : str
@@ -1224,7 +1224,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
         Number of decimals to include in rounding
     limits : list
         Sets limits on patch dimensions to read
-        
+
     Returns
     -------
     dict
@@ -1232,9 +1232,9 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
     list
         List of timestamps
     """
-    
+
     datas = defaultdict(bool)
-    
+
     fdsFile = fdsFileOperations()
     fdsFile.importFile(fdsFilePath)
     smvFile = getFileList(resultDir, chid, 'smv')[0]
@@ -1252,7 +1252,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
     bndfFiles = getFileList(bndfDir, chid, 'bf')
     #print('bndfFiles',bndfFiles)
     #print(resultDir, chid)
-    
+
     meshes = list(fdsFile.meshes.keys())
     if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
     numberOfMeshes = 0
@@ -1267,7 +1267,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
             numberOfMeshes += (I_UPPER+1)*(J_UPPER+1)*(K_UPPER+1)
         else:
             numberOfMeshes += 1
-    
+
     #numberOfMeshes = len(meshes)
     #print(numberOfMeshes)
     ts_out = None
@@ -1299,8 +1299,10 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                     if z1 < limits[4]: continue
                     if z2 > limits[5]: continue
                 #print(file, dx1, dz1)
-                if ts is None: continue
-                ts_out = ts  
+                if ts is None:
+                   continue
+                else:
+                   ts_out = ts
                 #print(file, meshNumber, x1, x2, y1, y2, z1, z2)
                 #print(file.split('_')[-2], numberOfMeshes)
                 #print(quantity, qty, shortName, units, npatch)
@@ -1335,7 +1337,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                     for option in zoptions:
                         if option[1] == axis:
                             print(option[0])
-                    
+
         #print("ABS INFO: ")
         #print(xmin, xmax, ymin, ymax, zmin, zmax, dx, dz)
         if qtyFound:
@@ -1357,18 +1359,18 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['X'] = x_grid_abs
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['Z'] = z_grid_abs
         #datas[qty]["MESH-%04.0f"%(meshNumber)]['DATA'] = data_abs
-    tmax = len(ts)
+    tmax = len(ts_out)
     for qty in list(datas.keys()):
         tmax = min([datas[qty]['DATA'].shape[2], tmax])
     for qty in list(datas.keys()):
         datas[qty]['DATA'] = datas[qty]['DATA'][:, :, :tmax]
-    ts = ts[:tmax]
+    ts = ts_out[:tmax]
     return datas, ts
 
 
 def linkBndfFileToMesh(meshes, bndfs, fdsQuantities):
     """Links boundary file back to mesh
-    
+
     Parameters
     ----------
     meshes : list
@@ -1377,16 +1379,16 @@ def linkBndfFileToMesh(meshes, bndfs, fdsQuantities):
         List containing path to each boundary file to query
     fdsQuantities : list
         List containing quantities to query from boundary file
-    
+
     Returns
     -------
     dict
         Dictionary containty mesh for each boundary file
     """
-    
+
     if 'unknownCounter' in meshes: meshes.remove('unknownCounter')
     numberOfMeshes = len(meshes)
-    
+
     bndf_dic = defaultdict(bool)
     for qty in fdsQuantities:
         bndf_qty = []
@@ -1408,7 +1410,7 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
                          orientations=[0], extend=[0, 0, 0],
                          names=None):
     """Extract maximum value from boundary file
-    
+
     Parameters
     ----------
     fdsF : str
@@ -1433,7 +1435,7 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
         List of integers specifying which orientations to consider
     names : list
         List of names specifiynig which obstructions to extract
-    
+
     Returns
     -------
     dict
@@ -1445,20 +1447,20 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     if names == None:
         #print(fdsFile.obsts)
         names = fdsFile.getPolygonNamesFromFdsFile()
-    
+
     #print(names)
-    
+
     #names = ['CE212319', 'CE210006', 'CE212298']
 
     smvData = parseSMVFile(smvF)
     (smvGrids, smvObsts) = (smvData['grids'], smvData['obsts'])
     (smvBndfs, smvSurfs) = (smvData['bndfs'], smvData['surfs'])
     (smvFiles, bndes) = (smvData['files'], smvData['bndes'])
-    
+
     fdsObsts = fdsFile.obsts
     points = parseFDSforPts(fdsObsts, smvObsts, names, extend=extend)
     polygons, numberOfGroups = pts2polygons(points)
-    
+
     bndfs = getFileList(resultDir, chid, 'bf')
     bndf_dic = linkBndfFileToMesh(meshes, bndfs, quantities)
     #pd.DataFrame(names).to_csv('test_names.csv')
@@ -1466,7 +1468,7 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
     for qty in quantities:
         datas[qty] = defaultdict(bool)
         times, mPts, orients, units = loadBNDFdata(
-                tStart, tEnd, tInt, tBand, bndf_dic[qty], 
+                tStart, tEnd, tInt, tBand, bndf_dic[qty],
                 smvData, orientations, polygons)
         datas[qty]['TIMES'] = times
         datas[qty]['NAMES'] = names
@@ -1484,7 +1486,7 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
         f.close()
         if quantity == fdsQuantity:
             filesWithQueriedQuantity.append(boundaryFile)
-    
+
     outFiles = []
     for boundaryFile in filesWithQueriedQuantity:
         print("Starting to avg file %s"%(boundaryFile))
@@ -1499,7 +1501,7 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
         outFile, outQty = bndfTimeAverage(boundaryFile, dt, outFile, outQty)
         print("wrote %s to %s"%(outQty, outFile))
         outFiles.append(outFile)
-    
+
     smvFile = getFileList(resultDir, chid, 'smv')[0]
     linesSMV = zreadlines(smvFile)
     smvData = parseSMVFile(smvFile)
@@ -1509,7 +1511,7 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
     bndf_ref_files = [x[1] for x in bndfs]
     meshes = [int(x[0]) for x in bndfs]
     vnums = [int(x[3]) for x in bndfs]
-    
+
     bndfLines = []
     for refFile, outFile in zip(filesWithQueriedQuantity, outFiles):
         rfile = refFile.split(os.sep)[-1]
@@ -1517,7 +1519,7 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
         outFile = outFile.split(os.sep)[-1]
         bndfLine = buildBndfSmvLine(mesh, vnum, outQty, outFile, shortName, units)
         bndfLines.extend(bndfLine)
-    
+
     if outDir is None:
         newSmvFile = outFile.split(os.sep)[:-1]
         newSmvFile.append(smvFile.split(os.sep)[-1].replace('.smv','_avg.smv'))
@@ -1526,7 +1528,7 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
         newSmvFile = outDir.split(os.sep)
         newSmvFile.append(smvFile.split(os.sep)[-1].replace('.smv','_avg.smv'))
         newSmvFile = os.sep.join(newSmvFile)
-    
+
     linesSMV.extend(bndfLines)
     smvText = '\n'.join(linesSMV)
     smvText = smvText + '\n'
@@ -1534,9 +1536,9 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
     with open(newSmvFile, 'w') as f:
         f.write(smvText)
     print("wrote to %s"%(newSmvFile))
-    
+
     return outFiles, outQty, filesWithQueriedQuantity, newSmvFile
-        
+
 
 def buildBndfSmvLine(mesh, vnum, qty, file, shortName, units):
     bndfLine = "BNDF" + str(mesh).rjust(6) + str(vnum).rjust(6) + "\n"
@@ -1546,7 +1548,7 @@ def buildBndfSmvLine(mesh, vnum, qty, file, shortName, units):
     bndfLine = bndfLine + " " + units
     bndfLine = bndfLine.split('\n')
     return bndfLine
-    
+
 
 def bndfTimeAverage(boundaryFile, dt, outFile=None, outQty=None):
     f = zopen(boundaryFile)
@@ -1554,33 +1556,33 @@ def bndfTimeAverage(boundaryFile, dt, outFile=None, outQty=None):
     patchInfo, data = parseBndfPatches(f, npatch)
     f.close()
     pts = patchInfo[0][-1][1]
-    
+
     times = data[::(pts+3)]
-    
+
     # Reshape data into array for time averaging
     data2 = np.zeros((pts-3, len(times)))
     for i, time in enumerate(times):
         ind1 = i*(pts+3)
         ind2 = (i+1)*(pts+3)
         data2[:, i] = data[ind1+3:ind2-3]
-    
+
     # Time average the array
     data3 = data2.copy()
     for i, time in enumerate(times):
         t1 = max([(time-dt/2), times[0]])
         t2 = min([(time+dt/2), times[-1]])
         tinds = np.logical_and(times>=t1, times<=t2)
-        
+
         data3[:, i] = np.nanmean(data2[:, tinds], axis=1)
-    
+
     # Reshape data back to 1-D array for binary write
     data4 = np.array(data, dtype=np.float32)
     for i, time in enumerate(times):
         ind1 = i*(pts+3)
         ind2 = (i+1)*(pts+3)
-        
+
         data4[ind1+3:ind2-3] = data3[:, i]
-    
+
     data5 = data4.tobytes()
     if outFile is None:
         outFile = boundaryFile.replace('.bf','_avg.bf')
@@ -1589,11 +1591,11 @@ def bndfTimeAverage(boundaryFile, dt, outFile=None, outQty=None):
             outFile = os.sep.join([x for x in tmp if '.zip' not in x])
     if outQty is None:
         outQty = shortName + ' (%0.0ds Avg)'%(dt)
-    
+
     with open(outFile, 'wb') as f:
         header = writeBndfHeader(outQty, shortName, units, npatch)
         darray = writeBndfPatchInfo(patchInfo)
-        
+
         f.write(header)
         f.write(darray)
         f.write(data5)
@@ -1601,7 +1603,7 @@ def bndfTimeAverage(boundaryFile, dt, outFile=None, outQty=None):
 
 
 def writeBndfHeader(quantity, shortName, units, npatch):
-    
+
     header = b'\x1e\x00\x00\x00'
     header = header + (quantity.ljust(30, ' ')).encode('utf-8')
     header = header + b'\x1e\x00\x00\x00' + b'\x1e\x00\x00\x00'
@@ -1610,13 +1612,13 @@ def writeBndfHeader(quantity, shortName, units, npatch):
     header = header + (units.ljust(30, ' ')).encode('utf-8')
     #header = header + b'\x1e\x00\x00\x00\x04\x00\x00\x00'
     #header = header + b'\xbf\x0f\x00\x00\x04\x00\x00\x00$\x00\x00\x00'
-    
+
     npatch_array = np.array([30, 4, npatch, 4, 36], dtype=np.int32)
-    
+
     npatch_binary = npatch_array.tobytes()
-    
+
     header = header + npatch_binary
-    
+
     return header
 
 
@@ -1625,7 +1627,7 @@ def writeBndfPatchInfo(patchInfo):
     patchIors = patchInfo[2]
     patchNBs = patchInfo[3]
     patchNMs = patchInfo[4]
-    
+
     patchHeader = b''
     for i in range(0, len(patchDs)):
         patchD = patchDs[i]

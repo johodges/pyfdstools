@@ -916,6 +916,7 @@ class fdsLineTypes(object):
         surfTypes['REFERENCE_HEAT_FLUX_TIME_INTERVAL'] = 'float'
         surfTypes['RGB'] = 'listfloat'
         surfTypes['ROUGHNESS'] = 'float'
+        surfTypes['SKIP_INRAD'] = 'bool'
         surfTypes['SPEC_ID'] = 'string'
         surfTypes['STRETCH_FACTOR'] = 'listfloat'
         surfTypes['SUBSTEP_POWER'] = 'float'

@@ -740,6 +740,10 @@ def getLimsFromGrid(data, grid):
         lims = [grid[0][ind1,1], grid[0][ind2,1],
                 grid[1][ind3,1], grid[1][ind4,1],
                 grid[2][ind5,1], grid[2][ind6,1]]
+        #print(grid[0][:,0])
+        #print(grid[1][:,0])
+        #print(grid[2][:,0])
+        #print(data)
     except:
         print(grid[0][:,0])
         print(grid[1][:,0])
@@ -1289,7 +1293,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
 
     # Check if requested quantities are in the dataset
     all_quantities_found = True
-    quantities = readBoundaryQuantities(resultDir, chid)
+    quantities = readBoundaryQuantities(bndfDir, chid)
     for qty in fdsQuantities:
         if qty not in quantities:
             all_quantities_found = False

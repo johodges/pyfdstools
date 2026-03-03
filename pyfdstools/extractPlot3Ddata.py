@@ -329,7 +329,12 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
                 x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
                 levels=levels, extend=extend)
     else:
-        im = ax.imshow(d1[::-1, :], cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, extent=[x1.min(), x1.max(),z1.min(), z1.max()])
+        dout = d1[::-1, :] # default behavior is extend above and below
+        if extend == 'below':
+            dout[dout > qnty_mx] = np.nan
+        elif extend == 'above':
+            dout[dout < qnty_mn] = np.nan
+        im = ax.imshow(dout, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, extent=[x1.min(), x1.max(),z1.min(), z1.max()])
     if addCbar:
         if tickDecimals is not None:
             fmt = "%"+".%d"%(tickDecimals)+"f"
@@ -536,7 +541,233 @@ def readSingleSlcfFile(slcfFile,
     return lims, datas2, times
 
 
-def readSLCF3Ddata(chid, resultDir, quantityToExport,
+def readSLCF3Ddata(chid, workingDir, quantityToExport,
+                   time=None, dt=None, saveTimesFile=False, verbose=False,
+                   axis=None, value=None):
+    endianness = getEndianness(workingDir, chid)
+    datatype = getDatatypeByEndianness(np.float32, endianness)
+    
+    if '.zip' in workingDir:
+        smvFile = getFileListFromZip(workingDir, chid, 'smv')[0]
+    else:
+        smvFile = getFileList(workingDir, chid, 'smv')[0]
+    smvOutputs = parseSMVFile(smvFile)
+    
+    smv_grids = smvOutputs['grids']
+    smv_slcf = smvOutputs['files']['SLICES']
+    
+    resultDir = workingDir
+    if '.zip' not in workingDir:
+        fdsFileName = getFileList(workingDir, chid, 'fds')[0]
+        fdsFile = fdsFileOperations()
+        fdsFile.importFile(fdsFileName)
+        if fdsFile.dump['ID'] is not False:
+            if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
+                resultDir = workingDir + os.sep + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep
+    
+    grids = defaultdict(bool)
+    #slcfFiles = list(smv_slcf.keys())
+    #slcfFiles.sort()
+    foundSomething = False
+    tinds = []
+    
+    for i in range(0, len(smv_grids)):
+        if verbose: print("Starting grid %d"%(i+1))
+        xs = smv_grids[i][0][:, 1]
+        ys = smv_grids[i][1][:, 1]
+        zs = smv_grids[i][2][:, 1]
+        xGrid, yGrid, zGrid = np.meshgrid(xs, ys, zs)
+        xGrid = np.swapaxes(xGrid, 0, 1)
+        yGrid = np.swapaxes(yGrid, 0, 1)
+        zGrid = np.swapaxes(zGrid, 0, 1)
+        
+        meshStr = "%s"%(chid) if len(smv_grids) == 1 else "%s_%d_"%(chid, i+1)
+        #print(i, meshStr)
+        if '.zip' in resultDir:
+            slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
+            slcfFiles = [x for x in slcfFiles if '%s'%(meshStr) in x]
+        else:
+            slcfFiles = glob.glob("%s%s%s*.sf"%(resultDir, os.sep, meshStr))
+        #print(i, "%s%s%s*.sf"%(resultDir, os.sep, meshStr), slcfFiles)
+        grids[meshStr] = defaultdict(bool)
+        grids[meshStr]['xGrid'] = xGrid
+        grids[meshStr]['yGrid'] = yGrid
+        grids[meshStr]['zGrid'] = zGrid
+        
+        if (axis is not None) and (value is not None):
+            skip = False
+            if (axis == 1) and ((value < xs[0]) or (value > xs[-1])): skip = True
+            if (axis == 2) and ((value < ys[0]) or (value > ys[-1])): skip = True
+            if (axis == 3) and ((value < zs[0]) or (value > zs[-1])): skip = True
+            if skip and verbose: print("Skipping mesh %d as selected plane (%d, %0.4f) not contained in mesh %0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f"%(i+1, axis, value, xs[0], xs[-1], ys[0], ys[-1], zs[0], zs[-1]))
+            if skip: continue
+        grids[meshStr]['include'] = True
+        times3D = []
+        datas3D = []
+        lims3D = []
+        
+        #print("%s%s_*.sf"%(resultDir, meshStr))
+        for slcfFile in slcfFiles:
+            if saveTimesFile:
+                timesFile = slcfFile.replace('.sf','_times.csv')
+            else:
+                timesFile = None
+            timesSLCF = readSLCFtimes(slcfFile, timesFile, endianness=endianness)
+            times = []
+            f = zopen(slcfFile)
+
+            qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
+            # Check if slice is correct quantity
+            correctQuantity = (qty == quantityToExport)
+            # Check if slice is 2-dimensional
+            threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
+            #print(qty, quantityToExport)
+            if correctQuantity and threeDimSlice:
+                (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
+                # Check if slice is 3-D
+                #print(slcfFile, qty, sName, uts, iX, eX, iY, eY, iZ, eZ)
+                shape = (NX+1, NY+1, NZ+1)
+                if verbose: print("Reading slice %s"%(slcfFile))
+                if time == None:
+                    NT = len(timesSLCF)
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
+                    for i in range(0, NT):
+                        t, data = readNextTime(f, NX, NY, NZ, datatype)
+                        data = np.reshape(data, shape, order='F')
+                        datas2[:, :, :, i] = data
+                    times = timesSLCF
+                elif (time != None) and (dt == None):
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+                    i = np.argmin(abs(timesSLCF-time))
+                    f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
+                    t, data = readNextTime(f, NX, NY, NZ, datatype)
+                    data = np.reshape(data, shape, order='F')
+                    datas2[:, :, :, 0] = data
+                    times = [timesSLCF[i]]
+                elif (time != None) and (dt != None):
+                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
+                    i = np.argmin(abs(timesSLCF - (time - dt/2)))
+                    j = np.argmin(abs(timesSLCF - (time + dt/2)))
+                    f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
+                    data = True
+                    for ii in range(i, j+1):
+                        if data is not False:
+                            t, data = readNextTime(f, NX, NY, NZ, datatype)
+                            data = np.reshape(data, shape, order='F')
+                            datas2[:, :, :, 0] += data
+                    if j - i > 0:
+                        datas2[:, :, :, 0] = datas2[:, :, :, 0] / (j-i)
+                    times = [timesSLCF[i]]
+                lims3D.append([iX, eX, iY, eY, iZ, eZ])
+                datas3D.append(datas2)
+                times3D.append(times)
+                outputUnits = uts
+            f.close()
+        
+        if len(datas3D) == 0:
+            readSLCFquantities(chid, workingDir, printInfo=False)
+            
+        foundSomething = True
+        grids[meshStr]['datas3D'] = datas3D
+        grids[meshStr]['lims3D'] = lims3D
+        tinds.append(datas3D[0].shape[3])
+    
+    grid_abs = getAbsoluteGrid(grids)
+    xGrid_abs = grid_abs[:, :, :, 0]
+    yGrid_abs = grid_abs[:, :, :, 1]
+    zGrid_abs = grid_abs[:, :, :, 2]
+    if not foundSomething:
+        print("No 3D slice data found for qty %s"%(quantityToExport))
+        return False, False, False, False
+    tInd = np.nanmin(tinds)
+    xshp, yshp, zshp = xGrid_abs.shape
+    if (axis is not None) and (value is not None):
+        if axis == 1: xshp = 1
+        if axis == 2: yshp = 1
+        if axis == 3: zshp = 1
+    data_abs = np.zeros((xshp, yshp, zshp, tInd))
+    data_abs[:, :, :, :] = np.nan
+    
+    abs_xs = xGrid_abs[:, 0, 0]
+    abs_ys = yGrid_abs[0, :, 0]
+    abs_zs = zGrid_abs[0, 0, :]
+    
+    for key in list(grids.keys()):
+        x1 = grids[key]['xGrid'].flatten()
+        y1 = grids[key]['yGrid'].flatten()
+        z1 = grids[key]['zGrid'].flatten()
+        
+        if not grids[key]['include']: continue
+        
+        xi = np.where(np.logical_or(np.isclose(abs_xs, x1.min()), np.isclose(abs_xs,x1.max())))[0]
+        yi = np.where(np.logical_or(np.isclose(abs_ys, y1.min()), np.isclose(abs_ys,y1.max())))[0]
+        zi = np.where(np.logical_or(np.isclose(abs_zs, z1.min()), np.isclose(abs_zs,z1.max())))[0]
+        
+        xg, yg, zg = np.meshgrid(abs_xs[xi[0]:xi[1]+1], abs_ys[yi[0]:yi[1]+1], abs_zs[zi[0]:zi[1]+1])
+        xg = np.swapaxes(xg, 0, 1)
+        yg = np.swapaxes(yg, 0, 1)
+        zg = np.swapaxes(zg, 0, 1)
+        
+        p = np.zeros((xg.flatten().shape[0],3))
+        p[:, 0] = xg.flatten()
+        p[:, 1] = yg.flatten()
+        p[:, 2] = zg.flatten()
+        
+        xs = grids[key]['xGrid'][:, 0, 0]
+        ys = grids[key]['yGrid'][0, :, 0]
+        zs = grids[key]['zGrid'][0, 0, :]        
+        d = np.zeros_like(data_abs[xi[0]:xi[1]+1, yi[0]:yi[1]+1, zi[0]:zi[1]+1, 0])
+        for t in range(0, tInd):
+            d[:, :, :] = np.nan
+            if t < grids[key]['datas3D'][0].shape[3]:
+                lims3D = grids[key]['lims3D']
+                iX, eX, iY, eY, iZ, eZ = lims3D[0]
+                #d[iX:eX+1,iY:eY+1,iZ:eZ+1] = grids[key]['datas3D'][0][:, :, :, t]
+                d = grids[key]['datas3D'][0][:, :, :, t] #hybrid meshing
+                #print(xs.shape, ys.shape, zs.shape, grids[key]['datas3D'][0][:, :, :, t].shape)
+                #print(grids[key]['lims3D'])
+                #d2 = scpi.interpn((xs, ys, zs), grids[key]['datas3D'][0][:, :, :, t], p, method='linear', fill_value=None, bounds_error=False)
+                #print(d2r.shape)
+                #print(data_abs.shape, data_abs[xi[0]:xi[1]+1, 0, zi[0]:zi[1]+1, t].shape)
+                d2 = scpi.interpn((xs, ys, zs), d, p, method='linear', fill_value=None, bounds_error=False)
+                d2r = np.reshape(d2, xg.shape)
+                if (axis is not None) and (value is not None):
+                    if axis == 1:
+                        xind = np.argmin(abs(xs-value))
+                        #d2 = scpi.interpn((ys, zs), d[xind, :, :], p[:,1:], method='linear', fill_value=None, bounds_error=False)
+                        #d2r = np.reshape(d2, xg[0, :, :].shape)
+                        data_abs[0, yi[0]:yi[1]+1, zi[0]:zi[1]+1, t] = d2r[xind, :, :]
+                    if axis == 2: 
+                        yind = np.argmin(abs(ys-value))
+                        #d2 = scpi.interpn((xs, zs), d[:, yind, :], p[:,[0, 2]], method='linear', fill_value=None, bounds_error=False)
+                        #print(d2.shape, xg.shape)
+                        #d2r = np.reshape(d2, xg[:, 0, :].shape)
+                        #print(d2r.shape, data_abs[0, yi[0]:yi[1]+1, zi[0]:zi[1]+1, t].shape)
+                        data_abs[xi[0]:xi[1]+1, 0, zi[0]:zi[1]+1, t] = d2r[:, yind, :]
+                    if axis == 3: 
+                        zind = np.argmin(abs(zs-value))
+                        #d2 = scpi.interpn((xs, ys), d[:, :, zind], p[:,:-1], method='linear', fill_value=None, bounds_error=False)
+                        #d2r = np.reshape(d2, xg[:, :, 0].shape)
+                        data_abs[xi[0]:xi[1]+1, yi[0]:yi[1]+1, 0, t] = d2r[:, :, zind]
+                else:
+                    data_abs[xi[0]:xi[1]+1, yi[0]:yi[1]+1, zi[0]:zi[1]+1, t] = d2r
+    if (axis is not None) and (value is not None):
+        if axis == 1: 
+            grid_out = grid_abs[0, :, :, :][:, :, [1, 2]]
+            data_out = data_abs[0, :, :, :]
+        if axis == 2: 
+            grid_out = grid_abs[:, 0, :, :][:, :, [0, 2]]
+            data_out = data_abs[:, 0, :, :]
+        if axis == 3: 
+            grid_out = grid_abs[:, :, 0, :][:, :, [0, 1]]
+            data_out = data_abs[:, :, 0, :]
+    else:
+        grid_out = grid_abs
+        data_out = data_abs
+    return grid_out, data_out, times3D[0], outputUnits
+
+
+def readSLCF3DdataXYZ(chid, resultDir, quantityToExport,
                    time=None, dt=None, saveTimesFile=False):
     endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
@@ -990,7 +1221,24 @@ def readSLCFtimes(file, timesFile=None, endianness=None):
         np.savetxt(timesFile, times)
     return times
 
-def readSLCFquantities(chid, resultDir, printInfo=False):
+def readSLCFquantities(chid, workingDir, printInfo=False):
+    resultDir = workingDir
+    if '.zip' not in workingDir:
+        fdsFileName = getFileList(workingDir, chid, 'fds')[0]
+        fdsFile = fdsFileOperations()
+        fdsFile.importFile(fdsFileName)
+        if fdsFile.dump['ID'] is not False:
+            if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
+                resultDir = workingDir + os.sep + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep
+    
+    if '.zip' in workingDir:
+        smvFile = getFileListFromZip(workingDir, chid, 'smv')[0]
+    else:
+        smvFile = getFileList(workingDir, chid, 'smv')[0]
+    
+    smvData = parseSMVFile(smvFile)
+    
+    '''
     try:
         smvFile = os.path.join(resultDir, '%s.smv'%(chid))
         smvData = parseSMVFile(smvFile)
@@ -998,13 +1246,14 @@ def readSLCFquantities(chid, resultDir, printInfo=False):
         smvDir = os.sep.join(os.path.abspath(resultDir).split(os.sep)[:-1])
         smvFile = os.path.join(smvDir, '%s.smv'%(chid))
         smvData = parseSMVFile(smvFile)
-        files = smvData['files']
-        files2 = defaultdict(bool)
-        files2['SLICES'] = defaultdict(bool)
-        for key in list(files['SLICES'].keys()):
-            n = os.path.basename(key)
-            files2['SLICES'][n] = files['SLICES'][key]
-        smvData['files'] = files2
+    '''
+    files = smvData['files']
+    files2 = defaultdict(bool)
+    files2['SLICES'] = defaultdict(bool)
+    for key in list(files['SLICES'].keys()):
+        n = os.path.basename(key)
+        files2['SLICES'][n] = files['SLICES'][key]
+    smvData['files'] = files2
     (grid, obst) = (smvData['grids'], smvData['obsts'])
     (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
     (files, bndes) = (smvData['files'], smvData['bndes'])
@@ -1020,6 +1269,9 @@ def readSLCFquantities(chid, resultDir, printInfo=False):
     meshes = []
     centers = []
     units = []
+    all_files_from_smv = list(files['SLICES'].keys())
+    #print(all_files_from_smv)
+    #assert False, "Stopped"
     for file in slcfFiles:
         if '.zip' in resultDir:
             f = zip.open(file.split("%s%s"%('.zip',os.sep))[1])
@@ -1032,9 +1284,14 @@ def readSLCFquantities(chid, resultDir, printInfo=False):
         meshStr = n[-2]
         meshes.append(meshStr)
         #print(files['SLICES'][file.split(os.sep)[-1]])
+        ftocheck = file.split(os.sep)[-1]
+        if ftocheck not in all_files_from_smv:
+            print("WARNING file %s not in smokeview slices"%(ftocheck))
+            continue
         if printInfo:
             print(file)
-            print(files['SLICES'][file.split(os.sep)[-1]])
+            print(files['SLICES'])
+            print(files['SLICES'][ftocheck])
         centers.append(files['SLICES'][file.split(os.sep)[-1]]['CELL_CENTERED'])
         units.append(uts)
         f.close()
@@ -1046,13 +1303,14 @@ def buildQTYstring(chid, resultDir, qty):
     quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir)
     quantitiesCheck = [True if qty == x else False for x in quantities]
     inds = np.where(quantitiesCheck)[0]
+    print(inds)
     if len(inds) == 0:
         print("Quantity %s unknown."%(qty))
         print("Known quantities:")
         for qnty in sorted(set(quantities)):
             print(qnty)
     else:
-        ind = inds[0]
+        ind = inds[0][0]
     quantityStr = slcfFiles[ind].split('.sf')[0].split('_')[-1]
     return quantityStr
 
@@ -1282,7 +1540,7 @@ def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None,
         xAbs_c = xAbs_c[:, :-1]
         zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
         zAbs_c = zAbs_c[:-1,:]
-    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir2, printInfo=False)
+    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir2, printInfo=printInfo)
     if printInfo:
         print(quantities)
         print(slcfFiles)

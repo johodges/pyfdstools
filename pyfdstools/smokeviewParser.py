@@ -266,6 +266,8 @@ def parseSMVFile(smvFile):
                           c1, c2, c3, c4])
         if 'SLCF' in linesSMV[i]:
             file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
+            if r'/' in file: file = file.split(r'/')[1]
+            if r'\\' in file: file = file.split(r'\\')[1]
             files['SLICES'][file] = defaultdict(bool)
             files['SLICES'][file]['CELL_CENTERED'] = False
             files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
@@ -274,6 +276,8 @@ def parseSMVFile(smvFile):
             files['SLICES'][file]['LINETEXT'] = linesSMV[i]
         if 'SLCC' in linesSMV[i]:
             file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
+            if r'/' in file: file = file.split(r'/')[1]
+            if r'\\' in file: file = file.split(r'\\')[1]
             files['SLICES'][file] = defaultdict(bool)
             files['SLICES'][file]['CELL_CENTERED'] = True
             files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
@@ -282,6 +286,8 @@ def parseSMVFile(smvFile):
             files['SLICES'][file]['LINETEXT'] = linesSMV[i]
         if 'SLCT' in linesSMV[i]:
             file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
+            if r'/' in file: file = file.split(r'/')[1]
+            if r'\\' in file: file = file.split(r'\\')[1]
             files['SLICES'][file] = defaultdict(bool)
             files['SLICES'][file]['CELL_CENTERED'] = False
             files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
@@ -290,6 +296,8 @@ def parseSMVFile(smvFile):
             files['SLICES'][file]['LINETEXT'] = linesSMV[i]
         if 'SMOKF3D' in linesSMV[i]:
             file = '%s.s3d'%(linesSMV[i+1][1:].split('.s3d')[0])
+            if r'/' in file: file = file.split(r'/')[1]
+            if r'\\' in file: file = file.split(r'\\')[1]
             files['SMOKF3D'][file] = defaultdict(bool)
             files['SMOKF3D'][file]['QUANTITY'] = linesSMV[i+2].strip()
             files['SMOKF3D'][file]['SHORTNAME'] = linesSMV[i+3].strip()

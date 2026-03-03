@@ -218,6 +218,7 @@ class fdsLineTypes(object):
         dumpTypes['SMV_PARALLEL_WRITE'] = 'bool'
         dumpTypes['SUPPRESS_DIAGNOSTICS'] = 'bool'
         dumpTypes['VELOCITY_ERROR_FILE'] = 'bool'
+        dumpTypes['WRITE_FORMAT'] = 'string'
         dumpTypes['WRITE_STL'] = 'bool'
         dumpTypes['WRITE_XYZ'] = 'bool'
         dumpTypes['newline'] = 'ignore'

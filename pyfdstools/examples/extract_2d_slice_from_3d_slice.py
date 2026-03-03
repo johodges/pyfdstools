@@ -56,18 +56,30 @@ if __name__ == "__main__":
     if time == -1: time = None
     if dt == -1: dt = None
     
-    print("\t1. Reading 3D slice data.")
+    print("\t1. Method 1: Reading 2D slice data from 3D.")
+    grid, data, times, unit = fds.readSLCF3Ddata(chid, working_dir, quantity, time=time, dt=dt, axis=axis, value=value)
+    
+    data_slc = data[:, :, -1]
+    x = grid[:, :, 0]
+    z = grid[:, :, 1]
+    
+    print("\t2. Method 1: Plotting final frame of extracted 2D slice.")
+    fig, ax = fds.plotSlice(x, z, data_slc, axis,
+                        qnty_mn=qnty_mn, qnty_mx=qnty_mx,
+                        clabel="%s (%s)"%(quantity, unit))
+    
+    print("\t3. Method 2: Reading 3D slice data.")
     grid, data, times, unit = fds.readSLCF3Ddata(chid, working_dir, quantity, time=time, dt=dt)
     
-    print("\t2. Finding queried 2D slice in 3D slice data.")
+    print("\t4. Method 2: Finding queried 2D slice in 3D slice data.")
     x, z, data_slc = fds.findSliceLocation(grid, data[:,:,:,-1], axis, value)
     
-    print("\t3. Plotting final frame of extracted 2D slice.")
+    print("\t5. Plotting final frame of extracted 2D slice.")
     fig, ax = fds.plotSlice(x, z, data_slc, axis,
                         qnty_mn=qnty_mn, qnty_mx=qnty_mx,
                         clabel="%s (%s)"%(quantity, unit))
     outfile = os.path.join(outdir, '%s_%s_%0.0f_%0.4f_final_frame.png'%(chid, quantity, axis, value))
-    print("\t4. Saving final frame of extracted 2D slice to file %s."%(outfile))
+    print("\t6. Saving final frame of extracted 2D slice to file %s."%(outfile))
     fig.savefig(outfile)
     plt.show()
     

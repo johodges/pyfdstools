@@ -33,5 +33,6 @@ from .inputFileVerification import *
 from .utilities import *
 from .colorSchemes import *
 from .paraview import *
+from .vtkhdf_plugin import *
 from .examples import *
 from ._version import __version__

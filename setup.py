@@ -28,6 +28,7 @@ setup(
                         'pandas>=0.25',
                         'pyevtk>=1.0',
                         'scipy>=1.3.1',
+                        'vtk',
                       ],
 
     classifiers=[

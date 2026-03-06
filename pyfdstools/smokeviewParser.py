@@ -18,7 +18,7 @@
 # # IMPORTS
 #=======================================================================
 import numpy as np
-from .utilities import zreadlines
+from .utilities import zreadlines, getFileListFromZip, getFileList, getAbsoluteGrid
 from collections import defaultdict
 
 
@@ -198,6 +198,82 @@ def parseBNDE(lines, i):
     (mesh, vNum) = (float(mesh), float(vNum))
     return mesh, bndeName, gbfName, vID, vNum
 
+
+def getBlockedCellsInPlane(working_dir, chid, axis, value):
+    if '.zip' in working_dir:
+        smvFile = getFileListFromZip(working_dir, chid, 'smv')[0]
+    else:
+        smvFile = getFileList(working_dir, chid, 'smv')[0]
+    smvOutputs = parseSMVFile(smvFile)
+    
+    smv_grids = smvOutputs['grids']
+    smv_obsts = smvOutputs['obsts']
+    smv_slcf = smvOutputs['files']['SLICES']
+    grids = defaultdict(bool)
+    for i in range(0, len(smv_grids)):
+        #if verbose: print("Starting grid %d"%(i+1))
+        xs = smv_grids[i][0][:, 1]
+        ys = smv_grids[i][1][:, 1]
+        zs = smv_grids[i][2][:, 1]
+        xGrid, yGrid, zGrid = np.meshgrid(xs, ys, zs)
+        xGrid = np.swapaxes(xGrid, 0, 1)
+        yGrid = np.swapaxes(yGrid, 0, 1)
+        zGrid = np.swapaxes(zGrid, 0, 1)
+        
+        meshStr = "%s"%(chid) if len(smv_grids) == 1 else "%s_%d_"%(chid, i+1)
+        grids[meshStr] = defaultdict(bool)
+        grids[meshStr]['xGrid'] = xGrid
+        grids[meshStr]['yGrid'] = yGrid
+        grids[meshStr]['zGrid'] = zGrid
+        
+    grid_abs = getAbsoluteGrid(grids)
+    xGrid_abs = grid_abs[:, :, :, 0]
+    yGrid_abs = grid_abs[:, :, :, 1]
+    zGrid_abs = grid_abs[:, :, :, 2]
+    abs_xs = xGrid_abs[:, 0, 0]
+    abs_ys = yGrid_abs[0, :, 0]
+    abs_zs = zGrid_abs[0, 0, :]
+    
+    xshp, yshp, zshp = xGrid_abs.shape
+    #if (axis is not None) and (value is not None):
+    if axis == 1: blocks = np.zeros((yshp, zshp))
+    if axis == 2: blocks = np.zeros((xshp, zshp))
+    if axis == 3: blocks = np.zeros((xshp, yshp))
+    
+    
+    for i in range(0, len(smv_obsts)):
+        if axis == 1:
+            if (value < smv_obsts[i][0]) or (value > smv_obsts[i][1]): continue # not in plane
+            xi = np.where(np.logical_or(np.isclose(abs_ys, smv_obsts[i][15]), np.isclose(abs_ys,smv_obsts[i][16])))[0]
+            zi = np.where(np.logical_or(np.isclose(abs_zs, smv_obsts[i][17]), np.isclose(abs_zs,smv_obsts[i][18])))[0]
+            x1, x2 = xi[0], xi[-1]
+            z1, z2 = zi[0], zi[-1]
+            if x1 == x2: x2 = x1+1
+            if z1 == z2: z2 = z1+1
+            blocks[x1:x2, z1:z2] = 1
+        elif axis == 2:
+            if (value < smv_obsts[i][2]) or (value > smv_obsts[i][3]): continue # not in plane
+            xi = np.where(np.logical_or(np.isclose(abs_xs, smv_obsts[i][13]), np.isclose(abs_xs,smv_obsts[i][14])))[0]
+            zi = np.where(np.logical_or(np.isclose(abs_zs, smv_obsts[i][17]), np.isclose(abs_zs,smv_obsts[i][18])))[0]
+            x1, x2 = xi[0], xi[-1]
+            z1, z2 = zi[0], zi[-1]
+            if x1 == x2: x2 = x1+1
+            if z1 == z2: z2 = z1+1
+            blocks[x1:x2, z1:z2] = 1
+        elif axis == 3:
+            if (value < smv_obsts[i][4]) or (value > smv_obsts[i][5]): continue # not in plane
+            xi = np.where(np.logical_or(np.isclose(abs_xs, smv_obsts[i][13]), np.isclose(abs_xs,smv_obsts[i][14])))[0]
+            zi = np.where(np.logical_or(np.isclose(abs_ys, smv_obsts[i][15]), np.isclose(abs_ys,smv_obsts[i][16])))[0]
+            try:
+                x1, x2 = xi[0], xi[-1]
+                z1, z2 = zi[0], zi[-1]
+            except:
+                print(abs_ys)
+                print(i, smv_obsts[i])
+            if x1 == x2: x2 = x1+1
+            if z1 == z2: z2 = z1+1
+            blocks[x1:x2, z1:z2] = 1
+    return blocks
 
 def parseSMVFile(smvFile):
     """This function parses a smokeview file

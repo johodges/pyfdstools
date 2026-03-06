@@ -1346,7 +1346,7 @@ def visualizePlot3D(x, z, T, U, V, W, HRR,
     plt.colorbar()
 
 
-def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
+def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False, grid=None):
     resultDir = os.sep.join(os.path.abspath(slcfFile).split(os.sep)[:-1])
     endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
@@ -1354,9 +1354,10 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False):
     timesSLCF = readSLCFtimes(slcfFile, None, endianness=endianness)
     times = []
     
-    xyzFile = '%s%s'%('_'.join(slcfFile.split('_')[:-1]), '.xyz')
-    grids = getGridsFromXyzFiles([xyzFile], chid)
-    grid = grids[list(grids.keys())[0]]
+    if grid == None:
+        xyzFile = '%s%s'%('_'.join(slcfFile.split('_')[:-1]), '.xyz')
+        grids = getGridsFromXyzFiles([xyzFile], chid)
+        grid = grids[list(grids.keys())[0]]
     xGrid = grid['xGrid']
     yGrid = grid['yGrid']
     zGrid = grid['zGrid']
@@ -1510,7 +1511,219 @@ def getAxisAndValueFromXB(XB, grid, cen):
         value = -1
     return axis, value
 
-def query2dAxisValue(resultDir, chid, quantity, axis, value, time=None, dt=None, atol=1e-8, printInfo=False):
+def query2dAxisValue(workingDir, chid, quantity, axis, value, time=None, dt=None, atol=1e-8, printInfo=False, verbose=False):
+    '''
+    xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
+    if len(xyzFiles) == 0:
+        xyzFiles = getFileListFromResultDir(resultDir+'*'+os.sep, chid, 'xyz')
+        resultDir2 = os.path.dirname(xyzFiles[0]) + os.sep 
+    else:
+        resultDir2 = resultDir
+    grids = getGridsFromXyzFiles(xyzFiles, chid)
+    '''
+    endianness = getEndianness(workingDir, chid)
+    datatype = getDatatypeByEndianness(np.float32, endianness)
+    
+    if '.zip' in workingDir:
+        smvFile = getFileListFromZip(workingDir, chid, 'smv')[0]
+    else:
+        smvFile = getFileList(workingDir, chid, 'smv')[0]
+    smvOutputs = parseSMVFile(smvFile)
+    
+    smv_grids = smvOutputs['grids']
+    smv_slcf = smvOutputs['files']['SLICES']
+    
+    resultDir = workingDir
+    if '.zip' not in workingDir:
+        fdsFileName = getFileList(workingDir, chid, 'fds')[0]
+        fdsFile = fdsFileOperations()
+        fdsFile.importFile(fdsFileName)
+        if fdsFile.dump['ID'] is not False:
+            if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
+                resultDir = workingDir + os.sep + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep
+    
+    grids = defaultdict(bool)
+    for i in range(0, len(smv_grids)):
+        if verbose: print("Starting grid %d"%(i+1))
+        xs = smv_grids[i][0][:, 1]
+        ys = smv_grids[i][1][:, 1]
+        zs = smv_grids[i][2][:, 1]
+        xGrid, yGrid, zGrid = np.meshgrid(xs, ys, zs)
+        xGrid = np.swapaxes(xGrid, 0, 1)
+        yGrid = np.swapaxes(yGrid, 0, 1)
+        zGrid = np.swapaxes(zGrid, 0, 1)
+        
+        meshStr = "%s"%(chid) if len(smv_grids) == 1 else "%s_%d_"%(chid, i+1)
+        #print(i, "%s%s%s*.sf"%(resultDir, os.sep, meshStr), slcfFiles)
+        grids[meshStr] = defaultdict(bool)
+        grids[meshStr]['xGrid'] = xGrid
+        grids[meshStr]['yGrid'] = yGrid
+        grids[meshStr]['zGrid'] = zGrid
+    meshStrIsChid = False
+    if len(smv_grids) == 1: meshStrIsChid = True
+    
+    grids_abs = getAbsoluteGrid(grids)
+    if abs(axis) == 1:
+        xAbs = grids_abs[0, :, :, 1]
+        zAbs = grids_abs[0, :, :, 2]
+        xAbs_c = (xAbs[1:, :] + xAbs[:-1, :])/2
+        xAbs_c = xAbs_c[:, :-1]
+        zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
+        zAbs_c = zAbs_c[:-1,:]
+    elif abs(axis) == 2:
+        xAbs = grids_abs[:, 0, :, 0]
+        zAbs = grids_abs[:, 0, :, 2]
+        xAbs_c = (xAbs[1:, :] + xAbs[:-1, :])/2
+        xAbs_c = xAbs_c[:, :-1]
+        zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
+        zAbs_c = zAbs_c[:-1,:]
+    elif abs(axis) == 3:
+        xAbs = grids_abs[:, :, 0, 0]
+        zAbs = grids_abs[:, :, 0, 1]
+        xAbs_c = (xAbs[1:, :] + xAbs[:-1, :])/2
+        xAbs_c = xAbs_c[:, :-1]
+        zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
+        zAbs_c = zAbs_c[:-1,:]
+    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir, printInfo=printInfo)
+    if printInfo:
+        print(quantities)
+        print(slcfFiles)
+    
+    datas = defaultdict(bool)
+    foundSlice = False
+    available_slices = []
+    for qty, slcfFile, dim, cen, uts in zip(quantities, slcfFiles, dimensions, centers, units):
+        if qty == quantity:
+            n = slcfFile.split(chid)[-1].split('_')
+            meshStr = n[-2]
+            if meshStr == '': meshStr = chid
+            tmp = [len(x) for x in list(grids.keys())]
+            if np.max(tmp) < 4:
+                meshStr = str(int(meshStr))
+            if meshStrIsChid:
+                meshStr = chid
+            else:
+                meshStr = chid + "_%s_"%(meshStr)
+            #mesh = slcfFile.split(chid)[-1].split('.sf')[0].split('_')[-2]
+            #meshStr = "%s"%(chid) if mesh == '' else "%s_%s"%(chid, mesh)
+            #print(slcfFile, n, meshStr, grids.keys())
+            slcf_axis, slcf_value = getAxisAndValueFromXB(dim, grids[meshStr], cen)
+            
+            available_slices.append([slcf_axis, slcf_value])
+            if np.isclose(axis, abs(slcf_axis)) and np.isclose(slcf_value, value, atol=atol):
+                if printInfo:
+                    print("Reading %s"%(slcfFile), time, dt)
+                x, z, d, times, coords = read2dSliceFile(slcfFile, chid, time=time, dt=dt, grid=grids[meshStr])
+                if cen:
+                    x = (x[1:, :]+x[:-1, :])/2
+                    z = (z[:,1:]+z[:,:-1])/2
+                    x = x[:,:-1]
+                    z = z[:-1,:]
+                    d = d[1:,1:]
+                #print(x.shape, z.shape, d.shape)
+                slcfName = '%s_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f_%0.4f'%(qty, coords[0], coords[1], coords[2], coords[3], coords[4], coords[5])
+                datas[slcfName] = defaultdict(bool)
+                datas[slcfName]['limits'] = coords
+                datas[slcfName]['times'] = times
+                datas[slcfName]['datas'] = d.copy()
+                datas[slcfName]['x'] = x.copy()
+                datas[slcfName]['z'] = z.copy()
+                datas[slcfName]['center'] = cen
+                foundSlice = True
+                outUnits = uts
+    if not foundSlice:
+        print("Warning did not find a 2-D slice of %s on axis %d at value %0.4f"%(quantity, axis, value))
+        print("Available slices of qty %s:"%(quantity))
+        print('\tAxis\tValue')
+        for slcf_axis, slcf_value in available_slices:
+            print("\t%d\t%0.4f"%(slcf_axis, slcf_value))
+        print("Note an axis of -1 indicates a 3-D slice which is not currently supported in this function.")
+        return None, None        
+    data_abs = np.zeros((xAbs.shape[0], xAbs.shape[1], len(times)), dtype=np.float32)
+    data_abs_c = np.zeros((xAbs_c.shape[0], xAbs_c.shape[1], len(times)), dtype=np.float32)
+    for slcfName in list(datas.keys()):
+        x = datas[slcfName]['x']
+        z = datas[slcfName]['z']
+        d = datas[slcfName]['datas']
+        c = datas[slcfName]['center']
+        
+        if c:
+            xloc_mn = np.where(np.isclose(abs(xAbs_c - np.nanmin(x)), 0, atol=1e-04))[0][0]
+            xloc_mx = np.where(np.isclose(abs(xAbs_c - np.nanmax(x)), 0, atol=1e-04))[0][0]
+            zloc_mn = np.where(np.isclose(abs(zAbs_c - np.nanmin(z)), 0, atol=1e-04))[1][0]
+            zloc_mx = np.where(np.isclose(abs(zAbs_c - np.nanmax(z)), 0, atol=1e-04))[1][0]
+        else:
+            xloc_mn = np.where(np.isclose(abs(xAbs - np.nanmin(x)), 0, atol=1e-04))[0][0]
+            xloc_mx = np.where(np.isclose(abs(xAbs - np.nanmax(x)), 0, atol=1e-04))[0][0]
+            zloc_mn = np.where(np.isclose(abs(zAbs - np.nanmin(z)), 0, atol=1e-04))[1][0]
+            zloc_mx = np.where(np.isclose(abs(zAbs - np.nanmax(z)), 0, atol=1e-04))[1][0]
+            
+        (NX, NZ, NT) = np.shape(d)
+        ANX = xloc_mx-xloc_mn + 1
+        ANZ = zloc_mx-zloc_mn + 1
+        
+        if (NX != ANX) or (NZ != ANZ):
+            if c:
+                xi = xAbs_c[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
+                zi = zAbs_c[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
+            else:
+                xi = xAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
+                zi = zAbs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1].flatten()
+            
+            x = np.round(x, decimals=4)
+            z = np.round(z, decimals=4)
+            
+            xi = np.round(xi, decimals=4)
+            zi = np.round(zi, decimals=4)
+            
+            xi[xi < np.min(x)] = np.min(x)
+            xi[xi > np.max(x)] = np.max(x)
+            zi[zi < np.min(z)] = np.min(z)
+            zi[zi > np.max(z)] = np.max(z)
+            
+            tmpGrid = np.array([xi, zi]).T
+            for i in range(0, NT):
+                interpolator = scpi.RegularGridInterpolator((x[:, 0], z[0, :]), d[:, :, i])
+                data2 = interpolator(tmpGrid)
+                data2 = np.reshape(data2, (ANX, ANZ), order='C')
+                if c:
+                    try:
+                        data_abs_c[xloc_mn:xloc_mx+1,
+                                 zloc_mn:zloc_mx+1,
+                                 i] = data2
+                    except:
+                        print("Error loading %s at time %0.0f"%(slcfName, i))
+                else:
+                    try:
+                        data_abs[xloc_mn:xloc_mx+1,
+                                 zloc_mn:zloc_mx+1,
+                                 i] = data2
+                    except:
+                        print("Error loading %s at time %0.0f"%(slcfName, i))
+        else:
+            try:
+                data_abs[xloc_mn:xloc_mx+1,
+                         zloc_mn:zloc_mx+1,
+                         :] = d
+            except:
+                try:
+                    NTT = min([data_abs.shape[2], d.shape[2]])
+                    data_abs[xloc_mn:xloc_mx+1,
+                             zloc_mn:zloc_mx+1,
+                             :NTT] = d[:, :, :NTT]
+                    print("Error loading %s at time %0.0f"%(slcfName, i))
+                except:
+                    print("Error loading %s at all times"%(slcfName))
+                    print(d.shape, data_abs[xloc_mn:xloc_mx+1, zloc_mn:zloc_mx+1, :].shape, NTT)
+                    
+    data_abs_out = defaultdict(bool)
+    data_abs_out['x'] = xAbs
+    data_abs_out['z'] = zAbs
+    data_abs_out['datas'] = data_abs
+    data_abs_out['times'] = times
+    return data_abs_out, outUnits
+
+def query2dAxisValueXYZ(resultDir, chid, quantity, axis, value, time=None, dt=None, atol=1e-8, printInfo=False):
     xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
     if len(xyzFiles) == 0:
         xyzFiles = getFileListFromResultDir(resultDir+'*'+os.sep, chid, 'xyz')

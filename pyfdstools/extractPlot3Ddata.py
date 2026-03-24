@@ -1584,7 +1584,7 @@ def query2dAxisValue(workingDir, chid, quantity, axis, value, time=None, dt=None
         xAbs_c = xAbs_c[:, :-1]
         zAbs_c = (zAbs[:,1:] + zAbs[:,:-1])/2
         zAbs_c = zAbs_c[:-1,:]
-    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir, printInfo=printInfo)
+    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, workingDir, printInfo=printInfo)
     if printInfo:
         print(quantities)
         print(slcfFiles)

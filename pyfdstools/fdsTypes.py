@@ -710,6 +710,7 @@ class fdsLineTypes(object):
         radiTypes['RADIATION'] = 'bool'
         radiTypes['RADIATIVE_FRACTION'] = 'float'
         radiTypes['RADIATION_ITERATIONS'] = 'int'
+        radiTypes['RANDOMIZE_RADIATION_DIRECTIONS'] = 'bool'
         radiTypes['RADTMP'] = 'float'
         radiTypes['TIME_STEP_INCREMENT'] = 'int'
         radiTypes['WIDE_BAND_MODEL'] = 'bool'

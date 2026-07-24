@@ -473,6 +473,7 @@ class fdsLineTypes(object):
         miscTypes['ID'] = 'ignore'
         miscTypes['INITIAL_UNMIXED_FRACTION'] = 'float'
         miscTypes['LEVEL_SET_MODE'] = 'int'
+        miscTypes['MINIMUM_ZONE_VOLUME'] = 'float'
         miscTypes['MPI_TIMEOUT'] = 'float'
         miscTypes['NEIGHBOR_SEPARATION_DISTANCE'] = 'float'
         miscTypes['NEW_PARTICLE_METHOD'] = 'bool'

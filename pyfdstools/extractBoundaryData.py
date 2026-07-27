@@ -265,56 +265,43 @@ def getPatches(bndfFile, smvFile, axis, value, meshNum,
         Z-axis delta of the patches
     """
 
-    f = zopen(bndfFile)
-    quantity, shortName, units, npatch = parseBndfHeader(f)
-    patchInfo, data = parseBndfPatches(f, npatch)
-    f.close()
-    (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
-
+    # importBoundaryFile already reads and parses the BNDF header and patches.
     times, patches, units = importBoundaryFile(
-            bndfFile, smvFile, gridNum=meshNum, smvData=smvData)
-    allPatches = []
+        bndfFile,
+        smvFile=smvFile,
+        gridNum=meshNum,
+        smvData=smvData,
+        axis=axis,
+        value=value,
+        decimals=decimals,
+    )
+
     if patches is None:
-        return None, None, None, None, None, None, None, None, None, None
-    for i in range(0, len(patches)):
-        patches[i].data[patches[i].data < -1e10] = np.nan
-        #print(patches[i].lims, patchIors[i])
-        lims = patches[i].lims
-        if patches[i].data.shape[0]*patches[i].data.shape[1] > -1:
-            check = False
-            if (abs(axis) == 1):
-                if (lims[0] == value) and (lims[1] == value):
-                    check = True
-            if (abs(axis) == 2):
-                if (lims[2] == value) and (lims[3] == value):
-                    check = True
-            if (abs(axis) == 3):
-                if (lims[4] == value) and (lims[5] == value):
-                    check = True
-            if check and (axis == patchIors[i]):
-                allPatches.append(patches[i])
-                xmin = min([xmin, lims[0]])
-                xmax = max([xmax, lims[1]])
-                ymin = min([ymin, lims[2]])
-                ymax = max([ymax, lims[3]])
-                zmin = min([zmin, lims[4]])
-                zmax = max([zmax, lims[5]])
-                NX, NZ, NT = patches[i].data.shape
-                '''
-                if abs(axis) == 1:
-                    dx = np.round((lims[3]-lims[2])/(NX-1), decimals=decimals+2)
-                    dz = np.round((lims[5]-lims[4])/(NZ-1), decimals=decimals+2)
-                elif abs(axis) == 2:
-                    dx = np.round((lims[1]-lims[0])/(NX-1), decimals=decimals+2)
-                    dz = np.round((lims[5]-lims[4])/(NZ-1), decimals=decimals+2)
-                elif abs(axis) == 3:
-                    dx = np.round((lims[1]-lims[0])/(NX-1), decimals=decimals+2)
-                    dz = np.round((lims[3]-lims[2])/(NZ-1), decimals=decimals+2)
-                '''
-                dx = patches[i].dx
-                dz = patches[i].dz
-                allPatches.append(patches[i])
-    return times, allPatches, xmin, xmax, ymin, ymax, zmin, zmax, dx, dz
+        return (None, None, None, None, None, None, None, None, None, None)
+
+    if len(patches) == 0:
+        return (times,[],xmin,xmax,ymin,ymax,zmin,zmax,dx,dz)
+
+    allPatches = []
+
+    for patch in patches:
+        patch.data[patch.data < -1e10] = np.nan
+
+        lims = patch.lims
+
+        allPatches.append(patch)
+
+        xmin = min(xmin, lims[0])
+        xmax = max(xmax, lims[1])
+        ymin = min(ymin, lims[2])
+        ymax = max(ymax, lims[3])
+        zmin = min(zmin, lims[4])
+        zmax = max(zmax, lims[5])
+
+        dx = patch.dx
+        dz = patch.dz
+
+    return (times,allPatches,xmin,xmax,ymin,ymax,zmin,zmax,dx,dz)
 
 
 def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
@@ -341,87 +328,274 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
         X-axis delta of the patches
     dz : float
         Z-axis delta of the patches
+    axis : int
+        Signed orientation of the queried boundary plane:
+        -1, 1, -2, 2, -3, or 3.        
     decimals : int, optional
         Number of decimals to round (default 4)
 
     Returns
     -------
-    array(NXA, NZA)
-        Array containing global x-axis coordinates
-    array(NXA, NZA)
-        Array containing global z-axis coordinates
-    array(NXZ, NZA, NT)
-        Array containing data in global coordinates for each timestamp
+    x_grid_abs : ndarray
+        Two-dimensional array of global first-coordinate values.
+
+    z_grid_abs : ndarray
+        Two-dimensional array of global second-coordinate values.
+
+    data_abs : ndarray
+        Global boundary-data array with shape
+        (number of second-coordinate points,
+         number of first-coordinate points,
+         number of time steps).
     """
-    if abs(axis) == 1:
-        if patches[0].cell_centered == True:
-            #x_abs = np.linspace(ymin, ymax-dx, int(np.round((ymax-ymin)/dx)))
-            #z_abs = np.linspace(zmin, zmax-dz, int(np.round((zmax-zmin)/dz)))
-            x_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dx)+1))
-            z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
-        else:
-            x_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dx)+1))
-            z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
-    if abs(axis) == 2:
-        if patches[0].cell_centered == True:
-            x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
-            z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
-        else:
-            x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
-            z_abs = np.linspace(zmin, zmax, int(np.round((zmax-zmin)/dz)+1))
-    if abs(axis) == 3:
-        if patches[0].cell_centered == True:
-            #x_abs = np.linspace(xmin, xmax-dx, int(np.round((xmax-xmin)/dx)))
-            #z_abs = np.linspace(ymin, ymax-dz, int(np.round((ymax-ymin)/dz)))
-            x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
-            z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
-        else:
-            x_abs = np.linspace(xmin, xmax, int(np.round((xmax-xmin)/dx)+1))
-            z_abs = np.linspace(ymin, ymax, int(np.round((ymax-ymin)/dz)+1))
-    x_abs = np.round(x_abs, decimals=decimals)
-    z_abs = np.round(z_abs, decimals=decimals)
-    x_grid_abs, z_grid_abs = np.meshgrid(x_abs, z_abs)
-    NXA, NZA = x_grid_abs.shape
-    NX, NZ, NT = patches[0].data.shape
-    data_abs = np.zeros((NXA, NZA, NT))
-    data_abs[:, :, :] = np.nan
-    for patch in patches:
+    # ------------------------------------------------------------------
+    # Validate the inputs.
+    # ------------------------------------------------------------------
+    """
+    Convert a list of local boundary-data patches into one assembled 2D patch.
+    """
+
+    # ------------------------------------------------------------------
+    # Validate inputs
+    # ------------------------------------------------------------------
+    if patches is None or len(patches) == 0:
+        raise ValueError("buildAbsPatch received no patches.")
+
+    if axis not in (-3, -2, -1, 1, 2, 3):
+        raise ValueError(
+            "axis must be one of -3, -2, -1, 1, 2, or 3; "
+            f"received {axis}"
+        )
+
+    if not np.isfinite(dx) or dx <= 0:
+        raise ValueError(f"Invalid first-coordinate spacing dx={dx}")
+
+    if not np.isfinite(dz) or dz <= 0:
+        raise ValueError(f"Invalid second-coordinate spacing dz={dz}")
+
+    axis_abs = abs(axis)
+    cell_centered = bool(patches[0].cell_centered)
+
+    # Check that all patches use the same data convention.
+    for i, patch in enumerate(patches):
+        if bool(patch.cell_centered) != cell_centered:
+            raise ValueError(
+                "Cannot assemble cell-centered and node-centered patches "
+                f"together. Patch 0 cell_centered={cell_centered}, "
+                f"patch {i} cell_centered={patch.cell_centered}."
+            )
+
+    # ------------------------------------------------------------------
+    # Determine the two physical coordinates lying in the plane
+    # ------------------------------------------------------------------
+    if axis_abs == 1:
+        # x = constant: plot y horizontally and z vertically
+        coord1_min = ymin
+        coord1_max = ymax
+        coord2_min = zmin
+        coord2_max = zmax
+
+    elif axis_abs == 2:
+        # y = constant: plot x horizontally and z vertically
+        coord1_min = xmin
+        coord1_max = xmax
+        coord2_min = zmin
+        coord2_max = zmax
+
+    else:
+        # z = constant: plot x horizontally and y vertically
+        coord1_min = xmin
+        coord1_max = xmax
+        coord2_min = ymin
+        coord2_max = ymax
+
+    # ------------------------------------------------------------------
+    # Build global coordinate vectors
+    #
+    # For BNDC data, importBoundaryFile removes the final row and column:
+    #
+    #     patch.data = patch.data[:-1, :-1, :]
+    #
+    # The existing BNDC limit adjustment shifts both limits by half a
+    # cell. Therefore, the final valid cell-center coordinate is
+    # max_limit - spacing.
+    #
+    # Node-centered BNDF data retain both endpoints.
+    # ------------------------------------------------------------------
+    if cell_centered:
+        n_coord1 = int(np.round((coord1_max - coord1_min) / dx))
+        n_coord2 = int(np.round((coord2_max - coord2_min) / dz))
+
+        if n_coord1 < 1 or n_coord2 < 1:
+            raise ValueError(
+                "Invalid cell-centered global dimensions: "
+                f"n_coord1={n_coord1}, n_coord2={n_coord2}, "
+                f"limits=({coord1_min}, {coord1_max}, "
+                f"{coord2_min}, {coord2_max}), "
+                f"spacing=({dx}, {dz})"
+            )
+
+        coord1_abs = coord1_min + np.arange(n_coord1) * dx
+        coord2_abs = coord2_min + np.arange(n_coord2) * dz
+
+    else:
+        n_coord1 = int(np.round((coord1_max - coord1_min) / dx)) + 1
+        n_coord2 = int(np.round((coord2_max - coord2_min) / dz)) + 1
+
+        if n_coord1 < 1 or n_coord2 < 1:
+            raise ValueError(
+                "Invalid node-centered global dimensions: "
+                f"n_coord1={n_coord1}, n_coord2={n_coord2}, "
+                f"limits=({coord1_min}, {coord1_max}, "
+                f"{coord2_min}, {coord2_max}), "
+                f"spacing=({dx}, {dz})"
+            )
+
+        coord1_abs = coord1_min + np.arange(n_coord1) * dx
+        coord2_abs = coord2_min + np.arange(n_coord2) * dz
+
+    coord1_abs = np.round(coord1_abs, decimals=decimals)
+    coord2_abs = np.round(coord2_abs, decimals=decimals)
+
+    x_grid_abs, z_grid_abs = np.meshgrid(coord1_abs, coord2_abs)
+
+    # Use the longest patch time history. A shorter patch will fill only
+    # the times it contains.
+    nt_abs = max(patch.data.shape[2] for patch in patches)
+
+    data_abs = np.full(
+        (coord2_abs.size, coord1_abs.size, nt_abs),
+        np.nan,
+        dtype=float,
+    )
+
+    # ------------------------------------------------------------------
+    # Insert patches
+    # ------------------------------------------------------------------
+    tolerance = max(
+        10.0 ** (-decimals),
+        abs(dx) * 1.0e-6,
+        abs(dz) * 1.0e-6,
+    )
+
+    for patch_number, patch in enumerate(patches):
+
+        if patch.data is None or patch.data.ndim != 3:
+            raise ValueError(
+                f"Patch {patch_number} does not contain a 3-D data array. "
+                f"Shape: "
+                f"{None if patch.data is None else patch.data.shape}"
+            )
+
         lims = patch.lims
-        if abs(axis) == 1:
-            (xMin, xMax) = (lims[2], lims[3])
-            (zMin, zMax) = (lims[4], lims[5])
-        elif abs(axis) == 2:
-            (xMin, xMax) = (lims[0], lims[1])
-            (zMin, zMax) = (lims[4], lims[5])
-        elif abs(axis) == 3:
-            (xMin, xMax) = (lims[0], lims[1])
-            (zMin, zMax) = (lims[2], lims[3])
+
+        if axis_abs == 1:
+            patch_coord1_min = lims[2]
+            patch_coord2_min = lims[4]
+
+        elif axis_abs == 2:
+            patch_coord1_min = lims[0]
+            patch_coord2_min = lims[4]
+
         else:
-            estr = "Axis %0.0f not in [-1, -2, -3, 1, 2, 3]."%(axis)
-            assert False, estr
-        xInd1 = np.argwhere(np.isclose(x_grid_abs, xMin, atol=10**(-1*decimals)))[0][1]
-        if xInd1 == 0:
-            xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
-        else:
-            #print(patch.cell_centered)
-            #print(x_grid_abs)
-            #print(xMax)
-            xInd2 = np.argwhere(np.isclose(x_grid_abs, xMax, atol=10**(-1*decimals)))[0][1]
-        zInd1 = np.argwhere(np.isclose(z_grid_abs, zMin, atol=10**(-1*decimals)))[1][0]
-        if zInd1 == 0:
-            zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax, atol=10**(-1*decimals)))[1][0]
-        else:
-            zInd2 = np.argwhere(np.isclose(z_grid_abs, zMax, atol=10**(-1*decimals)))[1][0]
-        NT = min([patch.data.shape[2], data_abs[zInd1:zInd2, xInd1:xInd2, :].shape[2]])
-        for t in range(0, NT):
-            pdata = patch.data[:, :, t].T
-            if pdata.shape[0] != data_abs[zInd1:zInd2, xInd1:xInd2, t].shape[0]:
-                tmp = data_abs[zInd1:zInd2, xInd1:xInd2, t].shape
-                tmp2 = (tmp[1], tmp[0])
-                pdata2 = cv2.resize(pdata, dsize=tmp2, interpolation=cv2.INTER_LINEAR)
-                data_abs[zInd1:zInd2, xInd1:xInd2, t] = pdata2
-            else:
-                data_abs[zInd1:zInd2, xInd1:xInd2, t] = pdata
+            patch_coord1_min = lims[0]
+            patch_coord2_min = lims[2]
+
+        # The first two patch dimensions correspond to the first and
+        # second in-plane coordinates. The assembled array uses the
+        # conventional [vertical, horizontal, time] ordering, so each
+        # time slice is transposed before insertion.
+        patch_n_coord1 = patch.data.shape[0]
+        patch_n_coord2 = patch.data.shape[1]
+
+        # Locate only the lower-left patch coordinate. The upper
+        # insertion indices are determined from the actual patch data
+        # dimensions, avoiding ambiguity over inclusive/exclusive limits.
+        coord1_matches = np.flatnonzero(
+            np.isclose(
+                coord1_abs,
+                patch_coord1_min,
+                atol=tolerance,
+                rtol=0.0,
+            )
+        )
+
+        coord2_matches = np.flatnonzero(
+            np.isclose(
+                coord2_abs,
+                patch_coord2_min,
+                atol=tolerance,
+                rtol=0.0,
+            )
+        )
+
+        if coord1_matches.size == 0 or coord2_matches.size == 0:
+            raise ValueError(
+                f"Patch {patch_number} lower limits could not be found "
+                "on the assembled grid.\n"
+                f"Patch limits: {lims}\n"
+                f"Requested axis: {axis}\n"
+                f"First-coordinate lower limit: {patch_coord1_min}\n"
+                f"Second-coordinate lower limit: {patch_coord2_min}\n"
+                f"Global first-coordinate range: "
+                f"{coord1_abs[0]} to {coord1_abs[-1]}\n"
+                f"Global second-coordinate range: "
+                f"{coord2_abs[0]} to {coord2_abs[-1]}"
+            )
+
+        coord1_start = int(coord1_matches[0])
+        coord2_start = int(coord2_matches[0])
+
+        coord1_stop = coord1_start + patch_n_coord1
+        coord2_stop = coord2_start + patch_n_coord2
+
+        if (
+            coord1_start < 0
+            or coord2_start < 0
+            or coord1_stop > coord1_abs.size
+            or coord2_stop > coord2_abs.size
+        ):
+            raise ValueError(
+                f"Patch {patch_number} extends outside the global array.\n"
+                f"Patch data shape: {patch.data.shape}\n"
+                f"First-coordinate indices: "
+                f"{coord1_start}:{coord1_stop} of {coord1_abs.size}\n"
+                f"Second-coordinate indices: "
+                f"{coord2_start}:{coord2_stop} of {coord2_abs.size}\n"
+                f"Patch limits: {lims}"
+            )
+
+        nt_patch = min(patch.data.shape[2], nt_abs)
+
+        # Transpose all time slices at once:
+        #
+        # patch.data:          [coord1, coord2, time]
+        # transposed_patch:    [coord2, coord1, time]
+        patch_data = np.transpose(
+            patch.data[:, :, :nt_patch],
+            axes=(1, 0, 2),
+        )
+
+        expected_shape = (
+            coord2_stop - coord2_start,
+            coord1_stop - coord1_start,
+            nt_patch,
+        )
+
+        if patch_data.shape != expected_shape:
+            raise ValueError(
+                f"Unexpected shape while assembling patch {patch_number}.\n"
+                f"Patch shape after transpose: {patch_data.shape}\n"
+                f"Expected target shape: {expected_shape}\n"
+                f"Patch limits: {lims}"
+            )
+
+        data_abs[
+            coord2_start:coord2_stop,
+            coord1_start:coord1_stop,
+            :nt_patch,
+        ] = patch_data
+
     return x_grid_abs, z_grid_abs, data_abs
 
 
@@ -570,7 +744,8 @@ def readBoundaryQuantities(dataDir, chid):
     return quantities
 
 
-def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
+def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None, 
+    axis=None, value=None, decimals=4):
     """Import patches from a single boundary file
 
     Parameters
@@ -584,6 +759,13 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
         meshes are used.
     smvData : dict, optional
         Previously imported smvData
+    axis : int, optional
+        Signed patch orientation to retain: -3, -2, -1, 1, 2, or 3.
+        If None, all orientations are retained.
+    value : float, optional
+        Coordinate of the requested plane. Requires axis.
+    decimals : int, optional
+        Coordinate matching precision.
 
     Returns
     -------
@@ -591,63 +773,189 @@ def importBoundaryFile(fname, smvFile=None, gridNum=0, smvData=None):
         List of float time stamps
     list
         List of patches
+    units : str
+        Boundary quantity units.
+        
     """
 
     try:
         f = zopen(fname)
-    except:
-        print("Unable to open file %s."%(fname))
+    except (OSError, IOError) as exc:
+        print(f"Unable to open file {fname}: {exc}")
         return None, None, None
-    quantity, shortName, units, npatch = parseBndfHeader(f)
-    patchInfo, data = parseBndfPatches(f, npatch)
-    f.close()
-    (patchPts, patchDs, patchIors, patchNBs, patchNMs) = patchInfo
-    if (smvData is None) and (smvFile is not None):
+
+    try:
+        quantity, shortName, units, npatch = parseBndfHeader(f)
+        patchInfo, data = parseBndfPatches(f, npatch)
+    finally:
+        f.close()
+
+    (
+        patchPts,
+        patchDs,
+        patchIors,
+        patchNBs,
+        patchNMs,
+    ) = patchInfo
+
+    if smvData is None:
+        if smvFile is None:
+            print(
+                "Either smokeview file or smokeview data "
+                "must be provided."
+            )
+            return None, None, None
+
         smvData = parseSMVFile(smvFile)
-    elif (smvData is None) and (smvFile is None):
-        print("Either smokeview file or smokeview data must be provided.")
-        return None, None, None
-    (grid, obst) = (smvData['grids'], smvData['obsts'])
-    (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
-    (files, bndes) = (smvData['files'], smvData['bndes'])
+
+    grids = smvData["grids"]
+    bndfs = smvData["bndfs"]
+    grid = grids[gridNum]
+
+    if axis is None and value is None:
+        selected_indices = list(range(len(patchPts)))
+
+    elif axis is not None and value is not None:
+        selected_indices = selectBoundaryPatchIndices(
+            patchDs=patchDs,
+            patchIors=patchIors,
+            grid=grid,
+            axis=axis,
+            value=value,
+            decimals=decimals,
+        )
+
+    else:
+        raise ValueError(
+            "axis and value must either both be specified or both be None."
+        )
+
     times, patches = buildPatches(
-            patchPts, patchDs, patchIors, data, grid[gridNum])
-    fname2 = fname.split('.zip')[-1].split(os.sep)[-1]
-    #print(bndfs)
-    bndf_extract = [[x[1], x[4]] for x in bndfs]
-    #print(bndf_extract)
-    bnd_types = [x[1] for x in bndf_extract if x[0] == fname2]
-    #print('bnd_types')
-    #print(fname2)
-    #print(bnd_types)
-    if len(bnd_types) == 0: return None, None, None
+        patchPts,
+        patchDs,
+        patchIors,
+        data,
+        grid,
+        selectedIndices=selected_indices,
+    )
+
+    fname2 = fname.split(".zip")[-1].split(os.sep)[-1]
+    bndf_extract = [[entry[1], entry[4]] for entry in bndfs]
+    bnd_types = [
+        bnd_type
+        for file_name, bnd_type in bndf_extract
+        if file_name == fname2
+    ]
+
+    if len(bnd_types) == 0:
+        return None, None, None
+
     bnd_type = bnd_types[0]
 
-    for i in range(0, len(patches)):
-        if bnd_type == 'BNDC':
-            patches[i].data = patches[i].data[:-1,:-1, :]
-            patches[i].cell_centered = True
-            XB = patches[i].lims
-            IOR = patches[i].orientation
-            (dx, dz) = (patches[i].dx, patches[i].dz)
-            #print("PRE", IOR, XB, dx, dy)
+    for patch in patches:
+
+        if bnd_type == "BNDC":
+            patch.data = patch.data[:-1, :-1, :]
+            patch.cell_centered = True
+
+            # Make a copy rather than modifying an aliased list.
+            XB = list(patch.lims)
+
+            IOR = patch.orientation
+            patch_dx = patch.dx
+            patch_dz = patch.dz
+
             if abs(IOR) == 1:
-                (XB[2], XB[3]) = (XB[2]+dx/2, XB[3]+dx/2)
-                (XB[4], XB[5]) = (XB[4]+dz/2, XB[5]+dz/2)
+                XB[2] += patch_dx / 2
+                XB[3] += patch_dx / 2
+                XB[4] += patch_dz / 2
+                XB[5] += patch_dz / 2
+
             elif abs(IOR) == 2:
-                (XB[0], XB[1]) = (XB[0]+dx/2, XB[1]+dx/2)
-                (XB[4], XB[5]) = (XB[4]+dz/2, XB[5]+dz/2)
+                XB[0] += patch_dx / 2
+                XB[1] += patch_dx / 2
+                XB[4] += patch_dz / 2
+                XB[5] += patch_dz / 2
+
             elif abs(IOR) == 3:
-                (XB[0], XB[1]) = (XB[0]+dx/2, XB[1]+dx/2)
-                (XB[2], XB[3]) = (XB[2]+dz/2, XB[3]+dz/2)
-            #print("POST", IOR, XB)
-            patches[i].lims = XB
+                XB[0] += patch_dx / 2
+                XB[1] += patch_dx / 2
+                XB[2] += patch_dz / 2
+                XB[3] += patch_dz / 2
+
+            patch.lims = XB
+
         else:
-            patches[i].cell_centered = False
+            patch.cell_centered = False
+
     return times, patches, units
 
 
-def buildPatches(patchPts, patchDs, patchIors, data, grid):
+def selectBoundaryPatchIndices(
+    patchDs,
+    patchIors,
+    grid,
+    axis,
+    value,
+    decimals=4,
+):
+    """
+    Select patches matching both the signed orientation and queried plane.
+    """
+
+    if axis not in (-3, -2, -1, 1, 2, 3):
+        raise ValueError(
+            f"axis must be one of -3, -2, -1, 1, 2, or 3; got {axis}"
+        )
+
+    tolerance = 10.0 ** (-decimals)
+    selected_indices = []
+
+    for patch_index, orientation in enumerate(patchIors):
+
+        # Preserve the original signed-IOR behavior.
+        if orientation != axis:
+            continue
+
+        lims = getLimsFromGrid(
+            patchDs[patch_index][3:],
+            grid,
+        )
+
+        if abs(axis) == 1:
+            plane_min = lims[0]
+            plane_max = lims[1]
+
+        elif abs(axis) == 2:
+            plane_min = lims[2]
+            plane_max = lims[3]
+
+        else:
+            plane_min = lims[4]
+            plane_max = lims[5]
+
+        if not (
+            np.isclose(
+                plane_min,
+                value,
+                atol=tolerance,
+                rtol=0.0,
+            )
+            and np.isclose(
+                plane_max,
+                value,
+                atol=tolerance,
+                rtol=0.0,
+            )
+        ):
+            continue
+
+        selected_indices.append(patch_index)
+
+    return selected_indices
+
+
+def buildPatches(patchPts, patchDs, patchIors, data, grid, selectedIndices=None):
     """Build spatial patches from patch points
 
     Parameters
@@ -671,39 +979,78 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid):
         List containing each patch
     """
 
-    pts = patchPts[-1][1]
+    if not patchPts:
+        return np.empty(0), []
 
-    timeSteps = int((data.shape[0]+1)/(pts+3))
+    if selectedIndices is None:
+        selectedIndices = range(len(patchPts))
+    else:
+        selectedIndices = list(selectedIndices)
+
+    points_per_record = patchPts[-1][1]
+    record_length = points_per_record + 3
+
+    # Preserve the existing record interpretation.
+    time_steps = int((data.shape[0] + 1) / record_length) - 1
+
+    times = np.empty(time_steps, dtype=data.dtype)
     patches = []
-    times = np.zeros((timeSteps-1,))
-    for i in range(1,timeSteps):
-        ind1 = i*(pts+3)
-        ind2 = (i+1)*(pts+3)
-        thisData = data[ind1:ind2]
-        t = thisData[0]
-        times[i-1] = t
-        for k in range(0,len(patchPts)):
-            (pind1,pind2) = (patchPts[k][0]+3,patchPts[k][1]+1)
-            (pdx,pdy,pdz) = (patchDs[k][0],patchDs[k][1],patchDs[k][2])
-            patchData = thisData[pind1:pind2].copy()
-            if abs(patchIors[k]) == 1:
-                patchData = patchData.reshape((pdy,pdz),order='F')
-            elif abs(patchIors[k]) == 2:
-                patchData = patchData.reshape((pdx,pdz),order='F')
-            elif abs(patchIors[k]) == 3:
-                patchData = patchData.reshape((pdx,pdy),order='F')
-            #patchData = patchData[:-1,:-1]
-            if i == 1:
-                lims = getLimsFromGrid(patchDs[k][3:],grid)
-                patch = fdspatch(patchData.shape[0],
-                                 patchData.shape[1],
-                                 timeSteps-1, lims, patchIors[k])
-                patches.append(patch)
-                patches[k].append(patchData,i-1)
+
+    # Allocate only the requested patches.
+    for patch_index in selectedIndices:
+        pdx, pdy, pdz = patchDs[patch_index][:3]
+        orientation = patchIors[patch_index]
+
+        if abs(orientation) == 1:
+            shape = (pdy, pdz)
+        elif abs(orientation) == 2:
+            shape = (pdx, pdz)
+        else:
+            shape = (pdx, pdy)
+
+        lims = getLimsFromGrid(patchDs[patch_index][3:], grid)
+
+        patches.append(
+            fdspatch(
+                shape[0],
+                shape[1],
+                time_steps,
+                lims,
+                orientation,
+            )
+        )
+
+    for time_index in range(time_steps):
+        # Existing data layout begins the first retained time record at
+        # one full record offset.
+        record_start = (time_index + 1) * record_length
+        record_end = record_start + record_length
+        this_data = data[record_start:record_end]
+
+        times[time_index] = this_data[0]
+
+        for output_index, patch_index in enumerate(selectedIndices):
+            patch_start = patchPts[patch_index][0] + 3
+            patch_end = patchPts[patch_index][1] + 1
+
+            pdx, pdy, pdz = patchDs[patch_index][:3]
+            orientation = patchIors[patch_index]
+
+            patch_data = this_data[patch_start:patch_end]
+
+            if abs(orientation) == 1:
+                shape = (pdy, pdz)
+            elif abs(orientation) == 2:
+                shape = (pdx, pdz)
             else:
-                patches[k].append(patchData,i-1)
-    for k in range(0, len(patches)):
-        patches[k].times = times
+                shape = (pdx, pdy)
+
+            patch_data = patch_data.reshape(shape, order="F")
+            patches[output_index].append(patch_data, time_index)
+
+    for patch in patches:
+        patch.times = times
+
     return times, patches
 
 
@@ -1320,13 +1667,14 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                 meshNumber = getMeshNumberFromFilename(numberOfMeshes, file)
                 ts, ps, x1, x2, y1, y2, z1, z2, dx1, dz1 = getPatches(
                         file, smvFile, axis, value, meshNumber, decimals=decimals, smvData=smvData)
+                #print(x1, x2, y1, y2, z1, z2)
                 if limits is not None:
-                    if x1 < limits[0]: continue
-                    if x2 > limits[1]: continue
-                    if y1 < limits[2]: continue
-                    if y2 > limits[3]: continue
-                    if z1 < limits[4]: continue
-                    if z2 > limits[5]: continue
+                    if x1 > limits[1]: continue
+                    if x2 < limits[0]: continue
+                    if y1 > limits[3]: continue
+                    if y2 < limits[2]: continue
+                    if z1 > limits[5]: continue
+                    if z2 < limits[4]: continue
                 if ts is None:
                    continue
                 else:
@@ -1335,6 +1683,7 @@ def queryBndf(resultDir, chid, fdsFilePath, fdsQuantities,
                 (ymin, ymax) = (min([ymin, y1]), max([ymax, y2]))
                 (zmin, zmax) = (min([zmin, z1]), max([zmax, z2]))
                 (dx, dz) = (min([dx, dx1]), min([dz, dz1]))
+                #print(len(ps))
                 for patch in ps:
                     allPatches.append(patch)
                     dataFound = True

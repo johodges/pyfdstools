@@ -1,0 +1,72 @@
+name: publish
+
+# Publishes a tagged release to PyPI. Trusted publishing is used, so no
+# API token is stored in the repository; configure the pyfdstools
+# project on PyPI to trust this workflow before the first release.
+#
+# To cut a release: bump __version__ in pyfdstools/_version.py, commit,
+# then push a matching tag, for example
+#
+#     git tag v0.0.24 && git push origin v0.0.24
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build the distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: python -m pip install --upgrade pip build twine
+
+      - name: Check that the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import sys
+
+          source = open('pyfdstools/_version.py').read()
+          version = re.search(r"__version__ = ['\"]([^'\"]*)['\"]",
+                              source).group(1)
+          tag = os.environ['GITHUB_REF_NAME'].lstrip('v')
+          if version != tag:
+              sys.exit("Tag %s does not match __version__ %s in "
+                       "pyfdstools/_version.py" % (tag, version))
+          print("Tag matches version %s." % (version))
+          PY
+
+      - run: python -m build
+
+      - run: python -m twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distribution
+          path: dist/
+
+  publish:
+    name: publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Required for PyPI trusted publishing.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distribution
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -5,8 +5,7 @@ from .extractGeomData import getBndeQuantities, readGcfFile, readBeFile
 from .extractParticleData import importParticle
 from .extractPlot3Ddata import readSLCFquantities, readSingleSlcfFile
 from .fdsFileOperations import fdsFileOperations
-from .utilities import getDatatypeByEndianness, getEndianness
-from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
+from .utilities import getFileList
 from .utilities import getFileListFromResultDir
 from .utilities import getGridsFromXyzFiles, getAbsoluteGrid, rearrangeGrid
 from .utilities import readXYZfile
@@ -15,9 +14,35 @@ import os
 import numpy as np
 import stl
 from collections import defaultdict
-import evtk
+
+# pyevtk installs both a 'pyevtk' package and a deprecated 'evtk' alias
+# which emits a DeprecationWarning on import. Prefer the current name
+# and fall back to the alias for older installations.
+try:
+    import pyevtk as evtk
+    import pyevtk.hl
+    import pyevtk.vtk
+except ImportError:
+    import evtk
+    import evtk.hl
+    import evtk.vtk
 
 def obstToStl(resultDir, chid, outDir=None):
+    """Writes the case's rectangular obstructions as a single STL file
+
+    Useful for showing the geometry alongside the exported field data in
+    ParaView, which cannot read FDS obstructions directly.
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    outDir : str, optional
+        Directory the STL is written to. Defaults to resultDir
+    """
+
     if outDir is None: outDir = resultDir
     smvFile = getFileListFromResultDir(resultDir, chid, 'smv')[0]
     smvData = parseSMVFile(smvFile)
@@ -64,11 +89,41 @@ def obstToStl(resultDir, chid, outDir=None):
     combined.save(os.path.join(outDir, chid+'.stl')) #,mode=stl.Mode.ASCII)
 
 def writeVtkHeader(fname, t, ext):
+    """Writes the opening XML of a VTK file
+
+    Parameters
+    ----------
+    fname : str
+        Path to the file being written
+    t : str
+        VTK dataset type, for example 'RectilinearGrid'
+    ext : str
+        Whole-extent string for the dataset
+    """
+
     with open(fname+ext, 'w') as f:
         f.write('<?xml version="1.0"?>\n')
         f.write('<VTKFile type="%s" version="1.0" byte_order="LittleEndian" header_type="UInt64">\n'%(t))
 
 def writeVtkGrid(fname, x, y, z, gXB, lXB):
+    """Appends the coordinate arrays of a rectilinear VTK grid
+
+    Parameters
+    ----------
+    fname : str
+        Path to the file being written
+    x : array
+        Coordinates along the x-axis
+    y : array
+        Coordinates along the y-axis
+    z : array
+        Coordinates along the z-axis
+    gXB : list
+        Global extent of the dataset in cell indices
+    lXB : list
+        Extent of this piece in cell indices
+    """
+
     with open(fname+'.vtr', 'a') as f:
         f.write('<RectilinearGrid WholeExtent="%d %d %d %d %d %d">\n'%(gXB[0], gXB[1], gXB[2], gXB[3], gXB[4], gXB[5]))
         f.write('<Piece Extent="%d %d %d %d %d %d">\n'%(lXB[0], lXB[1], lXB[2], lXB[3], lXB[4], lXB[5]))
@@ -88,6 +143,20 @@ def writeVtkGrid(fname, x, y, z, gXB, lXB):
         f.write('</Coordinates>\n')
 
 def writeVtkScalarsPoints(fname, qtys, datas, dtype):
+    """Appends point-centered scalar arrays to a VTK file
+
+    Parameters
+    ----------
+    fname : str
+        Path to the file being written
+    qtys : list
+        Names of the arrays
+    datas : list
+        Arrays of values, one per name
+    dtype : str
+        VTK datatype name, for example 'Float32'
+    """
+
     with open(fname, 'a') as f:
         f.write('<PointData>\n') # Scalars=%s>\n'%(",".join(['"%s"'%(q) for q in qtys])))
         for qty in qtys:
@@ -103,6 +172,20 @@ def writeVtkScalarsPoints(fname, qtys, datas, dtype):
         f.write('</PointData>\n')
 
 def writeVtkScalarsCells(fname, qtys, datas, dtype):
+    """Appends cell-centered scalar arrays to a VTK file
+
+    Parameters
+    ----------
+    fname : str
+        Path to the file being written
+    qtys : list
+        Names of the arrays
+    datas : list
+        Arrays of values, one per name
+    dtype : str
+        VTK datatype name, for example 'Float32'
+    """
+
     with open(fname, 'a') as f:
         f.write('<CellData>\n') # Scalars=%s>\n'%(",".join(['"%s"'%(q) for q in qtys])))
         for qty in qtys:
@@ -119,12 +202,49 @@ def writeVtkScalarsCells(fname, qtys, datas, dtype):
 
 
 def writeVtkTail(fname, ftype):
+    """Writes the closing XML of a VTK file
+
+    Parameters
+    ----------
+    fname : str
+        Path to the file being written
+    ftype : str
+        VTK dataset type the file opened with
+    """
+
     with open(fname, 'a') as f:
         f.write('</Piece>\n')
         f.write('</%s>\n'%(ftype))
         f.write('</VTKFile>\n')
 
 def writeVtkFile(fname, x, y, z, gXB, lXB, datas, cell=False, binary=True, dtype='Float64'):
+    """Writes one rectilinear grid VTK file
+
+    Parameters
+    ----------
+    fname : str
+        Path the file is written to
+    x : array
+        Coordinates along the x-axis
+    y : array
+        Coordinates along the y-axis
+    z : array
+        Coordinates along the z-axis
+    gXB : list
+        Global extent of the dataset in cell indices
+    lXB : list
+        Extent of this piece in cell indices
+    datas : dict
+        Mapping of array name to values
+    cell : bool, optional
+        Write the arrays as cell data rather than point data
+        (default False)
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    dtype : str, optional
+        VTK datatype name (default 'Float64')
+    """
+
     qtys = list(datas.keys())
     if binary:
         start = (gXB[0], gXB[2], gXB[4])
@@ -142,6 +262,30 @@ def writeVtkFile(fname, x, y, z, gXB, lXB, datas, cell=False, binary=True, dtype
         writeVtkTail(fname+'.vtr', 'RectilinearGrid')
     
 def writeVtkTimeSeries(namespace, grid, series_data, times, gXB, lXB, cell=False, binary=True, dtype='Float32'):
+    """Writes a rectilinear grid VTK file per timestep plus a .pvd index
+
+    Parameters
+    ----------
+    namespace : str
+        Prefix used to build the per timestep file names
+    grid : list
+        Coordinate arrays [x, y, z]
+    series_data : list
+        Per timestep mappings of array name to values
+    times : array(NT)
+        Timestamps of each frame
+    gXB : list
+        Global extent of the dataset in cell indices
+    lXB : list
+        Extent of this piece in cell indices
+    cell : bool, optional
+        Write the arrays as cell data rather than point data
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    dtype : str, optional
+        VTK datatype name (default 'Float32')
+    """
+
     nx, ny, nz, _ = np.shape(grid)
     x = np.array(grid[:, 0, 0, 0], dtype='float64')
     y = np.array(grid[0, :, 0, 1], dtype='float64')
@@ -165,6 +309,36 @@ def writeVtkTimeSeries(namespace, grid, series_data, times, gXB, lXB, cell=False
         writeVtkFile(fname, x, y, z, gXB, lXB, datas, cell=cell, binary=binary, dtype=dtype)
 
 def writeVtkImageFile(fname, x, y, z, gXB, lXB, datas, cell=False, binary=True, dtype='Float64'):
+    """Writes one uniform image data VTK file
+
+    Faster to load in ParaView than a rectilinear grid, but only valid
+    when the mesh is uniformly spaced.
+
+    Parameters
+    ----------
+    fname : str
+        Path the file is written to
+    x : array
+        Coordinates along the x-axis, used to derive the origin and
+        spacing
+    y : array
+        Coordinates along the y-axis
+    z : array
+        Coordinates along the z-axis
+    gXB : list
+        Global extent of the dataset in cell indices
+    lXB : list
+        Extent of this piece in cell indices
+    datas : dict
+        Mapping of array name to values
+    cell : bool, optional
+        Write the arrays as cell data rather than point data
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    dtype : str, optional
+        VTK datatype name (default 'Float64')
+    """
+
     qtys = list(datas.keys())
     dx = np.median(x[1:]-x[:-1])
     dy = np.median(y[1:]-y[:-1])
@@ -192,6 +366,30 @@ def writeVtkImageFile(fname, x, y, z, gXB, lXB, datas, cell=False, binary=True, 
         writeVtkTail(fname+'.vti', 'ImageData')
         
 def writeVtkImageTimeSeries(namespace, grid, series_data, times, gXB, lXB, cell=False, binary=True, dtype='Float32'):
+    """Writes an image data VTK file per timestep plus a .pvd index
+
+    Parameters
+    ----------
+    namespace : str
+        Prefix used to build the per timestep file names
+    grid : list
+        Coordinate arrays [x, y, z]
+    series_data : list
+        Per timestep mappings of array name to values
+    times : array(NT)
+        Timestamps of each frame
+    gXB : list
+        Global extent of the dataset in cell indices
+    lXB : list
+        Extent of this piece in cell indices
+    cell : bool, optional
+        Write the arrays as cell data rather than point data
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    dtype : str, optional
+        VTK datatype name (default 'Float32')
+    """
+
     nx, ny, nz, _ = np.shape(grid)
     x = np.array(grid[:, 0, 0, 0], dtype='float64')
     y = np.array(grid[0, :, 0, 1], dtype='float64')
@@ -215,6 +413,22 @@ def writeVtkImageTimeSeries(namespace, grid, series_data, times, gXB, lXB, cell=
         writeVtkImageFile(fname, x, y, z, gXB, lXB, datas, cell=cell, binary=binary, dtype=dtype)
 
 def writeVtkPolyFile(fname, pieces, binary=True):
+    """Writes a polygonal VTK file from a list of pieces
+
+    Used for boundary and geometry data, which are surfaces rather than
+    volumes.
+
+    Parameters
+    ----------
+    fname : str
+        Path the file is written to
+    pieces : list
+        List of pieces, each holding its points, connectivity and data
+        arrays
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    """
+
     if binary:
         keys = list(pieces[0].keys())
         keys.remove('numberOfPolys')
@@ -337,6 +551,20 @@ def writeVtkPolyFile(fname, pieces, binary=True):
     return False
 
 def writeVtkPointFile(fname, pieces, binary=True):
+    """Writes a point cloud VTK file from a list of pieces
+
+    Used for Lagrangian particle output.
+
+    Parameters
+    ----------
+    fname : str
+        Path the file is written to
+    pieces : list
+        List of pieces, each holding its points and data arrays
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    """
+
     classes = list(pieces.keys())
     
     if binary:
@@ -422,6 +650,20 @@ def writeVtkPointFile(fname, pieces, binary=True):
             f.write('</PolyData>\n</VTKFile>')
 
 def writeVtkPolyTimeSeries(namespace, series_data, times, binary=True):
+    """Writes a polygonal VTK file per timestep plus a .pvd index
+
+    Parameters
+    ----------
+    namespace : str
+        Prefix used to build the per timestep file names
+    series_data : list
+        Per timestep lists of pieces
+    times : array(NT)
+        Timestamps of each frame
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    """
+
     quantities = list(series_data.keys())
     qty = quantities[0]
     meshes = list(series_data[qty].keys())
@@ -452,8 +694,30 @@ def writeVtkPolyTimeSeries(namespace, series_data, times, binary=True):
 
 
 def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True, dtype=None, ftype='ImageData'):
+    """Exports the 3-D slice output of a case to VTK for ParaView
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    outtimes : array-like, optional
+        Times to export. Every output time is exported when omitted
+    outDir : str, optional
+        Directory the VTK files are written to. Defaults to resultDir
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    dtype : str, optional
+        VTK datatype name. Chosen from the data when omitted
+    ftype : str, optional
+        'ImageData' for uniform meshes or 'RectilinearGrid' for
+        stretched meshes (default 'ImageData')
+    """
+
     if outDir is None: outDir = resultDir
-    quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
+    quantities, slcfFiles, dimensions, meshes, centers, units = \
+        readSLCFquantities(chid, resultDir)
     twoDslice = [True if (dim[0] == dim[1]) or (dim[2] == dim[3]) or (dim[4] == dim[5]) else False for dim in dimensions]
     slcfs = getFileList(resultDir, chid, 'sf')
     if len(slcfs) == 0:
@@ -593,8 +857,30 @@ def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
             f.write('</VTKFile>\n')
 
 def exportSl2dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True, dtype=None, ftype='ImageData'):
+    """Exports the 2-D slice output of a case to VTK for ParaView
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    outtimes : array-like, optional
+        Times to export. Every output time is exported when omitted
+    outDir : str, optional
+        Directory the VTK files are written to. Defaults to resultDir
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    dtype : str, optional
+        VTK datatype name. Chosen from the data when omitted
+    ftype : str, optional
+        'ImageData' for uniform meshes or 'RectilinearGrid' for
+        stretched meshes (default 'ImageData')
+    """
+
     if outDir is None: outDir = resultDir
-    quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
+    quantities, slcfFiles, dimensions, meshes, centers, units = \
+        readSLCFquantities(chid, resultDir)
     twoDslice = [True if (dim[0] == dim[1]) or (dim[2] == dim[3]) or (dim[4] == dim[5]) else False for dim in dimensions]
     slcfs = getFileList(resultDir, chid, 'sf')
     if len(slcfs) == 0:
@@ -757,6 +1043,22 @@ def exportSl2dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
                     f.write('</VTKFile>\n')
 
 def exportBndfDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True):
+    """Exports the boundary file output of a case to VTK for ParaView
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    outtimes : array-like, optional
+        Times to export. Every output time is exported when omitted
+    outDir : str, optional
+        Directory the VTK files are written to. Defaults to resultDir
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    """
+
     if outDir is None: outDir = resultDir
     # Boundary data
     quantities = readBoundaryQuantities(resultDir, chid)
@@ -914,6 +1216,22 @@ def exportBndfDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
             
             
 def exportPrt5DataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True):
+    """Exports the particle output of a case to VTK for ParaView
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    outtimes : array-like, optional
+        Times to export. Every output time is exported when omitted
+    outDir : str, optional
+        Directory the VTK files are written to. Defaults to resultDir
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    """
+
     if outDir is None: outDir = resultDir
     # Particle data
     partFiles = getFileList(resultDir, chid, 'prt5')
@@ -1032,6 +1350,26 @@ def exportPrt5DataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
                 f.write('</VTKFile>\n')
 
 def exportBndeDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True):
+    """Exports the boundary element output of a case to VTK for ParaView
+
+    Boundary element output is the boundary data on unstructured &GEOM
+    surfaces, as opposed to the rectangular obstructions handled by
+    exportBndfDataToVtk.
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    outtimes : array-like, optional
+        Times to export. Every output time is exported when omitted
+    outDir : str, optional
+        Directory the VTK files are written to. Defaults to resultDir
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default True)
+    """
+
     if outDir is None: outDir = resultDir
     smvFiles = getFileList(resultDir, chid, 'smv')
     
@@ -1126,6 +1464,26 @@ def exportBndeDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
             f.write('</VTKFile>\n')
 
 def exportS3dDataToVtk(chid, resultDir, outtimes=None, binary=False, decode=False, dtype='UInt8'):
+    """Exports the smoke3D output of a case to VTK for ParaView
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    outtimes : array-like, optional
+        Times to export. Every output time is exported when omitted
+    binary : bool, optional
+        Write appended binary data rather than ASCII (default False)
+    decode : bool, optional
+        Convert the stored bytes back to physical units. When False the
+        raw byte values are exported, which keeps the files small
+        (default False)
+    dtype : str, optional
+        VTK datatype name (default 'UInt8', matching the stored bytes)
+    """
+
     values, times = extractS3dValues(resultDir, chid, decode=decode)
     s3dfiles = getFileList(resultDir, chid, 's3d')
     smvFile = getFileList(resultDir, chid, 'smv')[0]

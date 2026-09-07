@@ -18,6 +18,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import glob
+import warnings
 import zipfile
 import os
 import struct
@@ -26,13 +27,50 @@ import pandas as pd
 from collections import defaultdict
 from .fdsFileOperations import fdsFileOperations
 from .utilities import getDatatypeByEndianness, getEndianness
-from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
+from .utilities import getFileListFromZip, getFileList, getSmvFile
+from .utilities import zopen, zreadlines
 from .utilities import getFileListFromResultDir
 from .utilities import getGridsFromXyzFiles, getAbsoluteGrid, rearrangeGrid
 from .utilities import readXYZfile
 from .colorSchemes import buildSMVcolormap
 from .smokeviewParser import parseSMVFile
 from collections.abc import Iterable
+
+def _resolveResultDir(workingDir, chid):
+    """Resolves the directory FDS actually wrote its output files to
+
+    When the input file sets RESULTS_DIR on the &DUMP namelist, FDS
+    writes its output into that subdirectory rather than alongside the
+    input file. Reading it back therefore requires resolving the input
+    file first. Zip archives are returned unchanged, since the archive
+    path is used directly for lookups inside it.
+
+    Parameters
+    ----------
+    workingDir : str
+        Directory containing the FDS input file, or a zip archive
+    chid : str
+        FDS CHID of the case
+
+    Returns
+    -------
+    str
+        Directory the output files were written to
+    """
+
+    if '.zip' in workingDir:
+        return workingDir
+    fdsFiles = getFileList(workingDir, chid, 'fds')
+    if len(fdsFiles) == 0:
+        return workingDir
+    fdsFile = fdsFileOperations()
+    fdsFile.importFile(fdsFiles[0])
+    if fdsFile.dump['ID'] is not False:
+        if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
+            return (workingDir + os.sep
+                    + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep)
+    return workingDir
+
 
 def time2str(time, decimals=2):
     """Converts a timestamp to a string
@@ -101,8 +139,6 @@ def readP3Dfile(file):
     f = zopen(file)
     data1 = f.read()
     f.close()
-    print(file)
-    #with open(file,'rb') as f:
     header = np.frombuffer(data1, dtype=np.int32, count=5)
     _ = np.frombuffer(data1, dtype=np.float32, count=7)
     (nx, ny, nz) = (header[1], header[2], header[3])
@@ -269,27 +305,132 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
               title=None, contour=True, extend='both',
               linecontour=False,
               returnIm=False):
-    if qnty_mn == None:
+    """Plots a 2-D slice as a filled contour or image
+
+    Parameters
+    ----------
+    x : array(N, M)
+        First in-plane coordinate of each point
+    z : array(N, M)
+        Second in-plane coordinate of each point
+    data_slc : array(N, M)
+        Values to plot
+    axis : int
+        Axis normal to the slice (1 = x, 2 = y, 3 = z), used to pick the
+        default axis labels
+    fig : matplotlib.figure.Figure, optional
+        Figure to draw into. A new figure is created when omitted
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw into. New axes are created when omitted
+    cmap : str or matplotlib.colors.Colormap, optional
+        Colormap to use. The smokeview colormap is used when omitted,
+        as it is when the string 'SMV' is given
+    figsize : tuple, optional
+        Figure size. Derived from the aspect ratio of the slice when
+        omitted
+    fs : int, optional
+        Font size (default 16)
+    figsizeMult : int, optional
+        Length in inches of the shorter figure axis (default 4)
+    qnty_mn : float, optional
+        Lower limit of the color scale. Data minimum when omitted
+    qnty_mx : float, optional
+        Upper limit of the color scale. Data maximum when omitted
+    cbarnumticks : int, optional
+        Number of colorbar ticks (default 10)
+    tickDecimals : int, optional
+        Number of decimals shown on the colorbar ticks
+    levels : int or list, optional
+        Number of contour levels, or explicit level values
+    cbarticks : list, optional
+        Explicit colorbar tick locations
+    clabel : str, optional
+        Label for the colorbar
+    highlightValue : float, optional
+        Value at which the smokeview colormap places its highlight band
+    highlightWidth : float, optional
+        Width of the highlight band
+    reverseXY : bool, optional
+        Swap the horizontal and vertical axes (default False)
+    percentile : float, optional
+        Position of the colormap highlight, in the range 0 to 1
+    xmn : float, optional
+        Lower horizontal axis limit. Data minimum when omitted
+    xmx : float, optional
+        Upper horizontal axis limit. Data maximum when omitted
+    zmn : float, optional
+        Lower vertical axis limit. Data minimum when omitted
+    zmx : float, optional
+        Upper vertical axis limit. Data maximum when omitted
+    xlabel : str, optional
+        Horizontal axis label. Derived from axis when omitted
+    zlabel : str, optional
+        Vertical axis label. Derived from axis when omitted
+    addCbar : bool, optional
+        Draw a colorbar (default True)
+    fixXLims : bool, optional
+        Apply xmn and xmx to the axes (default True)
+    fixZLims : bool, optional
+        Apply zmn and zmx to the axes (default True)
+    title : str, optional
+        Axes title
+    contour : bool, optional
+        Draw filled contours rather than an image (default True)
+    extend : str, optional
+        Which end of the color scale is extended: 'both', 'below' (also
+        spelled 'min'), 'above' (also spelled 'max') or 'neither'
+        (default 'both')
+    linecontour : bool, optional
+        Draw line contours rather than filled contours (default False)
+    returnIm : bool, optional
+        Also return the mappable produced by the plotting call
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure containing the plot
+    matplotlib.axes.Axes
+        Axes containing the plot
+    matplotlib.cm.ScalarMappable
+        The mappable, returned only when returnIm is True
+    """
+
+    # 'below' and 'above' are pyfdstools spellings which describe which
+    # end of the scale is extended. matplotlib names the same two
+    # options 'min' and 'max'; passing the pyfdstools spelling straight
+    # through raised a ValueError from contourf and colorbar.
+    extendAliases = {'below': 'min', 'above': 'max'}
+    mplExtend = extendAliases.get(extend, extend)
+    if mplExtend not in ('neither', 'both', 'min', 'max'):
+        raise ValueError(
+            "extend must be one of 'neither', 'both', 'below'/'min' or "
+            "'above'/'max'; received %r" % (extend,))
+
+    if qnty_mn is None:
         qnty_mn = np.nanmin(data_slc)
-    if qnty_mx == None:
+    if qnty_mx is None:
         qnty_mx = np.nanmax(data_slc)
     if qnty_mn == qnty_mx:
         qnty_mn = 0
         qnty_mx = 1
     if highlightValue is not None:
         percentile = (highlightValue - qnty_mn) / (qnty_mx - qnty_mn)
-    if (xmn == None): xmn = x.min()
-    if (xmx == None): xmx = x.max()
-    if (zmn == None): zmn = z.min()
-    if (zmx == None): zmx = z.max()
-    if cmap == None:
+    if xmn is None: xmn = x.min()
+    if xmx is None: xmx = x.max()
+    if zmn is None: zmn = z.min()
+    if zmx is None: zmx = z.max()
+    if (cmap is None) or (isinstance(cmap, str) and cmap == 'SMV'):
         cmap = buildSMVcolormap(
                 percentile=percentile, width=highlightWidth)
-    if cmap == 'SMV':
-        cmap = buildSMVcolormap(
-                percentile=percentile, width=highlightWidth)
-    if levels == None:
-        levels = 100
+    # An integer here would tell contourf to choose that many levels
+    # spanning the *data*, which ignores qnty_mn and qnty_mx: the
+    # colorbar would then span the data rather than the requested range,
+    # and any tick outside the data would be clamped onto the extension
+    # arrow, printing on top of its neighbours. Build the levels
+    # explicitly so that the default matches what an explicit
+    # levels=100 already did.
+    if levels is None:
+        levels = np.linspace(qnty_mn, qnty_mx, 100)
     elif isinstance(levels, Iterable):
         levels = np.array(levels)
     else:
@@ -302,8 +443,21 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
             cbarticks = [x for x in cbarticks if abs(highlightValue-x) > 0.25*cx]
             cbarticks.append(highlightValue)
             cbarticks = sorted(cbarticks)
-            
-            
+
+    # Drop ticks outside the color scale. matplotlib does not discard
+    # them, it clamps them to the end of the bar, so a caller passing a
+    # tick list wider than the scale gets a stack of overlapping labels
+    # on the extension arrow rather than a missing tick.
+    tol = 1e-9 * max(1.0, abs(qnty_mx - qnty_mn))
+    inRange = [t for t in np.asarray(cbarticks, dtype=float)
+               if (t >= qnty_mn - tol) and (t <= qnty_mx + tol)]
+    if len(inRange) < len(np.asarray(cbarticks).ravel()):
+        dropped = len(np.asarray(cbarticks).ravel()) - len(inRange)
+        print("Warning, %d colorbar tick(s) fall outside the color scale "
+              "%0.4f to %0.4f and were dropped." % (dropped, qnty_mn, qnty_mx))
+    cbarticks = inRange
+
+
     if reverseXY:
         (x1 , z1, d1) = (z, x, data_slc[:, :])
         zrange = xmx-xmn #x.max()-x.min()
@@ -312,27 +466,29 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
         (x1, z1, d1) = (x, z, data_slc[:, :])
         xrange = xmx-xmn #x.max()-x.min()
         zrange = zmx-zmn #z.max()-z.min()
-    if figsize == None:
+    if figsize is None:
         if zrange > xrange:
             figsize = (figsizeMult, figsizeMult * zrange / xrange)
         else:
             figsize = (figsizeMult * xrange / zrange, figsizeMult)
-    if fig == None or ax == None:
+    if (fig is None) or (ax is None):
         fig, ax = plt.subplots(1, 1, figsize=figsize, constrained_layout=True)
     if contour:
         if linecontour:
             im = ax.contour(
-                x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
-                levels=levels, extend=extend)
+                x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx,
+                levels=levels, extend=mplExtend)
         else:
             im = ax.contourf(
-                x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, 
-                levels=levels, extend=extend)
+                x1, z1, d1, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx,
+                levels=levels, extend=mplExtend)
     else:
-        dout = d1[::-1, :] # default behavior is extend above and below
-        if extend == 'below':
+        # Copy before masking: d1 is a view of the caller's array, and
+        # writing NaN into it would corrupt the data they passed in.
+        dout = d1[::-1, :].copy() # default behavior is extend above and below
+        if mplExtend == 'min':
             dout[dout > qnty_mx] = np.nan
-        elif extend == 'above':
+        elif mplExtend == 'max':
             dout[dout < qnty_mn] = np.nan
         im = ax.imshow(dout, cmap=cmap, vmin=qnty_mn, vmax=qnty_mx, extent=[x1.min(), x1.max(),z1.min(), z1.max()])
     if addCbar:
@@ -341,7 +497,8 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
             #fmt = FormatScalarFormatter("%"+fmtStr+"f")
         else:
             fmt = None
-        cbar = fig.colorbar(im, cmap=cmap, extend=extend, ticks=cbarticks, format=fmt)
+        cbar = fig.colorbar(
+            im, cmap=cmap, extend=mplExtend, ticks=cbarticks, format=fmt)
         cbar.ax.tick_params(labelsize=fs)
         if clabel is not None:
             cbar.set_label(clabel, fontsize=fs)
@@ -368,209 +525,362 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
     else:
         return fig, ax
 
-def readPlot3Ddata(chid, resultDir, time):
-    if '.zip' in resultDir:
-        xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
-    else:
-        xyzFiles = glob.glob("%s%s%s*.xyz"%(resultDir,os.sep, chid))
-    if '.zip' in resultDir:
-        tFiles = getFileListFromZip(resultDir, chid, 'q')
-    else:
-        tFiles = glob.glob(xyzFiles[0].replace('.xyz','*.q'))
-    
-    tNames = [x.split(chid)[-1] for x in tFiles]
-    timeNameLength = len(tNames[0].split('_')[-1])
-    
-    print(tNames)
-    print(timeNameLength)
-    if timeNameLength == 8:
-        times = [x.split('.q')[0].replace('p','_').split('_') for x in tNames]
-        times = [float(x[2])+float(x[3])/100 for x in times]
-    elif timeNameLength == 2:
-        times = [x.split('.q')[0].split('_') for x in tNames]
-        times = [round(float(x[2])+float(x[3])/100,2) for x in times]
-    
+def _plot3dTimeFromName(name):
+    """Recovers the timestamp encoded in a plot3D file name
+
+    FDS names plot3D output files '<chid>_<mesh>_<time>.q', where the
+    decimal point of the time is written as the letter p, for example
+    'case001_1_30p02.q' for t = 30.02 s.
+
+    Parameters
+    ----------
+    name : str
+        Plot3D file name or path
+
+    Returns
+    -------
+    float
+        Timestamp encoded in the name
+    """
+
+    stem = os.path.basename(name).split('.q')[0]
+    timeStr = stem.split('_')[-1]
+    if 'p' in timeStr:
+        whole, fraction = timeStr.split('p')
+        return round(float(whole) + float(fraction)/(10.0**len(fraction)), 4)
+    return float(timeStr)
+
+
+def readPlot3Ddata(chid, resultDir, time, verbose=False):
+    """Reads plot3D data for every mesh and maps it onto one grid
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    time : float
+        Query time. The nearest plot3D output time is used
+    verbose : bool, optional
+        Print the extents of each mesh as it is read (default False)
+
+    Returns
+    -------
+    array(NX, NY, NZ, 3)
+        Absolute grid coordinates spanning every mesh
+    array(NX, NY, NZ, 5)
+        Plot3D data on the absolute grid. The last axis holds
+        temperature, u, v, w and HRRPUV
+
+    Raises
+    ------
+    FileNotFoundError
+        If the case contains no xyz or plot3D files, or if a mesh has no
+        plot3D file at any time
+    """
+
+    xyzFiles = getFileList(resultDir, chid, 'xyz')
+    tFiles = getFileList(resultDir, chid, 'q')
+    if len(xyzFiles) == 0:
+        raise FileNotFoundError(
+            "No xyz file for chid %s was found in %s. Add "
+            "WRITE_XYZ=.TRUE. to the &DUMP namelist to have FDS write "
+            "one." % (chid, resultDir))
+    if len(tFiles) == 0:
+        raise FileNotFoundError(
+            "No plot3D (.q) file for chid %s was found in %s."
+            % (chid, resultDir))
+
     grids = dict()
     datas = dict()
-    
-    ind = np.argmin(abs(np.array(times) - time))
-    dataFile = tFiles[ind]
-    
+
     for xyzFile in xyzFiles:
         mesh = xyzFile.split(chid)[-1].split('.xyz')[0].replace('_','')
         meshStr = "%s"%(chid) if mesh == '' else "%s_%s_"%(chid, mesh)
-        
-        #dataFile = buildDataFile(xyzFile, time)
-        
+
+        # Select the plot3D file belonging to this mesh, then the time
+        # nearest the one requested. Reading a single file for every
+        # mesh, as earlier releases did, silently returned the wrong
+        # mesh's data for multi-mesh cases.
+        meshFiles = [x for x in tFiles
+                     if os.path.basename(x).startswith(
+                         '%s_%s_'%(chid, mesh) if mesh != '' else chid)]
+        if len(meshFiles) == 0:
+            raise FileNotFoundError(
+                "No plot3D (.q) file was found for mesh %s of chid %s "
+                "in %s." % (mesh, chid, resultDir))
+        meshTimes = np.array([_plot3dTimeFromName(x) for x in meshFiles])
+        dataFile = meshFiles[int(np.argmin(abs(meshTimes - time)))]
+
         grid, gridHeader = readXYZfile(xyzFile)
         data, dataHeader = readP3Dfile(dataFile)
         (nx, ny, nz) = (dataHeader[0], dataHeader[1], dataHeader[2])
-        
-        
-        
-        printExtents(grid, data)
-        
+
+        if verbose:
+            printExtents(grid, data)
+
         xGrid, yGrid, zGrid = rearrangeGrid(grid)
 
         grids[meshStr] = defaultdict(bool)
         grids[meshStr]['xGrid'] = xGrid
         grids[meshStr]['yGrid'] = yGrid
         grids[meshStr]['zGrid'] = zGrid
-        
-        datas[meshStr] = defaultdict(bool)
-        
-        data = np.reshape(data, (nx, ny, nz, 5), order='F')
-        #grids.append([xGrid, yGrid, zGrid])
-        datas[meshStr] = data
-        
+
+        datas[meshStr] = np.reshape(data, (nx, ny, nz, 5), order='F')
+
     grid_abs = getAbsoluteGrid(grids)
     xGrid_abs = grid_abs[:, :, :, 0]
     yGrid_abs = grid_abs[:, :, :, 1]
     zGrid_abs = grid_abs[:, :, :, 2]
-    data_abs = np.zeros((xGrid_abs.shape[0],
-                         xGrid_abs.shape[1],
-                         xGrid_abs.shape[2],
-                         5))
-    data_abs[:,:,:,:] = np.nan
-    
+    data_abs = np.full((xGrid_abs.shape[0],
+                        xGrid_abs.shape[1],
+                        xGrid_abs.shape[2],
+                        5), np.nan)
+
     for key in list(grids.keys()):
-        (xGrid, yGrid, zGrid) = (grids[key]['xGrid'], grids[key]['yGrid'], grids[key]['zGrid'])
-        
+        (xGrid, yGrid, zGrid) = (grids[key]['xGrid'],
+                                 grids[key]['yGrid'],
+                                 grids[key]['zGrid'])
+
         xloc = np.where(abs(xGrid_abs-xGrid[0,0,0]) == 0)[0][0]
         yloc = np.where(abs(yGrid_abs-yGrid[0,0,0]) == 0)[1][0]
         zloc = np.where(abs(zGrid_abs-zGrid[0,0,0]) == 0)[2][0]
-        
+
         (NX, NY, NZ) = np.shape(xGrid)
-        
-        data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ,:] = datas[key]
-    
+
+        data_abs[xloc:xloc+NX, yloc:yloc+NY, zloc:zloc+NZ, :] = datas[key]
+
     return grid_abs, data_abs
 
+
 def extractResultDirAndChidFromSlcfName(slcfFile):
+    """Recovers the result directory and CHID from a slice file path
+
+    Parameters
+    ----------
+    slcfFile : str
+        Path to a slice file. FDS names these
+        '<chid>_<mesh>_<quantity index>.sf'
+
+    Returns
+    -------
+    str
+        Directory containing the slice file
+    str
+        FDS CHID of the case
+    """
+
     resultDir = os.sep.join(os.path.abspath(slcfFile).split(os.sep)[:-1])
     chid = '_'.join(os.path.abspath(slcfFile).split(os.sep)[-1].split('_')[:-2])
     return resultDir, chid
 
+def _readSlcfFrames(f, timesSLCF, NX, NY, NZ, datatype, time, dt,
+                    headerSize=142):
+    """Reads the requested frames from an open slice file
+
+    The three supported queries are handled here so that every slice
+    reader treats them identically:
+
+    * time is None                -> every frame in the file
+    * time given, dt is None      -> the single frame nearest time
+    * time and dt given           -> the mean of the frames whose
+                                     timestamps fall within
+                                     time +/- dt/2
+
+    Parameters
+    ----------
+    f : file
+        Binary file positioned immediately after the slice header
+    timesSLCF : array(NT)
+        Timestamps of every frame in the file
+    NX : int
+        Number of cells along the x-axis of the slice
+    NY : int
+        Number of cells along the y-axis of the slice
+    NZ : int
+        Number of cells along the z-axis of the slice
+    datatype : numpy.dtype
+        Datatype including byte order used to decode the frames
+    time : float or None
+        Query time
+    dt : float or None
+        Averaging window centred on time
+    headerSize : int, optional
+        Size of the slice file header in bytes (default 142)
+
+    Returns
+    -------
+    array(NX+1, NY+1, NZ+1, NT)
+        Array containing the requested frames
+    list or array
+        Timestamps corresponding to the returned frames
+    """
+
+    shape = (NX+1, NY+1, NZ+1)
+    frameBytes = 4 * (5 + (NX+1) * (NY+1) * (NZ+1))
+
+    if time is None:
+        NT = len(timesSLCF)
+        datas2 = np.zeros((NX+1, NY+1, NZ+1, NT), dtype=np.float32)
+        for i in range(0, NT):
+            t, data = readNextTime(f, NX, NY, NZ, datatype)
+            if data is False:
+                # The file is shorter than its time record implies.
+                datas2 = datas2[:, :, :, :i]
+                return datas2, timesSLCF[:i]
+            datas2[:, :, :, i] = np.reshape(data, shape, order='F')
+        return datas2, timesSLCF
+
+    if dt is None:
+        datas2 = np.zeros((NX+1, NY+1, NZ+1, 1), dtype=np.float32)
+        i = int(np.argmin(abs(timesSLCF - time)))
+        f.seek(i * frameBytes + headerSize, 0)
+        t, data = readNextTime(f, NX, NY, NZ, datatype)
+        datas2[:, :, :, 0] = np.reshape(data, shape, order='F')
+        return datas2, [timesSLCF[i]]
+
+    # Averaging window. Select by timestamp rather than by stepping a
+    # fixed number of frames so that a non-uniform slice output
+    # interval is handled correctly, and divide by the number of frames
+    # actually accumulated.
+    t1 = time - dt/2
+    t2 = time + dt/2
+    inds = np.where(np.logical_and(timesSLCF >= t1, timesSLCF <= t2))[0]
+    if inds.size == 0:
+        inds = np.array([int(np.argmin(abs(timesSLCF - time)))])
+
+    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1), dtype=np.float64)
+    ts = []
+    for ind in inds:
+        f.seek(int(ind) * frameBytes + headerSize, 0)
+        t, data = readNextTime(f, NX, NY, NZ, datatype)
+        if data is False:
+            break
+        datas2[:, :, :, 0] += np.reshape(data, shape, order='F')
+        ts.append(float(np.squeeze(t)))
+    if len(ts) > 0:
+        datas2[:, :, :, 0] = datas2[:, :, :, 0] / float(len(ts))
+        times = [(np.min(ts) + np.max(ts)) / 2]
+    else:
+        times = [time]
+    return np.array(datas2, dtype=np.float32), times
+
+
 def readSingleSlcfFile(slcfFile,
-                       time=None, dt=None, saveTimesFile=False, endianness="<"):
+                       time=None, dt=None, saveTimesFile=False,
+                       endianness="<"):
+    """Reads the data from a single slice file
+
+    Handles both 2-D and 3-D slices; the returned array always has the
+    shape (NX+1, NY+1, NZ+1, NT), where the singleton axis of a 2-D
+    slice is retained.
+
+    Parameters
+    ----------
+    slcfFile : str
+        Path to a slice file, or to a slice file inside a zip archive
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window centred on time. Ignored when time is omitted
+    saveTimesFile : bool, optional
+        If True the timestamps are cached alongside the slice file so
+        that subsequent reads do not have to rescan it (default False)
+    endianness : str, optional
+        Byte order of the file, '<' or '>' (default '<')
+
+    Returns
+    -------
+    list
+        Six component list [iX, eX, iY, eY, iZ, eZ] of the slice extents
+        in cell indices
+    array(NX+1, NY+1, NZ+1, NT)
+        Array containing the slice data
+    list or array
+        Timestamps corresponding to the returned data
+    """
+
     if saveTimesFile:
         timesFile = slcfFile.replace('.sf','_times.csv')
     else:
         timesFile = None
-    resultDir, chid = extractResultDirAndChidFromSlcfName(slcfFile)
-    #endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
     timesSLCF = readSLCFtimes(slcfFile, timesFile, endianness=endianness)
-    times = []
     f = zopen(slcfFile)
-    
+
     qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
-    # Check if slice is 2-dimensional
-    threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
-    
-    if threeDimSlice:
-        (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
-        # Check if slice is 3-D
-        #print(slcfFile, qty, sName, uts, iX, eX, iY, eY, iZ, eZ)
-        shape = (NX+1, NY+1, NZ+1)
-        if time == None:
-            NT = len(timesSLCF)
-            datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
-            for i in range(0, NT):
-                t, data = readNextTime(f, NX, NY, NZ, datatype)
-                data = np.reshape(data, shape, order='F')
-                datas2[:, :, :, i] = data
-            times = timesSLCF
-        elif (time != None) and (dt == None):
-            datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-            i = np.argmin(abs(timesSLCF-time))
-            f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-            t, data = readNextTime(f, NX, NY, NZ, datatype)
-            data = np.reshape(data, shape, order='F')
-            datas2[:, :, :, 0] = data
-            times = [timesSLCF[i]]
-        elif (time != None) and (dt != None):
-            datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-            i = np.argmin(abs(timesSLCF - (time - dt/2)))
-            j = np.argmin(abs(timesSLCF - (time + dt/2)))
-            f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-            data = True
-            for ii in range(i, j+1):
-                if data is not False:
-                    t, data = readNextTime(f, NX, NY, NZ, datatype)
-                    data = np.reshape(data, shape, order='F')
-                    datas2[:, :, :, 0] += data
-            if j - i > 0:
-                datas2[:, :, :, 0] = datas2[:, :, :, 0] / (j-i)
-            times = [timesSLCF[i]]
-        lims = [iX, eX, iY, eY, iZ, eZ]
-    else:
-        (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
-        #print("2-D slice:", slcfFile)
-        shape = (NX+1, NY+1, NZ+1)
-        if time == None:
-            NT = len(timesSLCF)
-            datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
-            for i in range(0, NT):
-                t, data = readNextTime(f, NX, NY, NZ, datatype)
-                data = np.reshape(data, shape, order='F')
-                datas2[:, :, :, i] = data
-            times = timesSLCF
-        elif (time != None) and (dt == None):
-            datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-            i = np.argmin(abs(timesSLCF-time))
-            f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-            t, data = readNextTime(f, NX, NY, NZ, datatype)
-            data = np.reshape(data, shape, order='F')
-            datas2[:, :, :, 0] = data
-            times = [timesSLCF[i]]
-        elif (time != None) and (dt != None):
-            datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-            i = np.argmin(abs(timesSLCF - (time - dt/2)))
-            j = np.argmin(abs(timesSLCF - (time + dt/2)))
-            f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-            for ii in range(i, j+1):
-                t, data = readNextTime(f, NX, NY, NZ, datatype)
-                data = np.reshape(data, shape, order='F')
-                datas2[:, :, :, 0] += data
-            if j - i > 0:
-                datas2[:, :, :, 0] = datas2[:, :, :, 0] / (j-i)
-            times = [timesSLCF[i]]
-        lims = [iX, eX, iY, eY, iZ, eZ]
+    (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
+    datas2, times = _readSlcfFrames(
+        f, timesSLCF, NX, NY, NZ, datatype, time, dt)
     f.close()
+    lims = [iX, eX, iY, eY, iZ, eZ]
     return lims, datas2, times
 
 
 def readSLCF3Ddata(chid, workingDir, quantityToExport,
                    time=None, dt=None, saveTimesFile=False, verbose=False,
                    axis=None, value=None):
+    """Reads 3-D slice data for a quantity and maps it onto one grid
+
+    Every mesh which wrote a 3-D slice of quantityToExport is read and
+    interpolated onto the absolute grid spanning all meshes in the case.
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    workingDir : str
+        Directory containing the FDS results, or a zip archive
+    quantityToExport : str
+        FDS quantity to read, for example 'TEMPERATURE'
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window centred on time
+    saveTimesFile : bool, optional
+        Cache the slice timestamps next to each slice file
+    verbose : bool, optional
+        Print progress while reading each mesh
+    axis : int, optional
+        If given together with value, extract only the 2-D plane normal
+        to this axis (1 = x, 2 = y, 3 = z), which avoids assembling the
+        full 3-D array
+    value : float, optional
+        Coordinate of the extracted plane along axis
+
+    Returns
+    -------
+    array
+        Absolute grid coordinates. Shape (NX, NY, NZ, 3) for a full 3-D
+        read, or (N, M, 2) when axis and value select a plane
+    array
+        Slice data on the absolute grid, with time as the last axis
+    array
+        Timestamps of the returned data
+    str
+        Units of the quantity as recorded in the slice file
+
+    Notes
+    -----
+    Returns ``(False, False, False, False)`` when the case contains no
+    3-D slice of the requested quantity.
+    """
+
     endianness = getEndianness(workingDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
     
-    if '.zip' in workingDir:
-        smvFile = getFileListFromZip(workingDir, chid, 'smv')[0]
-    else:
-        smvFile = getFileList(workingDir, chid, 'smv')[0]
-    smvOutputs = parseSMVFile(smvFile)
+    smvOutputs = parseSMVFile(getSmvFile(workingDir, chid))
     
     smv_grids = smvOutputs['grids']
-    smv_slcf = smvOutputs['files']['SLICES']
-    
-    resultDir = workingDir
-    if '.zip' not in workingDir:
-        fdsFileName = getFileList(workingDir, chid, 'fds')[0]
-        fdsFile = fdsFileOperations()
-        fdsFile.importFile(fdsFileName)
-        if fdsFile.dump['ID'] is not False:
-            if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
-                resultDir = workingDir + os.sep + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep
-    
+
+    resultDir = _resolveResultDir(workingDir, chid)
+
     grids = defaultdict(bool)
-    #slcfFiles = list(smv_slcf.keys())
-    #slcfFiles.sort()
     foundSomething = False
     tinds = []
-    
+    outputUnits = None
+
     for i in range(0, len(smv_grids)):
         if verbose: print("Starting grid %d"%(i+1))
         xs = smv_grids[i][0][:, 1]
@@ -606,80 +916,56 @@ def readSLCF3Ddata(chid, workingDir, quantityToExport,
         datas3D = []
         lims3D = []
         
-        #print("%s%s_*.sf"%(resultDir, meshStr))
         for slcfFile in slcfFiles:
             if saveTimesFile:
                 timesFile = slcfFile.replace('.sf','_times.csv')
             else:
                 timesFile = None
-            timesSLCF = readSLCFtimes(slcfFile, timesFile, endianness=endianness)
-            times = []
+            timesSLCF = readSLCFtimes(
+                slcfFile, timesFile, endianness=endianness)
             f = zopen(slcfFile)
 
-            qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
-            # Check if slice is correct quantity
+            qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(
+                f, endianness)
             correctQuantity = (qty == quantityToExport)
-            # Check if slice is 2-dimensional
             threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
-            #print(qty, quantityToExport)
             if correctQuantity and threeDimSlice:
-                (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
-                # Check if slice is 3-D
-                #print(slcfFile, qty, sName, uts, iX, eX, iY, eY, iZ, eZ)
-                shape = (NX+1, NY+1, NZ+1)
                 if verbose: print("Reading slice %s"%(slcfFile))
-                if time == None:
-                    NT = len(timesSLCF)
-                    datas2 = np.zeros((NX+1, NY+1, NZ+1, NT))
-                    for i in range(0, NT):
-                        t, data = readNextTime(f, NX, NY, NZ, datatype)
-                        data = np.reshape(data, shape, order='F')
-                        datas2[:, :, :, i] = data
-                    times = timesSLCF
-                elif (time != None) and (dt == None):
-                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-                    i = np.argmin(abs(timesSLCF-time))
-                    f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-                    t, data = readNextTime(f, NX, NY, NZ, datatype)
-                    data = np.reshape(data, shape, order='F')
-                    datas2[:, :, :, 0] = data
-                    times = [timesSLCF[i]]
-                elif (time != None) and (dt != None):
-                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
-                    i = np.argmin(abs(timesSLCF - (time - dt/2)))
-                    j = np.argmin(abs(timesSLCF - (time + dt/2)))
-                    f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-                    data = True
-                    for ii in range(i, j+1):
-                        if data is not False:
-                            t, data = readNextTime(f, NX, NY, NZ, datatype)
-                            data = np.reshape(data, shape, order='F')
-                            datas2[:, :, :, 0] += data
-                    if j - i > 0:
-                        datas2[:, :, :, 0] = datas2[:, :, :, 0] / (j-i)
-                    times = [timesSLCF[i]]
+                (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
+                datas2, times = _readSlcfFrames(
+                    f, timesSLCF, NX, NY, NZ, datatype, time, dt)
                 lims3D.append([iX, eX, iY, eY, iZ, eZ])
                 datas3D.append(datas2)
                 times3D.append(times)
                 outputUnits = uts
             f.close()
-        
+
         if len(datas3D) == 0:
-            readSLCFquantities(chid, workingDir, printInfo=False)
-            
+            # This mesh holds no 3-D slice of the requested quantity.
+            # Mark it excluded so that the assembly loop below skips it
+            # instead of indexing an empty list.
+            if verbose:
+                print("No 3-D slice of %s found for mesh %s"
+                      % (quantityToExport, meshStr))
+            grids[meshStr]['include'] = False
+            continue
+
         foundSomething = True
         grids[meshStr]['datas3D'] = datas3D
         grids[meshStr]['lims3D'] = lims3D
         tinds.append(datas3D[0].shape[3])
     
+    if not foundSomething:
+        print("No 3D slice data found for qty %s"%(quantityToExport))
+        print("Quantities available in this case:")
+        readSLCFquantities(chid, workingDir, printInfo=True)
+        return False, False, False, False
+
     grid_abs = getAbsoluteGrid(grids)
     xGrid_abs = grid_abs[:, :, :, 0]
     yGrid_abs = grid_abs[:, :, :, 1]
     zGrid_abs = grid_abs[:, :, :, 2]
-    if not foundSomething:
-        print("No 3D slice data found for qty %s"%(quantityToExport))
-        return False, False, False, False
-    tInd = np.nanmin(tinds)
+    tInd = int(np.nanmin(tinds))
     xshp, yshp, zshp = xGrid_abs.shape
     if (axis is not None) and (value is not None):
         if axis == 1: xshp = 1
@@ -768,7 +1054,44 @@ def readSLCF3Ddata(chid, workingDir, quantityToExport,
 
 
 def readSLCF3DdataXYZ(chid, resultDir, quantityToExport,
-                   time=None, dt=None, saveTimesFile=False):
+                      time=None, dt=None, saveTimesFile=False):
+    """Reads 3-D slice data using xyz files to build the mesh grids
+
+    .. deprecated::
+        Use :func:`readSLCF3Ddata`, which reads the mesh grids from the
+        smokeview file and therefore does not require the case to have
+        been run with WRITE_XYZ=.TRUE. on the &DUMP namelist. This
+        routine is retained for backwards compatibility.
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    quantityToExport : str
+        FDS quantity to read, for example 'TEMPERATURE'
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window centred on time
+    saveTimesFile : bool, optional
+        Cache the slice timestamps next to each slice file
+
+    Returns
+    -------
+    array(NX, NY, NZ, 3)
+        Absolute grid coordinates
+    array(NX, NY, NZ, NT)
+        Slice data on the absolute grid
+    array(NT)
+        Timestamps of the returned data
+    """
+
+    warnings.warn(
+        "readSLCF3DdataXYZ is deprecated and will be removed in a future "
+        "release; use readSLCF3Ddata instead.",
+        DeprecationWarning, stacklevel=2)
     endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
     if '.zip' in resultDir:
@@ -1018,12 +1341,42 @@ def readSLCF3DdataXYZ(chid, resultDir, quantityToExport,
 
 def readSLCF2Ddata(chid, resultDir, quantityToExport,
                    time=None, dt=None):
-    fdsFile = fdsFileOperations()
-    fdsFile.importFile(resultDir+os.sep+chid+'.fds')
-    slcfDir = resultDir
-    if fdsFile.dump['ID'] is not False:
-        if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
-            slcfDir = resultDir + os.sep + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep
+    """Reads every 2-D slice of a quantity onto the absolute grid
+
+    .. deprecated::
+        Use :func:`query2dAxisValue`, which selects a single plane by
+        axis and coordinate, reads the grid from the smokeview file
+        rather than requiring xyz files, and handles cell-centered
+        slices. This routine is retained for backwards compatibility.
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    quantityToExport : str
+        FDS quantity to read, for example 'TEMPERATURE'
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window centred on time
+
+    Returns
+    -------
+    array(NX, NY, NZ, 3)
+        Absolute grid coordinates
+    array(NX, NY, NZ, NT)
+        Slice data mapped onto the absolute grid
+    array(NT)
+        Timestamps of the returned data
+    """
+
+    warnings.warn(
+        "readSLCF2Ddata is deprecated and will be removed in a future "
+        "release; use query2dAxisValue instead.",
+        DeprecationWarning, stacklevel=2)
+    slcfDir = _resolveResultDir(resultDir, chid)
     if '.zip' in resultDir:
         xyzFiles = getFileListFromZip(slcfDir, chid, 'xyz')
     else:
@@ -1053,6 +1406,7 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
         lims2D = []
         coords2D = []
         times2D = []
+        timesOut = np.zeros((0,))
         for slcfFile in slcfFiles:
             timesSLCF = readSLCFtimes(slcfFile, None, endianness)
             times = []
@@ -1065,36 +1419,8 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
             threeDimSlice = (eX-iX > 0) and (eY-iY > 0) and (eZ-iZ > 0)
             if correctQuantity and not threeDimSlice:
                 (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
-                print("2-D slice:", slcfFile)
-                shape = (NX+1, NY+1, NZ+1)
-                if time == None:
-                    NT = len(timesSLCF)
-                    datas2 = np.zeros((NX+1, NY+1, NZ+1, NT), dtype=np.float32)
-                    for i in range(0, NT):
-                        t, data = readNextTime(f, NX, NY, NZ, datatype)
-                        data = np.reshape(data, shape, order='F')
-                        datas2[:, :, :, i] = np.array(data, dtype=np.float32)
-                    times = timesSLCF
-                elif (time != None) and (dt == None):
-                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1), dtype=np.float32)
-                    i = np.argmin(abs(timesSLCF-time))
-                    f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-                    t, data = readNextTime(f, NX, NY, NZ, datatype)
-                    data = np.reshape(data, shape, order='F')
-                    datas2[:, :, :, 0] = np.array(data, dtype=np.float32)
-                    times = [timesSLCF[i]]
-                elif (time != None) and (dt != None):
-                    datas2 = np.zeros((NX+1, NY+1, NZ+1, 1), dtype=np.float32)
-                    i = np.argmin(abs(timesSLCF - (time - dt/2)))
-                    j = np.argmin(abs(timesSLCF - (time + dt/2)))
-                    f.seek(i * 4 * (5 + (NX+1) * (NY+1) * (NZ+1)), 1)
-                    for ii in range(i, j+1):
-                        t, data = readNextTime(f, NX, NY, NZ, datatype)
-                        data = np.reshape(data, shape, order='F')
-                        datas2[:, :, :, 0] += np.array(data, dtype=np.float32)
-                    if j - i > 0:
-                        datas2[:, :, :, 0] = datas2[:, :, :, 0] / (j-i)
-                    times = [timesSLCF[i]]
+                datas2, times = _readSlcfFrames(
+                    f, timesSLCF, NX, NY, NZ, datatype, time, dt)
                 lims2D.append([iX, eX, iY, eY, iZ, eZ])
                 datas2D.append(datas2)
                 coords2D.append([xGrid[iX, iY, iZ],
@@ -1111,14 +1437,16 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
     xGrid_abs = grid_abs[:, :, :, 0]
     yGrid_abs = grid_abs[:, :, :, 1]
     zGrid_abs = grid_abs[:, :, :, 2]
-    tInds = [] 
-    for i, key in enumerate(list(grids.keys())):
-        try:
-            tInd = grids[key]['datas2D'][0].shape[3]
-            tInds.append(tInd)
-        except:
-            pass
-    tInd = np.min(tInds)
+    tInds = []
+    for key in list(grids.keys()):
+        datas2D = grids[key]['datas2D']
+        if (datas2D is not False) and (len(datas2D) > 0):
+            tInds.append(datas2D[0].shape[3])
+    if len(tInds) == 0:
+        raise ValueError(
+            "No 2-D slice of %s was found in %s."
+            % (quantityToExport, resultDir))
+    tInd = int(np.min(tInds))
     data_abs = np.zeros((xGrid_abs.shape[0],
                          xGrid_abs.shape[1],
                          xGrid_abs.shape[2],
@@ -1133,7 +1461,6 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
         coords2D = grids[key]['coords2D']
         
         for data, coord in zip(datas2D, coords2D):
-            print(coord)
             xloc = np.where(np.isclose(
                     abs(xGrid_abs - coord[0]), 0, atol=1e-06))[0][0]
             yloc = np.where(np.isclose(
@@ -1146,9 +1473,6 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
                      yloc:yloc+NY,
                      zloc:zloc+NZ,
                      :NT] = data[:, :, :, :NT]
-            if (coord[0] == 0.0) and (coord[2] == 0.3514):
-                print(xloc, xloc+NX, yloc, yloc+NY, zloc, zloc+NZ )
-                plt.imshow(data[:, 0, :, 0])
     return grid_abs, data_abs, timesOut
 
 
@@ -1158,6 +1482,24 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
 
 
 def extractPoint(point, grid, data):
+    """Returns the data at the grid point nearest a coordinate
+
+    Parameters
+    ----------
+    point : array-like
+        Three component [x, y, z] coordinate to query
+    grid : array(NX, NY, NZ, 3)
+        Absolute grid coordinates
+    data : array(NX, NY, NZ, N)
+        Data on the absolute grid
+
+    Returns
+    -------
+    array(N)
+        Data at the nearest grid point. A warning is printed when the
+        nearest point is more than 0.25 m away in total from the query
+    """
+
     ind = np.argmin(np.sum(abs(grid-point),axis=3).flatten())
     ind = np.unravel_index(ind, grid[:,:,:,0].shape)
     x = grid[ind[0],ind[1],ind[2],0]
@@ -1171,6 +1513,30 @@ def extractPoint(point, grid, data):
     return d
 
 def readNextTime(f, NX, NY, NZ, datatype):
+    """Reads one timestep record from an open slice file
+
+    Parameters
+    ----------
+    f : file
+        Binary file positioned at the start of a timestep record
+    NX : int
+        Number of cells along the x-axis of the slice
+    NY : int
+        Number of cells along the y-axis of the slice
+    NZ : int
+        Number of cells along the z-axis of the slice
+    datatype : numpy.dtype
+        Float datatype including byte order
+
+    Returns
+    -------
+    array(1)
+        Timestamp of the frame
+    array or bool
+        Flat array of the frame values, or False if the record could not
+        be read because the file ended early
+    """
+
     _ = np.frombuffer(f.read(8), dtype=datatype)
     time = np.frombuffer(f.read(4), dtype=datatype)
     _ = np.frombuffer(f.read(8), dtype=datatype)
@@ -1182,6 +1548,31 @@ def readNextTime(f, NX, NY, NZ, datatype):
     return time, data
 
 def readSLCFheader(f, endianness, byteSize=False):
+    """Reads the 142 byte header of a slice file
+
+    Parameters
+    ----------
+    f : file
+        Binary file positioned at the start of the file
+    endianness : str
+        Byte order of the file, '<' or '>'
+    byteSize : bool, optional
+        Return the extents as a single six component tuple rather than
+        as six separate values (default False)
+
+    Returns
+    -------
+    str
+        FDS quantity recorded in the file
+    str
+        Short name of the quantity
+    str
+        Units of the quantity
+    tuple or six ints
+        Slice extents [iX, eX, iY, eY, iZ, eZ] in cell indices, as one
+        tuple when byteSize is True and as six values otherwise
+    """
+
     data = f.read(142)
     header = data[:110]
     size = struct.unpack('%siiiiii'%(endianness), data[118:142])
@@ -1197,46 +1588,103 @@ def readSLCFheader(f, endianness, byteSize=False):
         return quantity, shortName, units, iX, eX, iY, eY, iZ, eZ
 
 def readSLCFtimes(file, timesFile=None, endianness=None):
-    if timesFile != None:
-        if os.path.exists(timesFile) == True:
+    """Reads the timestamps of every frame in a slice file
+
+    Parameters
+    ----------
+    file : str
+        Path to a slice file, or to a slice file inside a zip archive
+    timesFile : str, optional
+        Path of a csv cache of the timestamps. It is read when it exists
+        and written after a scan when it does not
+    endianness : str, optional
+        Byte order of the file, '<' or '>'. Determined from the case's
+        .end file when omitted
+
+    Returns
+    -------
+    array(NT)
+        Array of timestamps
+    """
+
+    if timesFile is not None:
+        if os.path.exists(timesFile):
             times = np.loadtxt(timesFile, delimiter=',')
             return times
-    if endianness == None:
+    if endianness is None:
         resultDir, chid = extractResultDirAndChidFromSlcfName(file)
         endianness = getEndianness(resultDir, chid)
+    datatype = getDatatypeByEndianness(np.float32, endianness)
+
     f = zopen(file)
     qty, sName, uts, iX, eX, iY, eY, iZ, eZ = readSLCFheader(f, endianness)
     (NX, NY, NZ) = (eX-iX, eY-iY, eZ-iZ)
-    data = f.read()
-    f.close()
-    if len(data) % 4 == 0:
-        fullFile = np.frombuffer(data, dtype=np.float32)
+    headerSize = 142
+    frameFloats = (NX+1)*(NY+1)*(NZ+1) + 5
+    frameBytes = 4 * frameFloats
+
+    fileSize = None
+    if '.zip' not in file:
+        try:
+            fileSize = os.path.getsize(file)
+        except OSError:
+            fileSize = None
+
+    if fileSize is not None:
+        # Seek to each frame's time record instead of reading the whole
+        # file. A slice file is frequently several gigabytes, and only
+        # four bytes per frame are needed here.
+        numberOfFrames = int((fileSize - headerSize) // frameBytes)
+        times = np.zeros(numberOfFrames, dtype=np.float32)
+        for i in range(0, numberOfFrames):
+            f.seek(headerSize + i*frameBytes + 8, 0)
+            times[i] = np.frombuffer(f.read(4), dtype=datatype)[0]
     else:
-        #print(len(data))
-        remainder = -1*int(len(data) % 4)
-        #print(len(data[:remainder]))
-        fullFile = np.frombuffer(data[:remainder], dtype=np.float32)
-    times = fullFile[2::(NX+1)*(NY+1)*(NZ+1)+5]
-    if timesFile != None:
+        # Members of a zip archive are decompressed as a stream, so
+        # seeking past data is no cheaper than reading it.
+        data = f.read()
+        remainder = len(data) % 4
+        if remainder != 0:
+            data = data[:-remainder]
+        fullFile = np.frombuffer(data, dtype=datatype)
+        times = np.array(fullFile[2::frameFloats])
+    f.close()
+
+    if timesFile is not None:
         np.savetxt(timesFile, times)
     return times
 
 def readSLCFquantities(chid, workingDir, printInfo=False):
-    resultDir = workingDir
-    if '.zip' not in workingDir:
-        fdsFileName = getFileList(workingDir, chid, 'fds')[0]
-        fdsFile = fdsFileOperations()
-        fdsFile.importFile(fdsFileName)
-        if fdsFile.dump['ID'] is not False:
-            if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
-                resultDir = workingDir + os.sep + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep
-    
-    if '.zip' in workingDir:
-        smvFile = getFileListFromZip(workingDir, chid, 'smv')[0]
-    else:
-        smvFile = getFileList(workingDir, chid, 'smv')[0]
-    
-    smvData = parseSMVFile(smvFile)
+    """Lists the slice files written by a case and what they contain
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    workingDir : str
+        Directory containing the FDS results, or a zip archive
+    printInfo : bool, optional
+        Print each slice file as it is inspected (default False)
+
+    Returns
+    -------
+    list
+        Quantity recorded in each slice file
+    list
+        Path of each slice file
+    list
+        Six component extent [iX, eX, iY, eY, iZ, eZ] of each slice
+    list
+        Mesh string parsed from each slice file name
+    list
+        Whether each slice holds cell-centered data
+    list
+        Units of the quantity in each slice file
+    """
+
+    resultDir = _resolveResultDir(workingDir, chid)
+
+    smvData = parseSMVFile(getSmvFile(workingDir, chid))
     
     '''
     try:
@@ -1300,21 +1748,59 @@ def readSLCFquantities(chid, workingDir, printInfo=False):
     return quantities, slcfFiles, dimensions, meshes, centers, units
 
 def buildQTYstring(chid, resultDir, qty):
-    quantities, slcfFiles, dimensions, meshes, centers, units = readSLCFquantities(chid, resultDir)
-    quantitiesCheck = [True if qty == x else False for x in quantities]
-    inds = np.where(quantitiesCheck)[0]
-    print(inds)
-    if len(inds) == 0:
-        print("Quantity %s unknown."%(qty))
-        print("Known quantities:")
-        for qnty in sorted(set(quantities)):
-            print(qnty)
-    else:
-        ind = inds[0][0]
+    """Finds the file name suffix FDS used for a slice quantity
+
+    Parameters
+    ----------
+    chid : str
+        FDS CHID of the case
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    qty : str
+        FDS quantity, for example 'TEMPERATURE'
+
+    Returns
+    -------
+    str
+        Suffix used in the slice file names for this quantity
+
+    Raises
+    ------
+    ValueError
+        If the case contains no slice of the requested quantity
+    """
+
+    quantities, slcfFiles, dimensions, meshes, centers, units = \
+        readSLCFquantities(chid, resultDir)
+    inds = np.where([qty == x for x in quantities])[0]
+    if inds.size == 0:
+        raise ValueError(
+            "Quantity %s not found in %s. Known quantities: %s"
+            % (qty, resultDir, ', '.join(sorted(set(quantities)))))
+    ind = int(inds[0])
     quantityStr = slcfFiles[ind].split('.sf')[0].split('_')[-1]
     return quantityStr
 
 def getLimsFromGrid(grid):
+    """Returns the bounding box of an absolute grid
+
+    Parameters
+    ----------
+    grid : array(NX, NY, NZ, 3)
+        Absolute grid coordinates
+
+    Returns
+    -------
+    list
+        Six component list [xmin, xmax, ymin, ymax, zmin, zmax]
+
+    See Also
+    --------
+    pyfdstools.extractBoundaryData.getPatchLimsFromGrid : the unrelated
+        routine which converts boundary patch cell indices to
+        coordinates, and which carried this same name before v0.0.24
+    """
+
     xGrid = grid[:, :, :, 0]
     yGrid = grid[:, :, :, 1]
     zGrid = grid[:, :, :, 2]
@@ -1327,6 +1813,36 @@ def getLimsFromGrid(grid):
 
 def visualizePlot3D(x, z, T, U, V, W, HRR,
                     qnty_mn=None, qnty_mx=None):
+    """Plots the temperature field of a plot3D slice
+
+    Parameters
+    ----------
+    x : array(N, M)
+        First in-plane coordinate of each point
+    z : array(N, M)
+        Second in-plane coordinate of each point
+    T : array(N, M)
+        Temperature values, which are the values plotted
+    U : array(N, M)
+        Velocity component along x, accepted for symmetry with
+        findSliceLocation and not currently plotted
+    V : array(N, M)
+        Velocity component along y
+    W : array(N, M)
+        Velocity component along z
+    HRR : array(N, M)
+        Heat release rate per unit volume
+    qnty_mn : float, optional
+        Lower limit of the color scale. Data minimum when omitted
+    qnty_mx : float, optional
+        Upper limit of the color scale. Data maximum when omitted
+
+    See Also
+    --------
+    plotSlice : the general purpose slice plotting routine, which offers
+        control over labels, limits, colormaps and output
+    """
+
     cmap = buildSMVcolormap()
     
     xrange = x.max()-x.min()
@@ -1347,6 +1863,45 @@ def visualizePlot3D(x, z, T, U, V, W, HRR,
 
 
 def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False, grid=None):
+    """Reads a single 2-D slice file and returns it with its coordinates
+
+    Parameters
+    ----------
+    slcfFile : str
+        Path to a slice file, or to one inside a zip archive
+    chid : str
+        FDS CHID of the case
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window. Combined with time it returns a single
+        averaged frame; on its own it applies a running average of this
+        width to every frame
+    cen : bool, optional
+        Shift the coordinates to cell centers, for a slice written with
+        CELL_CENTERED=.TRUE. (default False)
+    grid : dict, optional
+        Mesh grid with the keys 'xGrid', 'yGrid' and 'zGrid'. Read from
+        the mesh's xyz file when omitted
+
+    Returns
+    -------
+    array(N, M)
+        First in-plane coordinate of each point
+    array(N, M)
+        Second in-plane coordinate of each point
+    array(N, M, NT)
+        Slice values
+    list or array
+        Timestamps of the returned frames
+    list
+        Six component list of the slice bounds in coordinates
+
+    Notes
+    -----
+    Returns None if the file holds a 3-D rather than a 2-D slice.
+    """
+
     resultDir = os.sep.join(os.path.abspath(slcfFile).split(os.sep)[:-1])
     endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
@@ -1404,21 +1959,28 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False, grid=None):
             t, data = readNextTime(f, NX, NY, NZ, datatype)
             data = np.reshape(data, shape, order='F')
             datas3[:, :, :, i] = data
-        datas2 = datas3.copy()
-        slcfDt = np.median(timesSLCF[1:] - timesSLCF[:-1])
-        #print(slcfDt, dt)
-        for i in range(0, NT):
-            t1 = max([0, timesSLCF[i]-dt/2])
-            t2 = min([timesSLCF[-1], timesSLCF[i]+dt/2])
-            inds = np.where(np.logical_and(timesSLCF >= t1, timesSLCF <= t2))[0]
-            datas2[:, :, :, i] = np.nanmean(datas3[:, :, :, inds], axis=3)
-            #ind1 = max([0, int(i-(dt/2)/slcfDt)])
-            #ind2 = min([NT, int(i+(dt/2)/slcfDt)])
-            if i > 55 and i < 130:#(timesSLCF[i] > 55) and (timesSLCF[i] < 65):
-                #print(i, timesSLCF[i], dt, slcfDt, ind1, ind2)
-                pass
-                
-            #datas2[:, :, :, i] = np.nanmean(datas3[:, :, :, ind1:ind2], axis=3)
+        # Running mean over the window [t-dt/2, t+dt/2] for every
+        # frame. timesSLCF is monotonic, so both window bounds advance
+        # monotonically and the means can be formed from a prefix sum:
+        # one pass over the data instead of re-averaging a slab of
+        # frames for every timestep.
+        firstInds = np.searchsorted(timesSLCF, timesSLCF - dt/2, side='left')
+        lastInds = np.searchsorted(timesSLCF, timesSLCF + dt/2, side='right')
+        counts = (lastInds - firstInds).astype(np.float64)
+        counts[counts < 1] = 1.0
+        if np.isnan(datas3).any():
+            # A prefix sum would smear a single NaN across every
+            # subsequent frame, so fall back to the direct nanmean.
+            datas2 = np.zeros_like(datas3)
+            for i in range(0, NT):
+                datas2[:, :, :, i] = np.nanmean(
+                    datas3[:, :, :, firstInds[i]:lastInds[i]], axis=3)
+        else:
+            cumulative = np.zeros(
+                (NX+1, NY+1, NZ+1, NT+1), dtype=np.float64)
+            np.cumsum(datas3, axis=3, out=cumulative[:, :, :, 1:])
+            datas2 = (cumulative[:, :, :, lastInds]
+                      - cumulative[:, :, :, firstInds]) / counts
         times = timesSLCF
     elif (time != None) and (dt == None):
         datas2 = np.zeros((NX+1, NY+1, NZ+1, 1))
@@ -1481,6 +2043,28 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False, grid=None):
     return x, z, d, times, coords
 
 def getAxisAndValueFromXB(XB, grid, cen):
+    """Determines which plane a slice lies in from its cell extents
+
+    Parameters
+    ----------
+    XB : list
+        Six component slice extent [iX, eX, iY, eY, iZ, eZ] in cell
+        indices
+    grid : dict
+        Mesh grid with the keys 'xGrid', 'yGrid' and 'zGrid'
+    cen : bool
+        Whether the slice holds cell-centered data, in which case the
+        coordinate is shifted by half a cell
+
+    Returns
+    -------
+    int
+        Axis normal to the slice (1 = x, 2 = y, 3 = z), or -1 when the
+        extents describe a 3-D slice
+    float
+        Coordinate of the slice along that axis, or -1 for a 3-D slice
+    """
+
     NX = XB[1] - XB[0]
     NY = XB[3] - XB[2]
     NZ = XB[5] - XB[4]
@@ -1511,37 +2095,74 @@ def getAxisAndValueFromXB(XB, grid, cen):
         value = -1
     return axis, value
 
-def query2dAxisValue(workingDir, chid, quantity, axis, value, time=None, dt=None, atol=1e-8, printInfo=False, verbose=False):
-    '''
-    xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
-    if len(xyzFiles) == 0:
-        xyzFiles = getFileListFromResultDir(resultDir+'*'+os.sep, chid, 'xyz')
-        resultDir2 = os.path.dirname(xyzFiles[0]) + os.sep 
-    else:
-        resultDir2 = resultDir
-    grids = getGridsFromXyzFiles(xyzFiles, chid)
-    '''
+def query2dAxisValue(workingDir, chid, quantity, axis, value, time=None,
+                     dt=None, atol=1e-8, printInfo=False, verbose=False):
+    """Reads a 2-D slice at a given axis and coordinate
+
+    Every mesh which wrote a 2-D slice of the requested quantity in the
+    requested plane is read and mapped onto the absolute grid spanning
+    all meshes in the case. Mesh grids are read from the smokeview file,
+    so the case does not need to have been run with WRITE_XYZ=.TRUE.
+
+    Parameters
+    ----------
+    workingDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    quantity : str
+        FDS quantity to read, for example 'TEMPERATURE'
+    axis : int
+        Axis normal to the queried slice (1 = x, 2 = y, 3 = z)
+    value : float
+        Coordinate of the queried slice along axis
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window centred on time. When time is omitted, a
+        running average of this width is applied to every frame
+    atol : float, optional
+        Tolerance used when matching value against the available slice
+        coordinates (default 1e-8)
+    printInfo : bool, optional
+        Print each slice file as it is read (default False)
+    verbose : bool, optional
+        Print progress while reading each mesh (default False)
+
+    Returns
+    -------
+    defaultdict
+        Dictionary with the keys:
+        'x'     - array(N, M) of the first in-plane coordinate
+        'z'     - array(N, M) of the second in-plane coordinate
+        'datas' - array(N, M, NT) of slice values
+        'times' - timestamps of each frame
+    str
+        Units of the quantity as recorded in the slice file
+
+    Notes
+    -----
+    Returns ``(None, None)`` and prints the slices which are available
+    when the requested plane does not exist in the case.
+
+    Examples
+    --------
+    >>> data, units = query2dAxisValue(
+    ...     workingDir, 'case001', 'TEMPERATURE', 1, 2.55, time=30, dt=60)
+    >>> data['datas'].shape[-1]
+    1
+    """
+
     endianness = getEndianness(workingDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
     
-    if '.zip' in workingDir:
-        smvFile = getFileListFromZip(workingDir, chid, 'smv')[0]
-    else:
-        smvFile = getFileList(workingDir, chid, 'smv')[0]
-    smvOutputs = parseSMVFile(smvFile)
+    smvOutputs = parseSMVFile(getSmvFile(workingDir, chid))
     
     smv_grids = smvOutputs['grids']
     smv_slcf = smvOutputs['files']['SLICES']
     
-    resultDir = workingDir
-    if '.zip' not in workingDir:
-        fdsFileName = getFileList(workingDir, chid, 'fds')[0]
-        fdsFile = fdsFileOperations()
-        fdsFile.importFile(fdsFileName)
-        if fdsFile.dump['ID'] is not False:
-            if fdsFile.dump['ID']['RESULTS_DIR'] is not False:
-                resultDir = workingDir + os.sep + fdsFile.dump['ID']['RESULTS_DIR'] + os.sep
-    
+    resultDir = _resolveResultDir(workingDir, chid)
+
     grids = defaultdict(bool)
     for i in range(0, len(smv_grids)):
         if verbose: print("Starting grid %d"%(i+1))
@@ -1723,7 +2344,50 @@ def query2dAxisValue(workingDir, chid, quantity, axis, value, time=None, dt=None
     data_abs_out['times'] = times
     return data_abs_out, outUnits
 
-def query2dAxisValueXYZ(resultDir, chid, quantity, axis, value, time=None, dt=None, atol=1e-8, printInfo=False):
+def query2dAxisValueXYZ(resultDir, chid, quantity, axis, value, time=None,
+                        dt=None, atol=1e-8, printInfo=False):
+    """Reads a 2-D slice using xyz files to build the mesh grids
+
+    .. deprecated::
+        Use :func:`query2dAxisValue`, which reads the mesh grids from
+        the smokeview file and therefore does not require the case to
+        have been run with WRITE_XYZ=.TRUE. on the &DUMP namelist. This
+        routine is retained for backwards compatibility.
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    quantity : str
+        FDS quantity to read, for example 'TEMPERATURE'
+    axis : int
+        Axis normal to the queried slice (1 = x, 2 = y, 3 = z)
+    value : float
+        Coordinate of the queried slice along axis
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window centred on time
+    atol : float, optional
+        Tolerance used when matching value against the available slice
+        coordinates (default 1e-8)
+    printInfo : bool, optional
+        Print each slice file as it is inspected (default False)
+
+    Returns
+    -------
+    defaultdict
+        Dictionary with the keys 'x', 'z', 'datas' and 'times'
+    str
+        Units of the quantity
+    """
+
+    warnings.warn(
+        "query2dAxisValueXYZ is deprecated and will be removed in a "
+        "future release; use query2dAxisValue instead.",
+        DeprecationWarning, stacklevel=2)
     xyzFiles = getFileListFromResultDir(resultDir, chid, 'xyz')
     if len(xyzFiles) == 0:
         xyzFiles = getFileListFromResultDir(resultDir+'*'+os.sep, chid, 'xyz')
@@ -1889,6 +2553,25 @@ def query2dAxisValueXYZ(resultDir, chid, quantity, axis, value, time=None, dt=No
     return data_abs_out, outUnits
 
 def renderSliceCsvs(data, chid, outdir):
+    """Writes each frame of a 2-D slice to its own csv file
+
+    Parameters
+    ----------
+    data : dict
+        Slice dictionary as returned by query2dAxisValue, with the keys
+        'x', 'z', 'datas' and 'times'
+    chid : str
+        FDS CHID of the case, used as the file name prefix
+    outdir : str
+        Directory the csv files are written to
+
+    Notes
+    -----
+    Each file is named '<chid>_<time>.csv' and is written with the
+    second in-plane coordinate as the row index and the first as the
+    column headers.
+    """
+
     times = data['times']
     xs = data['x'][:, 0]
     zs = data['z'][0, :]
@@ -1901,6 +2584,24 @@ def renderSliceCsvs(data, chid, outdir):
 
 
 def writeSLCFheader(f, quantity, shortName, units, size, endianness):
+    """Writes the 142 byte header of a slice file
+
+    Parameters
+    ----------
+    f : file
+        Binary file open for writing
+    quantity : str
+        FDS quantity name
+    shortName : str
+        Short name of the quantity
+    units : str
+        Units of the quantity
+    size : array(6)
+        Slice extents [iX, eX, iY, eY, iZ, eZ] in cell indices
+    endianness : str
+        Byte order to write, '<' or '>'
+    """
+
     sz = struct.pack('%s%0.0fi'%(endianness, len(size)), *size)
     qty = str.encode("{:<30}".format(quantity))
     sn = str.encode("{:<30}".format(shortName))
@@ -1916,6 +2617,20 @@ def writeSLCFheader(f, quantity, shortName, units, size, endianness):
     f.write(b'\x18\x00\x00\x00')
 
 def writeSLCFTime(f, time, data, endianness):
+    """Writes one timestep record to a slice file
+
+    Parameters
+    ----------
+    f : file
+        Binary file positioned at the end of the previous record
+    time : float
+        Timestamp of the frame
+    data : array
+        Flat array of the frame values, in Fortran order
+    endianness : str
+        Byte order to write, '<' or '>'
+    """
+
     f.write(b'\x04\x00\x00\x00')
     t = time.tobytes()
     f.write(t)
@@ -1930,6 +2645,45 @@ def writeSLCFTime(f, time, data, endianness):
 
 def writeSlice(outFile, resultDir, chid, data, times, axis, val,
                        outQty, sName, uts, meshnum, smvFile=None, endianness="<", suffix=None):
+    """Writes a derived 2-D slice as a slice file smokeview can read
+
+    Used to add a computed quantity to an existing case, for example a
+    radiative heat flux slice built from device output. Passing smvFile
+    also registers the new slice in that smokeview file, without which
+    smokeview will not display it.
+
+    Parameters
+    ----------
+    outFile : str
+        Name of the slice file to write, relative to resultDir
+    resultDir : str
+        Directory the slice file is written to
+    chid : str
+        FDS CHID of the case
+    data : list
+        List of NT frames, each an array(N, M) of values
+    times : array(NT)
+        Timestamps of each frame
+    axis : int
+        Axis normal to the slice (1 = x, 2 = y, 3 = z)
+    val : int
+        Cell index of the slice plane along axis
+    outQty : str
+        FDS quantity name to record
+    sName : str
+        Short name of the quantity
+    uts : str
+        Units of the quantity
+    meshnum : int
+        Mesh number the slice belongs to
+    smvFile : str, optional
+        Name of a smokeview file to append the slice record to
+    endianness : str, optional
+        Byte order to write, '<' or '>' (default '<')
+    suffix : str, optional
+        Suffix distinguishing this slice in the smokeview record
+    """
+
     outPath = os.path.join(resultDir, outFile)
     smvPath = os.path.join(resultDir, smvFile)
     
@@ -1959,6 +2713,29 @@ def writeSlice(outFile, resultDir, chid, data, times, axis, val,
         writeSliceToSmv(smvPath, meshnum, X, outQty, outPath, sName, uts, suffix=suffix)
 
 def writeSliceToSmv(file, meshNum, X, outQty, outFile, sName, uts, suffix):
+    """Appends a slice record to a smokeview file
+
+    Parameters
+    ----------
+    file : str
+        Path to the smokeview file to append to
+    meshNum : int
+        Mesh number the slice belongs to
+    X : list
+        Six component slice extent in cell indices
+    outQty : str
+        FDS quantity name
+    outFile : str
+        Path of the slice file being registered
+    sName : str
+        Short name of the quantity
+    uts : str
+        Units of the quantity
+    suffix : str
+        Suffix distinguishing this slice from others of the same
+        quantity
+    """
+
     if suffix is None: suffix = "1 \n"
     with open(file, 'a') as f:
         f.write('SLCF     %0.0f # STRUCTURED &     %0.0f    %0.0f     %0.0f    %0.0f     %0.0f    %0.0f !      %s'%(meshNum, X[0], X[1], X[2], X[3], X[4], X[5], suffix))
@@ -1968,6 +2745,24 @@ def writeSliceToSmv(file, meshNum, X, outQty, outFile, sName, uts, suffix):
         f.write(' %s\n\n'%(uts))
 
 def getAxisFromLims(lims):
+    """Determines which plane a slice lies in from its cell extents
+
+    Parameters
+    ----------
+    lims : list
+        Six component slice extent [iX, eX, iY, eY, iZ, eZ] in cell
+        indices
+
+    Returns
+    -------
+    int
+        Axis normal to the slice (1 = x, 2 = y, 3 = z), or -1 when the
+        extents describe a 3-D slice
+    int or None
+        Cell index of the slice plane along that axis, or None for a
+        3-D slice
+    """
+
     iX, eX, iY, eY, iZ, eZ = lims
     (NX, NY, NZ) = (eX - iX+1, eY - iY+1, eZ - iZ+1)
     if (NX == 1):
@@ -1985,6 +2780,31 @@ def getAxisFromLims(lims):
     return slcf_axis, val
 
 def slcfTimeAverage(slcfFile, dt, outFile=None, outQty=None, outdt=None):
+    """Time-averages one slice file and writes the result as a slice file
+
+    Parameters
+    ----------
+    slcfFile : str
+        Path to the slice file to average
+    dt : float
+        Averaging window in seconds
+    outFile : str, optional
+        Path the averaged slice file is written to. Derived from the
+        input name when omitted
+    outQty : str, optional
+        Quantity name to record in the output. Derived from the input
+        quantity and the window when omitted
+    outdt : float, optional
+        Output timestep. The input timestep is kept when omitted
+
+    Returns
+    -------
+    str
+        Path of the slice file which was written
+    str
+        Quantity name recorded in it
+    """
+
     
     # Read the data
     resultDir, chid = extractResultDirAndChidFromSlcfName(slcfFile)
@@ -2045,6 +2865,42 @@ def slcfTimeAverage(slcfFile, dt, outFile=None, outQty=None, outdt=None):
     
 
 def slcfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None, outdt=None):
+    """Time-averages every slice of a quantity across all meshes
+
+    Writes one averaged slice file per input slice, plus a smokeview
+    file which registers them, so that the averaged field can be opened
+    in smokeview alongside the original.
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    fdsQuantity : str
+        FDS quantity to average, for example 'TEMPERATURE'
+    dt : float
+        Averaging window in seconds
+    outDir : str, optional
+        Directory the averaged files are written to. Defaults to
+        resultDir
+    outQty : str, optional
+        Quantity name to record in the output
+    outdt : float, optional
+        Output timestep. The input timestep is kept when omitted
+
+    Returns
+    -------
+    list
+        Paths of the averaged slice files
+    str
+        Quantity name recorded in them
+    list
+        Paths of the slice files which were averaged
+    str
+        Path of the smokeview file which registers the new slices
+    """
+
     slcfFiles = getFileList(resultDir, chid, 'sf')
     filesWithQueriedQuantity = []
     endianness = getEndianness(resultDir, chid)

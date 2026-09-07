@@ -1236,19 +1236,34 @@ class fdsFileOperations(object):
     
     
     def checkOverlappingMESH(self):
-        """Returns True if any meshes are overlapping else False
-        
+        """Returns True if any two meshes in the model overlap
+
+        Each mesh is shrunk slightly before the test so that meshes
+        which merely share a face are not reported. A mesh whose name
+        contains 'east', 'west', 'north' or 'south' is instead grown on
+        that side, so that a mesh which should abut its neighbour there
+        but does not is reported.
+
         Returns
         -------
         bool
-            True if any meshes are overlapping, else False
+            True if any two meshes overlap, else False
         """
         
-        def in_hull(p,hull):
-            if not isinstance(hull,scsp.Delaunay):
+        def in_hull(p, hull):
+            """Returns True if a point lies inside a Delaunay hull."""
+            if not isinstance(hull, scsp.Delaunay):
                 hull = scsp.Delaunay(hull)
-            return hull.find_simplex(p)>=0
-        def pointsFromXB(XB,extend=[0.05, -0.05, 0.05, -0.05, 0, 0]):
+            return hull.find_simplex(p) >= 0
+
+        def pointsFromXB(XB, extend=[0.05, -0.05, 0.05, -0.05, 0, 0]):
+            """Returns the eight corners of an XB, shrunk or grown.
+
+            Unlike utilities.pointsFromXB, which takes one offset per
+            axis, extend here holds a separate offset for each of the
+            six faces, so that a mesh can be shrunk on one side and
+            grown on another when testing for a shared boundary.
+            """
             pts = [[XB[0]+extend[0],XB[2]+extend[2],XB[4]+extend[4]],
                    [XB[0]+extend[0],XB[2]+extend[2],XB[5]+extend[5]],
                    [XB[0]+extend[0],XB[3]+extend[3],XB[4]+extend[4]],
@@ -1258,14 +1273,20 @@ class fdsFileOperations(object):
                    [XB[1]+extend[1],XB[3]+extend[3],XB[4]+extend[4]],
                    [XB[1]+extend[1],XB[3]+extend[3],XB[5]+extend[5]]]
             return pts
+
+        # self.meshes carries the bookkeeping entry 'unknownCounter'
+        # alongside the meshes themselves; subscripting that integer for
+        # an XB raised TypeError for every model.
+        meshKeys = [k for k in self.meshes.keys() if k != 'unknownCounter']
+
         meshHulls = defaultdict(bool)
-        for key in list(self.meshes.keys()):
+        for key in meshKeys:
             pts = pointsFromXB(self.meshes[key]['XB'])
             meshHull = scsp.Delaunay(pts)
             meshHulls[key] = meshHull
         overlap = False
-        for key1 in list(self.meshes.keys()):
-            for key2 in list(self.meshes.keys()):
+        for key1 in meshKeys:
+            for key2 in meshKeys:
                 if (key1 != key2):
                     extend = [0.05, -0.05, 0.05, -0.05, 0, 0]
                     if ('east' in key2): extend = [0.05, 0.1, 0.05, -0.05, 0, 0]
@@ -1589,7 +1610,12 @@ class fdsFileOperations(object):
                 txt = self.makeRAMP(keyD)
             else:
                 newline1 = newlines[field]
-                newline2 = keyD['newline']
+                # keyD is a defaultdict, so subscripting it for a key
+                # which is not present would insert a phantom 'newline'
+                # entry into the namelist collection. get() leaves the
+                # model unchanged, which matters because generating text
+                # should not mutate the model it is generating from.
+                newline2 = keyD.get('newline', False)
                 newline = (newline1 or newline2)
                 #print(field, keyT)
                 txt = self.makeLinesFromDict(keyD, keyT, keyN, precision, newline)
@@ -1601,29 +1627,47 @@ class fdsFileOperations(object):
         return text
     
     def sortDEVCs(self):
-        """ Sorts devcs as required by FDS.
-        Currently only moves aspiration devices to the end.
+        """Orders the devices as FDS requires them to appear
+
+        FDS requires an aspiration device to be declared after the
+        devices it samples, so aspiration devices are moved to the end.
+        The devices are written out through makeLinesFromDict, which
+        sorts on the dictionary key, so the ordering is imposed by
+        prefixing each key with a sequence number. The prefix is
+        internal: the ID written to the input file comes from the
+        device's own ID entry, not from this key.
+
+        Notes
+        -----
+        This is called from generateFDStext, so it has to be safe to
+        call repeatedly. Any existing sequence prefix is stripped before
+        a new one is applied; earlier releases appended a fresh prefix
+        every time, so the device keys grew on each call, and the
+        sequence number never advanced, so the requested ordering was
+        not actually produced.
         """
-        devc_keys = list(self.devcs.keys())
-        endDevcs = defaultdict(bool)
-        startDevcs = defaultdict(bool)
-        counter = 0
-        if 'unknownCounter' in devc_keys:
-            devc_keys.remove('unknownCounter')
-            endDevcs['unknownCounter'] = startDevcs['unknownCounter']
-        if 'newline' in devc_keys:
-            devc_keys.remove('newline')
-            endDevcs['newline'] = startDevcs['newline']
+
+        reserved = ('unknownCounter', 'newline')
+        devc_keys = [k for k in self.devcs.keys() if k not in reserved]
+
+        normal = []
+        aspiration = []
         for key in devc_keys:
             devc = defaultdict(bool, self.devcs[key])
+            baseKey = re.sub(r'^(DEVICE-\d{6}-)+', '', key)
             if devc['QUANTITY'] == 'ASPIRATION':
-                endDevcs[key] = devc
-                self.devcs.pop(key)
+                aspiration.append((baseKey, devc))
             else:
-                startDevcs['DEVICE-%06d-%s'%(counter, key)] = devc
-        self.devcs = startDevcs
-        for key in endDevcs.keys():
-            self.devcs[key] = endDevcs[key]
+                normal.append((baseKey, devc))
+
+        sortedDevcs = defaultdict(bool)
+        for counter, (baseKey, devc) in enumerate(normal + aspiration):
+            sortedDevcs['DEVICE-%06d-%s'%(counter, baseKey)] = devc
+
+        for key in reserved:
+            if key in self.devcs:
+                sortedDevcs[key] = self.devcs[key]
+        self.devcs = sortedDevcs
     
     def getDefaultFields(self):
         """Returns default field order

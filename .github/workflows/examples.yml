@@ -1,0 +1,103 @@
+name: examples
+
+# Runs the example scripts end to end against the cases bundled with the
+# package, and exercises the optional ParaView and VTK submodules that
+# the main test workflow deliberately installs without.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly, so that a break caused by a new release of a dependency is
+    # noticed even when nothing has been pushed.
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: examples-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  examples:
+    name: bundled examples on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install the package and its test requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Run the example scripts
+        env:
+          MPLBACKEND: Agg
+        run: python -m pytest tests -m slow -v
+
+      - name: Upload the generated output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-output-${{ matrix.os }}
+          path: pyfdstools/examples/generated/
+          if-no-files-found: warn
+          retention-days: 7
+
+  optional-extras:
+    name: optional submodules (${{ matrix.extra }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extra: [paraview, vtk]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install with the ${{ matrix.extra }} extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[${{ matrix.extra }},test]"
+
+      - name: Import the optional submodule
+        env:
+          MPLBACKEND: Agg
+          EXTRA: ${{ matrix.extra }}
+        run: |
+          python - <<'PY'
+          import os
+          import pyfdstools as fds
+
+          extra = os.environ['EXTRA']
+          moduleName = 'paraview' if extra == 'paraview' else 'vtkhdf_plugin'
+          module = getattr(fds, moduleName)
+          print("Imported pyfdstools.%s from %s" % (moduleName, module.__file__))
+
+          # The lazy loader must expose the submodule's names on the
+          # package once its dependencies are present.
+          if extra == 'paraview':
+              assert callable(fds.exportSl3dDataToVtk)
+              assert callable(fds.obstToStl)
+          else:
+              assert callable(fds.detect_surface_plane_from_points)
+          print("Optional names resolve through the package namespace.")
+          PY
+
+      - name: Run the unit tests with the extra installed
+        env:
+          MPLBACKEND: Agg
+        run: python -m pytest tests -m "not slow" -q

@@ -1,3 +1,11 @@
 *.png
 *.csv
 *.fds
+*.sf
+*.smv
+*.vtk
+*.vtr
+*.vti
+*.vtp
+*.stl
+*.nc

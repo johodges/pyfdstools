@@ -23,6 +23,26 @@ import os
 from .utilities import zopen, getFileList
 
 def findHeaderLength(lines):
+    """Finds the index of the last header line in an FDS csv file
+
+    FDS csv output starts with one or more header lines (units, then
+    labels) before the numeric data. The header ends at the last line
+    which cannot be parsed as a row of floats.
+
+    Parameters
+    ----------
+    lines : list
+        List of the raw bytes lines of the file. Non-ASCII unit symbols
+        FDS writes (degree signs, superscript twos) are replaced in
+        place so that the caller decodes cleanly
+
+    Returns
+    -------
+    int
+        Index of the label line, or 0 if no data line was found within
+        the first 100 lines
+    """
+
     replacements =[
         [b'kW/m\xb2',b'kW/m2'],
         [b'\xb0C',b'C']
@@ -49,6 +69,23 @@ def findHeaderLength(lines):
         return 0
 
 def cleanDataLines(lines2, headerLines, skipcols=None):
+    """Parses the numeric rows of an FDS csv file
+
+    Parameters
+    ----------
+    lines2 : list
+        List of the raw bytes lines of the file
+    headerLines : int
+        Index of the label line, from findHeaderLength
+    skipcols : list, optional
+        Indices of columns to drop
+
+    Returns
+    -------
+    list
+        List of rows, each a list of floats
+    """
+
     lines = lines2[headerLines+1:]
     for i in range(0, len(lines)):
         line = (lines[i].decode('utf-8')).replace('\r\n','')
@@ -61,10 +98,41 @@ def cleanDataLines(lines2, headerLines, skipcols=None):
     return lines
 
 def load_csv(modeldir, chid, suffix='_devc', labelRow=-1, skipcols=None):
+    """Reads one of the csv files FDS writes for a case
+
+    Parameters
+    ----------
+    modeldir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    suffix : str, optional
+        Output suffix identifying which csv to read, for example
+        '_devc', '_hrr' or '_ctrl' (default '_devc')
+    labelRow : int, optional
+        Index of the row holding the column labels. The header length is
+        detected automatically when this is -1 (default -1)
+    skipcols : list, optional
+        Indices of columns to drop
+
+    Returns
+    -------
+    pandas.DataFrame
+        Table of the csv contents, with a column per device
+
+    Raises
+    ------
+    FileNotFoundError
+        If no csv with that suffix exists for the case
+    """
+
     if 'zip' in modeldir:
         csv_files = getFileList(modeldir, chid, 'csv')
         suff_files = [x for x in csv_files if suffix in x]
-        print(modeldir, chid, suff_files)
+        if len(suff_files) == 0:
+            raise FileNotFoundError(
+                "No csv file matching '%s' for chid %s was found in %s."
+                % (suffix, chid, modeldir))
         f = zopen(suff_files[0])
     else:
         file = "%s%s%s%s.csv"%(modeldir, os.sep, chid, suffix)
@@ -85,6 +153,24 @@ def load_csv(modeldir, chid, suffix='_devc', labelRow=-1, skipcols=None):
     return data
 
 def load_hrr(file):
+    """Reads an FDS _hrr.csv file directly by path
+
+    Parameters
+    ----------
+    file : str
+        Path to the csv file
+
+    Returns
+    -------
+    pandas.DataFrame
+        Table of the csv contents
+
+    See Also
+    --------
+    load_csv : reads the same file given a directory and CHID, and works
+        for archives and for every other csv suffix
+    """
+
     with open(file, 'r') as f:
         line = f.readline()
         line = f.readline()

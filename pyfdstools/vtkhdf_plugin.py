@@ -7,16 +7,112 @@ import os
 
 from .fdsFileOperations import fdsFileOperations
 from .utilities import getDatatypeByEndianness, getEndianness
-from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
+from .utilities import getFileListFromZip, getFileList
 from .smokeviewParser import parseSMVFile
 
 def round_if_needed(arr, tol):
+    """Rounds values to a resolution so that they compare exactly
+
+    Coordinates read back from a VTKHDF file carry floating point noise,
+    which would make otherwise identical grid lines compare as distinct.
+    Rounding them to a tolerance lets np.unique recover the grid.
+
+    Parameters
+    ----------
+    arr : array
+        Values to round
+    tol : float or None
+        Resolution to round to. The values are returned unchanged when
+        this is None or not positive
+
+    Returns
+    -------
+    array
+        Rounded values
+    """
+
     if tol is None or tol <= 0:
         return arr
     return np.round(arr / tol) * tol
 
 
+def detect_surface_plane_from_points(pts, tol=1e-10):
+    """Determines which axis a planar set of points is normal to
+
+    A slice surface read back from a VTKHDF file lies in a coordinate
+    plane, so exactly one of its three coordinates is constant. The axis
+    with the smallest spread is taken as the normal.
+
+    Parameters
+    ----------
+    pts : array(N, 3)
+        Array of point coordinates
+    tol : float, optional
+        Coordinates are rounded to this resolution before their spread
+        is measured, matching the rounding applied elsewhere in this
+        module (default 1e-10)
+
+    Returns
+    -------
+    int
+        Plane identifier, using the same convention as the rest of
+        pyfdstools: 1 for a y-z plane (x constant), 2 for an x-z plane
+        (y constant) and 3 for an x-y plane (z constant)
+    int
+        Index of the first in-plane axis
+    int
+        Index of the second in-plane axis
+    int
+        Index of the normal axis
+
+    Raises
+    ------
+    ValueError
+        If pts is empty or is not two-dimensional
+    """
+
+    pts = np.asarray(pts)
+    if pts.ndim != 2 or pts.shape[1] != 3:
+        raise ValueError(
+            "Expected an (N, 3) array of points; received shape %s"
+            % (pts.shape,))
+    if pts.shape[0] == 0:
+        raise ValueError("Cannot detect a plane from an empty point set.")
+
+    rounded = round_if_needed(pts, tol)
+    spans = rounded.max(axis=0) - rounded.min(axis=0)
+    normalAxis = int(np.argmin(spans))
+
+    # plane, first in-plane axis, second in-plane axis, normal axis
+    planeByNormal = {
+        0: (1, 1, 2, 0),
+        1: (2, 0, 2, 1),
+        2: (3, 0, 1, 2),
+    }
+    return planeByNormal[normalAxis]
+
+
 def get_point_array(part, array_name):
+    """Returns one point-data array from a VTK partition as numpy
+
+    Parameters
+    ----------
+    part : vtkDataSet
+        Partition to read from
+    array_name : str
+        Name of the point-data array
+
+    Returns
+    -------
+    array
+        Values of the array
+
+    Raises
+    ------
+    ValueError
+        If the partition has no array with that name
+    """
+
     arr = part.GetPointData().GetArray(array_name)
     if arr is None:
         raise ValueError(f"Point-data array '{array_name}' not found in partition.")
@@ -213,6 +309,19 @@ def cached_surface_to_structured_mesh(surface, array_name, tol=1e-10, plane=None
 
 
 def get_step_times(reader):
+    """Returns the timestamps of every step in a VTKHDF file
+
+    Parameters
+    ----------
+    reader : vtkHDFReader
+        Reader with the file already set
+
+    Returns
+    -------
+    array(NT)
+        Timestamps of each step
+    """
+
     info = reader.GetOutputInformation(0)
 
     key = vtk.vtkStreamingDemandDrivenPipeline.TIME_STEPS()
@@ -224,6 +333,38 @@ def get_step_times(reader):
     return None
 
 def query2dAxisValue_vtkhdf(workingDir, chid, quantity, axis, value, time=None, dt=None):
+    """Reads a 2-D slice from the VTKHDF output FDS can write
+
+    The VTKHDF equivalent of :func:`pyfdstools.query2dAxisValue`, for
+    cases run with a &DUMP namelist that writes VTKHDF rather than the
+    native slice files. It returns the same dictionary layout so that
+    the two are interchangeable downstream.
+
+    Parameters
+    ----------
+    workingDir : str
+        Directory containing the FDS results
+    chid : str
+        FDS CHID of the case
+    quantity : str
+        FDS quantity to read, for example 'TEMPERATURE'
+    axis : int
+        Axis normal to the queried slice (1 = x, 2 = y, 3 = z)
+    value : float
+        Coordinate of the queried slice along axis
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window centred on time
+
+    Returns
+    -------
+    defaultdict
+        Dictionary with the keys 'x', 'z', 'datas' and 'times'
+    str
+        Units of the quantity
+    """
+
     endianness = getEndianness(workingDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
     

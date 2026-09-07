@@ -1,8 +1,23 @@
+"""Standalone script showing how FDS output is exported to ParaView.
+
+.. deprecated::
+    Every routine here has an equivalent in :mod:`pyfdstools.paraview`,
+    which is maintained, handles cell-centered and stretched-mesh data,
+    and also exports 2-D slices, boundary element and smoke3D output.
+    Prefer::
+
+        import pyfdstools as fds
+        fds.exportSl3dDataToVtk(chid, resultDir)
+
+    This file is kept as a worked example of the underlying VTK file
+    format. It is not imported by the pyfdstools package and its
+    functions are not part of the public API.
+"""
+
 import pyfdstools as fds
 import os
 import numpy as np
 import hashlib
-import matplotlib.pyplot as plt
 import stl
 from collections import defaultdict
 
@@ -240,7 +255,8 @@ def writeVtkPolyTimeSeries(namespace, series_data, times):
 
 def exportSl3dDataToVtk(chid, resultDr):
     # Slice data
-    quantities, slcfFiles, dimensions, meshes, centers = fds.readSLCFquantities(chid, resultDir)
+    quantities, slcfFiles, dimensions, meshes, centers, units = \
+        fds.readSLCFquantities(chid, resultDir)
     
     uniqueQuantities = list(set(quantities))
     series_data = dict()

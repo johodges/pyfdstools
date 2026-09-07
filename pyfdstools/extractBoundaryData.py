@@ -18,9 +18,6 @@
 import os
 import numpy as np
 from collections import defaultdict
-import glob
-import cv2
-import pandas as pd
 from .utilities import zopen, in_hull, getFileList, pts2polygons, zreadlines
 from .fdsFileOperations import fdsFileOperations
 from .smokeviewParser import parseSMVFile
@@ -136,21 +133,25 @@ class fdspatch(object):
         """
 
         (NX, NY) = (self.data.shape[0]+1, self.data.shape[1]+1)
+        # indexing='ij' is required so that the varying coordinates come
+        # back with shape (NX, NY), matching the constant coordinate
+        # built alongside them. The default 'xy' indexing transposes
+        # them, which only goes unnoticed when NX happens to equal NY.
         if self.lims[0] == self.lims[1]:
             xGrid = np.zeros((NX, NY)) + self.lims[0]
             y = np.linspace(self.lims[2], self.lims[3], NX)
             z = np.linspace(self.lims[4], self.lims[5], NY)
-            yGrid, zGrid = np.meshgrid(y, z)
+            yGrid, zGrid = np.meshgrid(y, z, indexing='ij')
         elif self.lims[2] == self.lims[3]:
             yGrid = np.zeros((NX, NY)) + self.lims[2]
             x = np.linspace(self.lims[0], self.lims[1], NX)
             z = np.linspace(self.lims[4], self.lims[5], NY)
-            xGrid, zGrid = np.meshgrid(x, z)
+            xGrid, zGrid = np.meshgrid(x, z, indexing='ij')
         elif self.lims[4] == self.lims[5]:
             zGrid = np.zeros((NX, NY)) + self.lims[4]
             x = np.linspace(self.lims[0], self.lims[1], NX)
             y = np.linspace(self.lims[2], self.lims[3], NY)
-            xGrid, yGrid = np.meshgrid(x, y)
+            xGrid, yGrid = np.meshgrid(x, y, indexing='ij')
         (self.x, self.y, self.z) = (xGrid, yGrid, zGrid)
 
 
@@ -348,13 +349,6 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
          number of first-coordinate points,
          number of time steps).
     """
-    # ------------------------------------------------------------------
-    # Validate the inputs.
-    # ------------------------------------------------------------------
-    """
-    Convert a list of local boundary-data patches into one assembled 2D patch.
-    """
-
     # ------------------------------------------------------------------
     # Validate inputs
     # ------------------------------------------------------------------
@@ -917,7 +911,7 @@ def selectBoundaryPatchIndices(
         if orientation != axis:
             continue
 
-        lims = getLimsFromGrid(
+        lims = getPatchLimsFromGrid(
             patchDs[patch_index][3:],
             grid,
         )
@@ -1008,7 +1002,7 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid, selectedIndices=None)
         else:
             shape = (pdx, pdy)
 
-        lims = getLimsFromGrid(patchDs[patch_index][3:], grid)
+        lims = getPatchLimsFromGrid(patchDs[patch_index][3:], grid)
 
         patches.append(
             fdspatch(
@@ -1054,20 +1048,29 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid, selectedIndices=None)
     return times, patches
 
 
-def getLimsFromGrid(data, grid):
-    """Extracts limits from mesh grid and patch data
+def getPatchLimsFromGrid(data, grid):
+    """Converts patch cell indices to coordinates using the mesh grid
+
+    Named getLimsFromGrid before v0.0.24. It was renamed because
+    extractPlot3Ddata defines an unrelated getLimsFromGrid(grid), and
+    the package level star imports made only one of the two reachable.
 
     Parameters
     ----------
     data : list
-        List containing limits from patch
+        Six component list of patch bounds as cell indices
     grid : list
-        List of arrays containing the grid of the mesh
+        List of the three [index, coordinate] tables for the mesh
 
     Returns
     -------
-    float array(6)
-        Array containing limit extents
+    list
+        Six component list of patch bounds as coordinates
+
+    Raises
+    ------
+    ValueError
+        If a patch bound does not appear in the mesh grid
     """
 
     try:
@@ -1091,14 +1094,13 @@ def getLimsFromGrid(data, grid):
         #print(grid[1][:,0])
         #print(grid[2][:,0])
         #print(data)
-    except:
-        print(grid[0][:,0])
-        print(grid[1][:,0])
-        print(grid[2][:,0])
-        print(data)
-        print("Failed to make lims, returning null")
-        lims = [0,0,0,0,0,0]
-        assert False, "Stopped"
+    except IndexError as err:
+        raise ValueError(
+            "Patch bounds %s do not lie on the mesh grid.\n"
+            "  x indices: %s\n"
+            "  y indices: %s\n"
+            "  z indices: %s" % (list(data), grid[0][:, 0], grid[1][:, 0],
+                                 grid[2][:, 0])) from err
     return lims
 
 
@@ -1853,6 +1855,41 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
 
 
 def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None):
+    """Time-averages every boundary file of a quantity across all meshes
+
+    Writes one averaged boundary file per input file, plus a smokeview
+    file which registers them, so that the averaged field can be opened
+    in smokeview alongside the original.
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    fdsQuantity : str
+        FDS quantity to average, for example 'WALL TEMPERATURE'
+    dt : float
+        Averaging window in seconds
+    outDir : str, optional
+        Directory the averaged files are written to. Written next to the
+        originals when omitted
+    outQty : str, optional
+        Quantity name to record in the output. Derived from the input
+        quantity and the window when omitted
+
+    Returns
+    -------
+    list
+        Paths of the averaged boundary files
+    str
+        Quantity name recorded in them
+    list
+        Paths of the boundary files which were averaged
+    str
+        Path of the smokeview file which registers the new files
+    """
+
     bndfFiles = getFileList(resultDir, chid, 'bf')
     filesWithQueriedQuantity = []
     for boundaryFile in bndfFiles:
@@ -1916,6 +1953,32 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
 
 
 def buildBndfSmvLine(mesh, vnum, qty, file, shortName, units):
+    """Builds the BNDF record which registers a boundary file
+
+    Smokeview will not display a boundary file until a BNDF record in
+    the smokeview file names it.
+
+    Parameters
+    ----------
+    mesh : int
+        Mesh number the boundary file belongs to
+    vnum : int
+        Variable number of the quantity
+    qty : str
+        FDS quantity name
+    file : str
+        Name of the boundary file being registered
+    shortName : str
+        Short name of the quantity
+    units : str
+        Units of the quantity
+
+    Returns
+    -------
+    list
+        The five lines of the BNDF record, without line endings
+    """
+
     bndfLine = "BNDF" + str(mesh).rjust(6) + str(vnum).rjust(6) + "\n"
     bndfLine = bndfLine + " " + file + "\n"
     bndfLine = bndfLine + " " + qty + "\n"
@@ -1926,6 +1989,33 @@ def buildBndfSmvLine(mesh, vnum, qty, file, shortName, units):
 
 
 def bndfTimeAverage(boundaryFile, dt, outFile=None, outQty=None):
+    """Time-averages one boundary file and writes the result
+
+    Parameters
+    ----------
+    boundaryFile : str
+        Path to the boundary file to average
+    dt : float
+        Averaging window in seconds
+    outFile : str, optional
+        Path the averaged boundary file is written to. Derived from the
+        input name when omitted
+    outQty : str, optional
+        Quantity name to record in the output. Derived from the input
+        quantity and the window when omitted
+
+    Returns
+    -------
+    str
+        Path of the boundary file which was written
+    str
+        Quantity name recorded in it
+    str
+        Short name recorded in it
+    str
+        Units recorded in it
+    """
+
     f = zopen(boundaryFile)
     quantity, shortName, units, npatch = parseBndfHeader(f)
     patchInfo, data = parseBndfPatches(f, npatch)
@@ -1978,6 +2068,25 @@ def bndfTimeAverage(boundaryFile, dt, outFile=None, outQty=None):
 
 
 def writeBndfHeader(quantity, shortName, units, npatch):
+    """Builds the header of a boundary file
+
+    Parameters
+    ----------
+    quantity : str
+        FDS quantity name
+    shortName : str
+        Short name of the quantity
+    units : str
+        Units of the quantity
+    npatch : int
+        Number of patches the file contains
+
+    Returns
+    -------
+    bytes
+        Encoded header, ready to be written at the start of the file
+    """
+
 
     header = b'\x1e\x00\x00\x00'
     header = header + (quantity.ljust(30, ' ')).encode('utf-8')
@@ -1998,6 +2107,24 @@ def writeBndfHeader(quantity, shortName, units, npatch):
 
 
 def writeBndfPatchInfo(patchInfo):
+    """Builds the patch declaration block of a boundary file
+
+    The patch block follows the header and declares the extent,
+    orientation and mesh of every patch before any data are written.
+
+    Parameters
+    ----------
+    patchInfo : list
+        Patch information in the layout parseBndfPatches returns:
+        [patch points, extents, orientations, obstruction numbers,
+        mesh numbers]
+
+    Returns
+    -------
+    bytes
+        Encoded patch block
+    """
+
     patchDs = patchInfo[1]
     patchIors = patchInfo[2]
     patchNBs = patchInfo[3]

@@ -28,8 +28,13 @@ if __name__ == "__main__":
     axis, value = -2, 4.4
     time, dt = -1, -1
     quantities = ['WALL TEMPERATURE']
-    cbarticks = [20, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
-    qnty_mn, qnty_mx = [20, 1000]
+    # The wall temperature in this case peaks at about 412 C over the
+    # run, so the scale is set to cover that rather than an arbitrary
+    # round number. A fixed scale (rather than one taken from each
+    # frame) keeps the colors comparable between frames and between
+    # cases; widen it if you point this example at a hotter case.
+    cbarticks = [20, 50, 100, 150, 200, 250, 300, 350, 400, 450]
+    qnty_mn, qnty_mx = [20, 450]
     
     parser = argparse.ArgumentParser(prog='Dump 2D slice to csv',
                                      description='Example routine to dump a 2D slice to a csv',

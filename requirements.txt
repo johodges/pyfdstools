@@ -1,7 +1,11 @@
-libopencv
-matplotlib
-numpy
-pandas
-scipy
-opencv-contrib-python
-numpy-stl
+# Core requirements. These are all that pyfdstools needs to be imported
+# and to read/write every FDS output format it supports.
+matplotlib>=3.0
+numpy>=1.17
+pandas>=0.25
+scipy>=1.3.1
+
+# Optional requirements, installed via the pip extras:
+#   pip install pyfdstools[paraview]   -> numpy-stl, pyevtk
+#   pip install pyfdstools[vtk]        -> vtk
+#   pip install pyfdstools[all]        -> all of the above

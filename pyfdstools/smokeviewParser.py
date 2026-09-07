@@ -18,47 +18,94 @@
 # # IMPORTS
 #=======================================================================
 import numpy as np
-from .utilities import zreadlines, getFileListFromZip, getFileList, getAbsoluteGrid
+from .utilities import zreadlines, getSmvFile, getAbsoluteGrid
 from collections import defaultdict
+
+
+def _parseTRNblock(lines, i, numberOfCells):
+    """Parses one TRNX, TRNY or TRNZ block from a smokeview file
+
+    A TRN block is laid out as::
+
+        TRN?
+            <number of stretch specifications>
+            <that many stretch specification lines>
+            <numberOfCells + 1 lines of 'cell index  coordinate'>
+
+    The stretch specification lines are only present when the case uses
+    a stretched mesh (an FDS &TRNX, &TRNY or &TRNZ namelist), which is
+    why the coordinate table cannot be located at a fixed offset.
+
+    Parameters
+    ----------
+    lines : list
+        List of strings corresponding to lines from a smokeview file
+    i : int
+        Index of the TRN? keyword line
+    numberOfCells : int
+        Number of cells along this axis, taken from the GRID record
+
+    Returns
+    -------
+    array(numberOfCells + 1, 2)
+        Array whose columns are the cell index and the coordinate
+    """
+
+    numberOfStretchLines = int(lines[i+1].split()[0])
+    firstCoordinateLine = i + 2 + numberOfStretchLines
+    coordinateLines = lines[
+        firstCoordinateLine:firstCoordinateLine + numberOfCells + 1]
+    return np.array([[float(y) for y in x.split()]
+                     for x in coordinateLines])
 
 
 def parseGRID(lines, i):
     """This function parses grid data from smokeview lines.
-    
+
     Parameters
     ----------
     lines : list
         List of strings corresponding to lines from a smokeview file
     i : int
         Index of grid line
-    
+
     Returns
     -------
-    array(I)
-        Array containing x-coordinates of grid
-    array(J)
-        Array containing y-coordinates of grid
-    array(K)
-        Array containing z-coordinates of grid
+    array(I, 2)
+        Array containing cell indices and x-coordinates of grid
+    array(J, 2)
+        Array containing cell indices and y-coordinates of grid
+    array(K, 2)
+        Array containing cell indices and z-coordinates of grid
     """
+
     gridPts = [int(x) for x in lines[i+1].replace('\n','').split()]
-    (gridTRNX, gridTRNY, gridTRNZ) = ([], [], [])
-    (xind0, xind1) = (i+8, i+9+gridPts[0])
-    (yind0, yind1) = (i+12+gridPts[0], i+13+gridPts[0]+gridPts[1])
-    zind0 = i+16+gridPts[0]+gridPts[1]
-    zind1 = i+17+gridPts[0]+gridPts[1]+gridPts[2]
-    xlines = lines[xind0:xind1]
-    ylines = lines[yind0:yind1]
-    zlines = lines[zind0:zind1]
-    for x in xlines:
-        gridTRNX.append([float(y) for y in x.replace('\n','').split()])
-    for x in ylines:
-        gridTRNY.append([float(y) for y in x.replace('\n','').split()])
-    for x in zlines:
-        gridTRNZ.append([float(y) for y in x.replace('\n','').split()])
-    gridTRNX = np.array(gridTRNX)
-    gridTRNY = np.array(gridTRNY)
-    gridTRNZ = np.array(gridTRNZ)
+
+    # Locate each TRN block by name rather than by a fixed offset from
+    # the GRID line. Cases which use a stretched mesh insert extra
+    # stretch specification lines into the TRN blocks, which shifts
+    # everything that follows them.
+    keywords = ['TRNX', 'TRNY', 'TRNZ']
+    indices = {}
+    j = i + 1
+    while (j < len(lines)) and (len(indices) < len(keywords)):
+        stripped = lines[j].strip()
+        if stripped in keywords:
+            indices[stripped] = j
+        elif (j > i + 1) and stripped.startswith('GRID'):
+            # Reached the next mesh before finding all three blocks.
+            break
+        j = j + 1
+
+    missing = [k for k in keywords if k not in indices]
+    if len(missing) > 0:
+        raise ValueError(
+            "Smokeview GRID record at line %d is missing the %s "
+            "block(s)." % (i, ', '.join(missing)))
+
+    gridTRNX = _parseTRNblock(lines, indices['TRNX'], gridPts[0])
+    gridTRNY = _parseTRNblock(lines, indices['TRNY'], gridPts[1])
+    gridTRNZ = _parseTRNblock(lines, indices['TRNZ'], gridPts[2])
     return gridTRNX, gridTRNY, gridTRNZ
 
 
@@ -114,6 +161,7 @@ def parseOBST(lines, i, gridTRNX, gridTRNY, gridTRNZ):
     
     dx, dy, dz = calculateDeltas(gridTRNX, gridTRNY, gridTRNZ)
     numOBST = int(lines[i+1].replace(' ',''))
+
     tmp1 = lines[i+2:i+2+numOBST]
     tmp2 = lines[i+2+numOBST:i+2+numOBST+numOBST]
     tmp1 = [x.replace('\n','').split('!')[0] for x in tmp1]
@@ -124,19 +172,36 @@ def parseOBST(lines, i, gridTRNX, gridTRNY, gridTRNZ):
         if len(tmp2[j]) > 8:
             tmp2[j] = tmp2[j][:8]
     smvObj = np.array([x1+x2 for x1, x2 in zip(tmp1,tmp2)])
-    for j in range(0, smvObj.shape[0]):
-        pts = smvObj[j,13:19]
-        x1 = gridTRNX[np.where(gridTRNX[:,0] == pts[0])[0][0],1]
-        x2 = gridTRNX[np.where(gridTRNX[:,0] == pts[1])[0][0],1]
-        y1 = gridTRNY[np.where(gridTRNY[:,0] == pts[2])[0][0],1]
-        y2 = gridTRNY[np.where(gridTRNY[:,0] == pts[3])[0][0],1]
-        z1 = gridTRNZ[np.where(gridTRNZ[:,0] == pts[4])[0][0],1]
-        z2 = gridTRNZ[np.where(gridTRNZ[:,0] == pts[5])[0][0],1]
-        newPts = np.array([x1,x2,y1,y2,z1,z2])
-        if newPts[0] == newPts[1]: newPts[1] = newPts[1] + dx
-        if newPts[2] == newPts[3]: newPts[3] = newPts[3] + dy
-        if newPts[4] == newPts[5]: newPts[5] = newPts[5] + dz
-        smvObj[j,13:19] = newPts
+    if smvObj.shape[0] == 0:
+        return smvObj
+
+    # Columns 13-18 hold the obstruction bounding box as grid cell
+    # indices. Convert them to coordinates by looking the index up in
+    # the corresponding TRN table. Building a lookup per axis once is
+    # O(N_obst + N_grid) rather than the O(N_obst * N_grid) cost of
+    # searching the TRN table for every obstruction and every face.
+    lookups = []
+    for gridTRN in (gridTRNX, gridTRNY, gridTRNZ):
+        lookups.append(dict(zip(gridTRN[:, 0], gridTRN[:, 1])))
+
+    cellIndices = smvObj[:, 13:19]
+    coords = np.empty_like(cellIndices)
+    for axisIndex in range(0, 3):
+        lookup = lookups[axisIndex]
+        for side in range(0, 2):
+            column = 2*axisIndex + side
+            coords[:, column] = [lookup[value]
+                                 for value in cellIndices[:, column]]
+
+    # A thin obstruction has coincident lower and upper faces on one
+    # axis. Extend it by one cell so that it has a finite thickness.
+    for axisIndex, delta in enumerate((dx, dy, dz)):
+        lower = coords[:, 2*axisIndex]
+        upper = coords[:, 2*axisIndex + 1]
+        thin = (lower == upper)
+        coords[thin, 2*axisIndex + 1] = upper[thin] + delta
+
+    smvObj[:, 13:19] = coords
     return smvObj
 
 
@@ -200,15 +265,31 @@ def parseBNDE(lines, i):
 
 
 def getBlockedCellsInPlane(working_dir, chid, axis, value):
-    if '.zip' in working_dir:
-        smvFile = getFileListFromZip(working_dir, chid, 'smv')[0]
-    else:
-        smvFile = getFileList(working_dir, chid, 'smv')[0]
-    smvOutputs = parseSMVFile(smvFile)
+    """Builds a mask of the cells blocked by obstructions in a plane
+
+    Parameters
+    ----------
+    working_dir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    axis : int
+        Axis normal to the queried plane (1 = x, 2 = y, 3 = z)
+    value : float
+        Coordinate of the queried plane along axis
+
+    Returns
+    -------
+    array(N, M)
+        Array which is 1 where an obstruction blocks the plane and 0
+        elsewhere. The array is sized on the absolute grid built from
+        every mesh in the case
+    """
+
+    smvOutputs = parseSMVFile(getSmvFile(working_dir, chid))
     
     smv_grids = smvOutputs['grids']
     smv_obsts = smvOutputs['obsts']
-    smv_slcf = smvOutputs['files']['SLICES']
     grids = defaultdict(bool)
     for i in range(0, len(smv_grids)):
         #if verbose: print("Starting grid %d"%(i+1))
@@ -264,40 +345,82 @@ def getBlockedCellsInPlane(working_dir, chid, axis, value):
             if (value < smv_obsts[i][4]) or (value > smv_obsts[i][5]): continue # not in plane
             xi = np.where(np.logical_or(np.isclose(abs_xs, smv_obsts[i][13]), np.isclose(abs_xs,smv_obsts[i][14])))[0]
             zi = np.where(np.logical_or(np.isclose(abs_ys, smv_obsts[i][15]), np.isclose(abs_ys,smv_obsts[i][16])))[0]
-            try:
-                x1, x2 = xi[0], xi[-1]
-                z1, z2 = zi[0], zi[-1]
-            except:
-                print(abs_ys)
-                print(i, smv_obsts[i])
+            if (xi.size == 0) or (zi.size == 0):
+                # The obstruction bounds do not land on the absolute
+                # grid, which happens for obstructions belonging to a
+                # mesh finer than the one being masked. Skip it rather
+                # than leaving stale indices from the previous
+                # obstruction in place.
+                print("Warning, obstruction %d does not align with the "
+                      "absolute grid; skipping it." % (i))
+                continue
+            x1, x2 = xi[0], xi[-1]
+            z1, z2 = zi[0], zi[-1]
             if x1 == x2: x2 = x1+1
             if z1 == z2: z2 = z1+1
             blocks[x1:x2, z1:z2] = 1
     return blocks
 
+def _parseSliceRecord(lines, i, cellCentered):
+    """Parses one slice file record from a smokeview file
+
+    The SLCF (node-centered), SLCC (cell-centered) and SLCT (terrain)
+    keywords all introduce a five-line record with the same layout, so
+    they share this parser.
+
+    Parameters
+    ----------
+    lines : list
+        List of strings corresponding to lines from a smokeview file
+    i : int
+        Index of the keyword line introducing the record
+    cellCentered : bool
+        Whether the record describes cell-centered data
+
+    Returns
+    -------
+    str
+        Base name of the slice file the record refers to
+    defaultdict
+        Dictionary describing the slice, with the keys 'CELL_CENTERED',
+        'QUANTITY', 'SHORTNAME', 'UNITS' and 'LINETEXT'
+    """
+
+    file = '%s.sf'%(lines[i+1][1:].split('.sf')[0])
+    if r'/' in file: file = file.split(r'/')[1]
+    if r'\\' in file: file = file.split(r'\\')[1]
+    record = defaultdict(bool)
+    record['CELL_CENTERED'] = cellCentered
+    record['QUANTITY'] = lines[i+2].strip()
+    record['SHORTNAME'] = lines[i+3].strip()
+    record['UNITS'] = lines[i+4].strip()
+    record['LINETEXT'] = lines[i]
+    return file, record
+
+
 def parseSMVFile(smvFile):
     """This function parses a smokeview file
-    
+
     Parameters
     ----------
     smvFile : str
         String containing path to archive or smokeview file
-    
+
     Returns
     -------
-    list
-        List of grids
-    list
-        List of obstructions
-    list
-        List of boundary files
-    list
-        List of surfaces
+    defaultdict
+        Dictionary with the keys:
+        'grids'  - list of [gridTRNX, gridTRNY, gridTRNZ] per mesh
+        'obsts'  - array(M, 20) of obstructions across all meshes
+        'bndfs'  - list of [mesh, file, quantity, variable number, type]
+        'surfs'  - list of surface property records
+        'bndes'  - list of [mesh, file, geometry file, quantity, number]
+        'files'  - dictionary of 'SLICES' and 'SMOKF3D' file records
     """
-    
+
     linesSMV = zreadlines(smvFile)
     grids = []
-    obsts = []
+    obstBlocks = []
     bndfs = []
     surfs = []
     bndes = []
@@ -317,10 +440,11 @@ def parseSMVFile(smvFile):
             smvObj = parseOBST(
                     linesSMV, i, gridTRNX, gridTRNY, gridTRNZ)
             if len(smvObj) > 0:
-                if len(obsts) == 0:
-                    obsts = smvObj
-                else:
-                    obsts = np.append(obsts, smvObj, axis=0)
+                # Collected here and concatenated once after the loop.
+                # Appending to the array in place would reallocate and
+                # copy every obstruction found so far on each mesh,
+                # which is quadratic in the number of meshes.
+                obstBlocks.append(smvObj)
         if (".bf" in line2):
             mesh, bndfName, vID, vNum, bndtype = parseBNDF(linesSMV, i)
             bndfs.append([mesh, bndfName, vID, vNum, bndtype])
@@ -340,36 +464,12 @@ def parseSMVFile(smvFile):
             c4 = linesSMV[i+3].split()[6]
             surfs.append([sname, Tign, eps, stype, t_width, t_height, 
                           c1, c2, c3, c4])
-        if 'SLCF' in linesSMV[i]:
-            file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
-            if r'/' in file: file = file.split(r'/')[1]
-            if r'\\' in file: file = file.split(r'\\')[1]
-            files['SLICES'][file] = defaultdict(bool)
-            files['SLICES'][file]['CELL_CENTERED'] = False
-            files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
-            files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
-            files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
-            files['SLICES'][file]['LINETEXT'] = linesSMV[i]
+        if ('SLCF' in linesSMV[i]) or ('SLCT' in linesSMV[i]):
+            file, record = _parseSliceRecord(linesSMV, i, False)
+            files['SLICES'][file] = record
         if 'SLCC' in linesSMV[i]:
-            file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
-            if r'/' in file: file = file.split(r'/')[1]
-            if r'\\' in file: file = file.split(r'\\')[1]
-            files['SLICES'][file] = defaultdict(bool)
-            files['SLICES'][file]['CELL_CENTERED'] = True
-            files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
-            files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
-            files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
-            files['SLICES'][file]['LINETEXT'] = linesSMV[i]
-        if 'SLCT' in linesSMV[i]:
-            file = '%s.sf'%(linesSMV[i+1][1:].split('.sf')[0])
-            if r'/' in file: file = file.split(r'/')[1]
-            if r'\\' in file: file = file.split(r'\\')[1]
-            files['SLICES'][file] = defaultdict(bool)
-            files['SLICES'][file]['CELL_CENTERED'] = False
-            files['SLICES'][file]['QUANTITY'] = linesSMV[i+2].strip()
-            files['SLICES'][file]['SHORTNAME'] = linesSMV[i+3].strip()
-            files['SLICES'][file]['UNITS'] = linesSMV[i+4].strip()
-            files['SLICES'][file]['LINETEXT'] = linesSMV[i]
+            file, record = _parseSliceRecord(linesSMV, i, True)
+            files['SLICES'][file] = record
         if 'SMOKF3D' in linesSMV[i]:
             file = '%s.s3d'%(linesSMV[i+1][1:].split('.s3d')[0])
             if r'/' in file: file = file.split(r'/')[1]
@@ -379,6 +479,13 @@ def parseSMVFile(smvFile):
             files['SMOKF3D'][file]['SHORTNAME'] = linesSMV[i+3].strip()
             files['SMOKF3D'][file]['UNITS'] = linesSMV[i+4].strip()
             files['SMOKF3D'][file]['LINETEXT'] = linesSMV[i]
+    if len(obstBlocks) == 0:
+        obsts = []
+    elif len(obstBlocks) == 1:
+        obsts = obstBlocks[0]
+    else:
+        obsts = np.concatenate(obstBlocks, axis=0)
+
     smvOutputs['grids'] = grids
     smvOutputs['obsts'] = obsts
     smvOutputs['bndfs'] = bndfs

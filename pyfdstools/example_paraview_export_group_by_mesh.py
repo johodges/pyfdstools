@@ -1,10 +1,4 @@
 import pyfdstools as fds
-import os
-import numpy as np
-import hashlib
-import matplotlib.pyplot as plt
-import stl
-from collections import defaultdict
 
 if __name__ == '__main__':
     

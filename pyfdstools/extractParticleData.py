@@ -20,6 +20,26 @@ from collections import defaultdict
 from .utilities import zopen, zreadlines, getFileList
 
 def importParticles(resultDir, chid):
+    """Reads the particle output from every mesh of a case
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+
+    Returns
+    -------
+    defaultdict
+        Dictionary with the keys 'tags' (per particle histories),
+        'classes' (per particle class metadata and counts) and 'times'
+        (every timestamp found across the meshes)
+    defaultdict
+        Dictionary keyed by timestamp, each holding the list of particle
+        tags present at that time
+    """
+
     partFiles = getFileList(resultDir, chid, 'prt5')
     particle_data = defaultdict(bool)
     particle_data['tags'] = defaultdict(bool)
@@ -62,6 +82,39 @@ def importParticles(resultDir, chid):
     return particle_data, times_data
 
 def importParticle_meta(file):
+    """Reads a particle file, taking its timestamps from the .bnd file
+
+    Identical to :func:`importParticle` except for where the timestamps
+    come from: this reads them from the companion .prt5.bnd metadata
+    file and checks each one against the timestamp embedded in the
+    binary record, raising if the two disagree. importParticle takes
+    them from the binary alone.
+
+    Use this when a run was interrupted and the binary may be
+    inconsistent with its metadata; use importParticle otherwise, since
+    it does not require the .bnd file to be present.
+
+    Parameters
+    ----------
+    file : str
+        Path to a prt5 file, or to one inside a zip archive
+
+    Returns
+    -------
+    defaultdict
+        Dictionary with the keys 'tags', holding each particle's
+        coordinates and quantities over time, and 'classes', holding the
+        per class metadata
+    list
+        Timestamps of each output frame, read from the .bnd file
+
+    Raises
+    ------
+    ValueError
+        If a timestamp in the .bnd file disagrees with the one in the
+        corresponding binary record by more than 0.01 s
+    """
+
     txt = zreadlines(file.replace('.prt5','.prt5.bnd'))
     times = [float(line.split()[0]) for line in txt if line[1] != ' ']
     f = zopen(file, 'rb')
@@ -106,9 +159,12 @@ def importParticle_meta(file):
         #tid = 'T=%0.8f'%(time)
         counter = counter + 12
         if abs(time-time2) > 0.01:
-            print(np.frombuffer(data[counter-32:counter+32], np.float32))
-            print("Error imported time %0.4f does not match meta data time %0.4f"%(time2, time))
-            assert False, "Stopped"
+            raise ValueError(
+                "Timestamp %0.4f in the particle file does not match the "
+                "timestamp %0.4f in its .bnd metadata file. The run may "
+                "have been interrupted; use importParticle, which takes "
+                "the timestamps from the binary alone."
+                % (time2, time))
         
         for i in range(0, nPart_class):
             pid = 'N-%04d'%(i)
@@ -160,10 +216,12 @@ def importParticle_meta(file):
                             qid = qtyNames[k] + '(%s)'%(qtyUnits[k])
                             try:
                                 particle_dict['tags'][tag][qid].append(qtyValue[k])
-                            except IndexError:
-                                print(particle_dict['tags'][tag], qid)
-                                print(k, qtyValue)
-                                assert False, "Stopped"
+                            except IndexError as err:
+                                raise ValueError(
+                                    "Particle quantity %s has %d values "
+                                    "but %d were expected for tag %s."
+                                    % (qid, len(qtyValue), nQty, tag)
+                                ) from err
                     else:
                         particle_dict['tags'][tag] = defaultdict(bool)
                         particle_dict['tags'][tag]['times'] = [time]
@@ -184,6 +242,23 @@ def importParticle_meta(file):
     return particle_dict, times
 
 def importParticle(file):
+    """Reads the particle positions and quantities from a particle file
+
+    Parameters
+    ----------
+    file : str
+        Path to a prt5 file, or to one inside a zip archive
+
+    Returns
+    -------
+    defaultdict
+        Dictionary with the keys 'tags', holding each particle's
+        coordinates and quantities over time, and 'classes', holding the
+        per class metadata
+    array(NT)
+        Timestamps of each output frame
+    """
+
     f = zopen(file, 'rb')
     data = f.read()
     f.close()
@@ -277,10 +352,12 @@ def importParticle(file):
                             qid = qtyNames[k] + '(%s)'%(qtyUnits[k])
                             try:
                                 particle_dict['tags'][tag][qid].append(qtyValue[k])
-                            except IndexError:
-                                print(particle_dict['tags'][tag], qid)
-                                print(k, qtyValue)
-                                assert False, "Stopped"
+                            except IndexError as err:
+                                raise ValueError(
+                                    "Particle quantity %s has %d values "
+                                    "but %d were expected for tag %s."
+                                    % (qid, len(qtyValue), nQty, tag)
+                                ) from err
                     else:
                         particle_dict['tags'][tag] = defaultdict(bool)
                         particle_dict['tags'][tag]['times'] = [time]

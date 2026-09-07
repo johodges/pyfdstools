@@ -1,3 +1,15 @@
+"""Examples of driving Blender from pyfdstools.
+
+These run inside Blender's bundled Python interpreter, which provides
+the ``bpy`` module; they cannot be imported from an ordinary Python
+session. See the Blender integration notes in the project README for
+how to point Blender at an environment which also has pyfdstools
+installed.
+
+This file is not imported by the pyfdstools package and its functions
+are not part of the public API.
+"""
+
 #-----------------------------------------------------------------------
 # Copyright (C) 2020, All rights reserved
 #
@@ -22,7 +34,6 @@ import pyfdstools as fds
 import os
 from collections import defaultdict
 import numpy as np
-import matplotlib.pyplot as plt
 import bpy
 
 

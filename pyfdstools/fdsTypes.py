@@ -1,4 +1,4 @@
-7#-----------------------------------------------------------------------
+#-----------------------------------------------------------------------
 # Copyright (C) 2020, All rights reserved
 #
 # Jonathan L. Hodges
@@ -22,7 +22,52 @@
 from collections import defaultdict
 
 class fdsLineTypes(object):
+    """Declares the datatype of every parameter of every FDS namelist
+
+    fdsFileOperations uses these tables to decide how to parse each
+    parameter it reads from an input file and how to format it when it
+    writes one back out. Each getXXXXtypes method returns a dictionary
+    keyed by parameter name whose values are one of:
+
+    ``'string'``
+        A quoted character parameter
+    ``'float'``
+        A single real parameter
+    ``'int'``
+        A single integer parameter
+    ``'bool'``
+        A logical parameter, written as .TRUE. or .FALSE.
+    ``'listfloat'``, ``'listint'``, ``'liststring'``
+        A one-dimensional array parameter
+    ``'matrixfloat'``, ``'matrixstring'``
+        A two-dimensional array parameter, indexed in the input file as
+        NAME(i,j)
+    ``'ignore'``
+        A parameter which is read but not written back out
+
+    Attributes
+    ----------
+    version : str
+        FDS version the tables describe. Parameters which changed name
+        or type between versions are selected on this
+
+    Notes
+    -----
+    A parameter absent from these tables is still read, but is treated
+    as a string, so a numeric parameter which is missing here will be
+    written back out quoted. Add it to the relevant getXXXXtypes method
+    to correct that.
+    """
+
     def __init__(self, version="6.7.4"):
+        """
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definitions are used
+            (default '6.7.4')
+        """
+
         self.bndf = self.getBNDFtypes(version)
         self.catf = self.getCATFtypes(version)
         self.clip = self.getCLIPtypes(version)
@@ -63,6 +108,20 @@ class fdsLineTypes(object):
         self.zone = self.getZONEtypes(version)
 
     def getBNDFtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &BNDF namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &BNDF parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         bndfTypes = defaultdict(bool)
         bndfTypes['CELL_CENTERED'] = 'bool'
         bndfTypes['ID'] = 'ignore'
@@ -75,12 +134,40 @@ class fdsLineTypes(object):
         return bndfTypes
 
     def getCATFtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &CATF namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &CATF parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         catfTypes = defaultdict(bool)
         catfTypes['ID'] = 'ignore'
         catfTypes['OTHER_FILES'] = 'liststring'
         return catfTypes
 
     def getCLIPtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &CLIP namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &CLIP parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         clipTypes = defaultdict(bool)
         clipTypes['ID'] = 'ignore'
         clipTypes['MAXIMUM_DENSITY'] = 'float'
@@ -91,6 +178,20 @@ class fdsLineTypes(object):
         return clipTypes
 
     def getCOMBtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &COMB namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &COMB parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         combTypes = defaultdict(bool)
         combTypes['CHECK_REALIZABILITY'] = 'bool'
         combTypes['EXTINCTION_MODEL'] = 'string'
@@ -106,6 +207,20 @@ class fdsLineTypes(object):
         return combTypes
 
     def getCTRLtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &CTRL namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &CTRL parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         ctrlTypes = defaultdict(bool)
         ctrlTypes['CONSTANT'] = 'float'
         ctrlTypes['DELAY'] = 'float'
@@ -123,6 +238,20 @@ class fdsLineTypes(object):
         return ctrlTypes
     
     def getDEVCtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &DEVC namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &DEVC parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         devcTypes = defaultdict(bool)
         devcTypes['BYPASS_FLOWRATE'] = 'float'
         devcTypes['CONVERSION_ADDEND'] = 'float'
@@ -184,6 +313,20 @@ class fdsLineTypes(object):
         return devcTypes
 
     def getDUMPtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &DUMP namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &DUMP parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         dumpTypes = defaultdict(bool)
         dumpTypes['COLUMN_DUMP_LIMIT'] = 'bool'
         dumpTypes['DT_CPU'] = 'float'
@@ -225,6 +368,20 @@ class fdsLineTypes(object):
         return dumpTypes
     
     def getGEOMtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &GEOM namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &GEOM parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         geomTypes = defaultdict(bool)
         geomTypes['AZIM'] = 'float'
         geomTypes['BINARY_FILE'] = 'string'
@@ -263,6 +420,20 @@ class fdsLineTypes(object):
         return geomTypes
 
     def getHEADtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &HEAD namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &HEAD parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         headTypes = defaultdict(bool)
         headTypes['CHID'] = 'string'
         headTypes['TITLE'] = 'string'
@@ -271,6 +442,20 @@ class fdsLineTypes(object):
         return headTypes
 
     def getHOLEtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &HOLE namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &HOLE parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         holeTypes = defaultdict(bool)
         holeTypes['BLOCK_WIND'] = 'bool'
         holeTypes['COLOR'] = 'string'
@@ -287,6 +472,20 @@ class fdsLineTypes(object):
         return holeTypes
     
     def getHVACtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &HVAC namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &HVAC parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         hvacTypes = defaultdict(bool)
         hvacTypes['AIRCOIL_ID'] = 'string'
         hvacTypes['AMBIENT'] = 'bool'
@@ -332,6 +531,20 @@ class fdsLineTypes(object):
         return hvacTypes
 
     def getINITtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &INIT namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &INIT parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         initTypes = defaultdict(bool)
         initTypes['BULK_DENSITY_FILE'] = 'string'
         initTypes['CELL_CENTERED'] = 'bool'
@@ -365,6 +578,20 @@ class fdsLineTypes(object):
         return initTypes
 
     def getISOFtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &ISOF namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &ISOF parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         isofTypes = defaultdict(bool)
         isofTypes['ID'] = 'ignore'
         isofTypes['QUANTITY'] = 'string'
@@ -372,6 +599,20 @@ class fdsLineTypes(object):
         return isofTypes
 
     def getMATLtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &MATL namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &MATL parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         matlTypes = defaultdict(bool)
         matlTypes['A'] = 'listfloat'
         matlTypes['ABSORPTION_COEFFICIENT'] = 'float'
@@ -411,6 +652,20 @@ class fdsLineTypes(object):
         return matlTypes
 
     def getMESHtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &MESH namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &MESH parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         meshTypes = defaultdict(bool)
         meshTypes['CHECK_MESH_ALIGNMENT'] = 'bool'
         meshTypes['COLOR'] = 'string'
@@ -430,6 +685,20 @@ class fdsLineTypes(object):
         return meshTypes
     
     def getMOVEtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &MOVE namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &MOVE parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         moveTypes = defaultdict(bool)
         moveTypes['AXIS'] = 'listfloat'
         moveTypes['DX'] = 'float'
@@ -443,6 +712,20 @@ class fdsLineTypes(object):
         return moveTypes
 
     def getMISCtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &MISC namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &MISC parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         miscTypes = defaultdict(bool)
         miscTypes['AEROSOL_SCRUBBING'] = 'bool'
         miscTypes['AGGLOMERATION'] = 'bool'
@@ -515,6 +798,20 @@ class fdsLineTypes(object):
         return miscTypes
     
     def getMULTtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &MULT namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &MULT parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         multTypes = defaultdict(bool)
         multTypes['DX'] = 'float'
         multTypes['DX0'] = 'float'
@@ -541,6 +838,20 @@ class fdsLineTypes(object):
         return multTypes
 
     def getOBSTtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &OBST namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &OBST parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         obstTypes = defaultdict(bool)
         obstTypes['BNDF_OBST'] = 'bool'
         obstTypes['BULK_DENSITY'] = 'float'
@@ -574,6 +885,20 @@ class fdsLineTypes(object):
         return obstTypes
     
     def getPARTtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &PART namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &PART parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         partTypes = defaultdict(bool)
         partTypes['AGE'] = 'float'
         partTypes['CHECK_DISTRIBUTION'] = 'bool'
@@ -620,6 +945,20 @@ class fdsLineTypes(object):
         return partTypes
 
     def getPREStypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &PRES namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &PRES parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         presTypes = defaultdict(bool)
         presTypes['CHECK_POISSON'] = 'bool'
         presTypes['FISHPAK_BC'] = 'listfloat'
@@ -634,6 +973,20 @@ class fdsLineTypes(object):
         return presTypes
         
     def getPROFtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &PROF namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &PROF parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         profTypes = defaultdict(bool)
         profTypes['ID'] = 'string'
         profTypes['CELL_CENTERED'] = 'bool'
@@ -645,6 +998,20 @@ class fdsLineTypes(object):
         return profTypes
         
     def getPROPtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &PROP namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &PROP parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         propTypes = defaultdict(bool)
         propTypes['ACTIVATION_OBSCURATION'] = 'float'
         propTypes['ACTIVATION_TEMPERATURE'] = 'float'
@@ -694,6 +1061,20 @@ class fdsLineTypes(object):
         return propTypes
 
     def getRADItypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &RADI namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &RADI parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         radiTypes = defaultdict(bool)
         radiTypes['ANGLE_INCREMENT'] = 'int'
         radiTypes['C_MIN'] = 'float'
@@ -719,6 +1100,20 @@ class fdsLineTypes(object):
         return radiTypes
 
     def getRAMPtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &RAMP namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &RAMP parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         rampTypes = defaultdict(bool)
         rampTypes['T'] = 'listrowfloat'
         rampTypes['F'] = 'listrowfloat'
@@ -729,6 +1124,20 @@ class fdsLineTypes(object):
         return rampTypes
         
     def getREACtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &REAC namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &REAC parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         reacTypes = defaultdict(bool)
         reacTypes['A'] = 'float'
         reacTypes['AIT_EXCLUSION_ZONE'] = 'listfloat'
@@ -769,6 +1178,20 @@ class fdsLineTypes(object):
         return reacTypes
     
     def getSLCFtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &SLCF namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &SLCF parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         slcfTypes = defaultdict(bool)
         slcfTypes['AGL_SLICE'] = 'float'
         slcfTypes['CELL_CENTERED'] = 'bool'
@@ -790,6 +1213,20 @@ class fdsLineTypes(object):
         return slcfTypes
     
     def getSPECtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &SPEC namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &SPEC parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         specTypes = defaultdict(bool)
         specTypes['AEROSOL'] = 'bool'
         specTypes['BACKGROUND'] = 'bool'
@@ -831,6 +1268,20 @@ class fdsLineTypes(object):
         return specTypes
 
     def getSM3Dtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &SM3D namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &SM3D parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         sm3dTypes = defaultdict(bool)
         sm3dTypes['ID'] = 'ignore'
         sm3dTypes['QUANTITY'] = 'string'
@@ -838,6 +1289,20 @@ class fdsLineTypes(object):
         return sm3dTypes
         
     def getSURFtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &SURF namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &SURF parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         surfTypes = defaultdict(bool)
         surfTypes['ADIABATIC'] = 'bool'
         surfTypes['BACKING'] = 'string'
@@ -962,12 +1427,40 @@ class fdsLineTypes(object):
         return surfTypes
         
     def getTABLtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &TABL namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &TABL parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         tablTypes = defaultdict(bool)
         tablTypes['ID'] = 'string'
         tablTypes['TABLE_DATA'] = 'listfloat'
         return tablTypes
 
     def getTIMEtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &TIME namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &TIME parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         timeTypes = defaultdict(bool)
         timeTypes['DT'] = 'float'
         timeTypes['ID'] = 'ignore'
@@ -982,6 +1475,20 @@ class fdsLineTypes(object):
         return timeTypes
         
     def getTRNXtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &TRNX namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &TRNX parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         trnTypes = defaultdict(bool)
         trnTypes['CC'] = 'float'
         trnTypes['ID'] = 'string'
@@ -991,6 +1498,20 @@ class fdsLineTypes(object):
         return trnTypes
     
     def getTRNYtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &TRNY namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &TRNY parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         trnTypes = defaultdict(bool)
         trnTypes['CC'] = 'float'
         trnTypes['ID'] = 'string'
@@ -1000,6 +1521,20 @@ class fdsLineTypes(object):
         return trnTypes
 
     def getTRNZtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &TRNZ namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &TRNZ parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         trnTypes = defaultdict(bool)
         trnTypes['CC'] = 'float'
         trnTypes['ID'] = 'string'
@@ -1009,6 +1544,20 @@ class fdsLineTypes(object):
         return trnTypes
     
     def getVENTtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &VENT namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &VENT parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         surfTypes = defaultdict(bool)
         surfTypes['COLOR'] = 'string'
         surfTypes['CTRL_ID'] = 'string'
@@ -1043,6 +1592,20 @@ class fdsLineTypes(object):
         return surfTypes
         
     def getWINDtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &WIND namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &WIND parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         windTypes = defaultdict(bool)
         windTypes['DIRECTION'] = 'float'
         windTypes['FORCE_VECTOR'] = 'listfloat'
@@ -1070,6 +1633,20 @@ class fdsLineTypes(object):
         return windTypes
 
     def getZONEtypes(self, version="6.7.4"):
+        """Returns the parameter datatypes of the &ZONE namelist
+
+        Parameters
+        ----------
+        version : str, optional
+            FDS version whose namelist definition is used
+
+        Returns
+        -------
+        defaultdict
+            Dictionary mapping each &ZONE parameter name to its
+            datatype string. See the class documentation for the
+            datatypes which may appear.
+        """
         zoneTypes = defaultdict(bool)
         zoneTypes['ID'] = 'string'
         zoneTypes['XB'] = 'listfloat'

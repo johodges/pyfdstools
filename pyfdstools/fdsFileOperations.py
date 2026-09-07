@@ -24,6 +24,7 @@ import pandas as pd
 from collections import defaultdict
 import datetime
 import re
+import warnings
 import scipy.spatial as scsp
 import os
 import zipfile
@@ -1300,6 +1301,55 @@ class fdsFileOperations(object):
         return overlap
     
     
+    def noteUnknownParameter(self, lineType, keyID):
+        """Records a namelist parameter which fdsTypes does not declare
+
+        The parameter is reported once, however many lines use it, so
+        that a large input file does not produce one warning per line.
+
+        Parameters
+        ----------
+        lineType : str
+            Namelist the parameter appeared on, for example 'PRES'
+        keyID : str
+            Name of the parameter
+        """
+
+        if not hasattr(self, 'unknownParameters'):
+            self.unknownParameters = set()
+        if (lineType, keyID) in self.unknownParameters:
+            return
+        self.unknownParameters.add((lineType, keyID))
+        warnings.warn(
+            "&%s parameter %s is not declared in fdsTypes. Its text will "
+            "be kept as written and copied through unchanged. Add it to "
+            "get%stypes in pyfdstools/fdsTypes.py to have it parsed."
+            % (lineType, keyID, lineType),
+            UserWarning, stacklevel=2)
+
+
+    def rawParameterText(self, keyValue):
+        """Trims a parameter's raw text of its trailing separators
+
+        Parameters
+        ----------
+        keyValue : str
+            Text to the right of the equals sign, as interpretKey
+            returns it
+
+        Returns
+        -------
+        str
+            The text with surrounding whitespace and any trailing commas
+            or namelist terminator removed
+        """
+
+        text = keyValue.strip()
+        while len(text) > 0 and text[-1] in (' ', ',', '/'):
+            text = text[:-1].strip()
+        return text
+
+
     def dictFromLine(self, line, lineType, types):
         """Returns a dictionary with keys and values from a namelist
         
@@ -1320,10 +1370,20 @@ class fdsFileOperations(object):
         
         lineDict = defaultdict(bool)
         keys = self.splitLineIntoKeys(line)
-        #print(line)
         for i, key in enumerate(keys):
-            #print(key)
             keyID, keyID2, keyType, keyValue = self.interpretKey(key, lineType, types)
+
+            # A parameter which is not in fdsTypes has no type, so none
+            # of the branches below can interpret it. Keep its text
+            # exactly as written instead: an unrecognised parameter then
+            # survives a round trip untouched rather than taking the
+            # whole namelist line down with it. FDS gains parameters
+            # faster than the tables here track them, so this is the
+            # common case for a new release, not an exotic one.
+            if not keyType:
+                self.noteUnknownParameter(lineType, keyID2)
+                lineDict[keyID2] = self.rawParameterText(keyValue)
+                continue
             #print(i, keyID)
             #if lineType == 'SURF':
             #    print(i, keyID, keyID2, keyType, keyValue)
@@ -1503,11 +1563,11 @@ class fdsFileOperations(object):
                         matrix[:len(keyValues),0] = keyValues
                 keyValue = matrix
             else:
-                print(lineType.lower(), keyID, keyID2, keyType)
-                print(len(keyID))
-                print(line)
-                print(keys)
-                assert False, "Stopped"
+                raise ValueError(
+                    "Cannot interpret %s parameter %s: fdsTypes declares "
+                    "it as type %r, which is not a type this parser "
+                    "handles.\nLine: %s"
+                    % (lineType, keyID2, keyType, line))
             lineDict[keyID2] = keyValue
         return lineDict
     
@@ -1825,9 +1885,14 @@ class fdsFileOperations(object):
             List of strings containing individual namelist lines
         """
         
-        if file != None:
+        if file is not None:
             f = self.zopen(file)
-            textFDS = f.read()
+            try:
+                textFDS = f.read()
+            finally:
+                # Left open before, which leaked a handle per model
+                # imported and raised ResourceWarning under -W always.
+                f.close()
             textFDS = textFDS.decode("utf-8")
         elif text != None:
             textFDS = text
@@ -1940,13 +2005,11 @@ class fdsFileOperations(object):
         decimals = precision
         #print(types[key2])
         for key2 in keys:
-            #print(key2, dic[key2])
-            '''
-            if 'THICKNESS' in key2:
-                decimals = 8
-            else:
-                decimals = 4
-            '''
+            # Written back exactly as it was read. See dictFromLine.
+            if not types[key2]:
+                if dic[key2] is not False:
+                    text = "%s%s=%s, "%(text, key2, dic[key2])
+                continue
             if (types[key2] == 'ignore'):
                 pass
             elif (types[key2] == 'string'):

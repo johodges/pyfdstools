@@ -53,10 +53,13 @@ class fdsLineTypes(object):
 
     Notes
     -----
-    A parameter absent from these tables causes the whole namelist line
-    to be discarded on import, with only a "WARNING: Unknown line in
-    input file" to show for it. Add the parameter to the relevant
-    getXXXXtypes method to correct that.
+    A parameter absent from these tables cannot be interpreted, so its
+    text is kept exactly as written and copied through unchanged on
+    output, and a UserWarning names it once. That keeps an input file
+    using a parameter newer than these tables intact through a round
+    trip, but the value stays a string rather than becoming a float,
+    list or bool. Add the parameter to the relevant getXXXXtypes method
+    to have it parsed properly.
     """
 
     def __init__(self, version="6.7.4"):

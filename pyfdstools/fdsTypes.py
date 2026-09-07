@@ -53,10 +53,10 @@ class fdsLineTypes(object):
 
     Notes
     -----
-    A parameter absent from these tables is still read, but is treated
-    as a string, so a numeric parameter which is missing here will be
-    written back out quoted. Add it to the relevant getXXXXtypes method
-    to correct that.
+    A parameter absent from these tables causes the whole namelist line
+    to be discarded on import, with only a "WARNING: Unknown line in
+    input file" to show for it. Add the parameter to the relevant
+    getXXXXtypes method to correct that.
     """
 
     def __init__(self, version="6.7.4"):
@@ -962,6 +962,7 @@ class fdsLineTypes(object):
         presTypes = defaultdict(bool)
         presTypes['CHECK_POISSON'] = 'bool'
         presTypes['FISHPAK_BC'] = 'listfloat'
+        presTypes['HYPRE_DEVICE_RUN'] = 'bool'
         presTypes['MAX_PRESSURE_ITERATIONS'] = 'int'
         presTypes['PRESSURE_RELAX_TIME'] = 'float'
         presTypes['PRESSURE_TOLERANCE'] = 'float'

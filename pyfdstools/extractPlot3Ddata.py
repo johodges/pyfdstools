@@ -422,8 +422,15 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
     if (cmap is None) or (isinstance(cmap, str) and cmap == 'SMV'):
         cmap = buildSMVcolormap(
                 percentile=percentile, width=highlightWidth)
+    # An integer here would tell contourf to choose that many levels
+    # spanning the *data*, which ignores qnty_mn and qnty_mx: the
+    # colorbar would then span the data rather than the requested range,
+    # and any tick outside the data would be clamped onto the extension
+    # arrow, printing on top of its neighbours. Build the levels
+    # explicitly so that the default matches what an explicit
+    # levels=100 already did.
     if levels is None:
-        levels = 100
+        levels = np.linspace(qnty_mn, qnty_mx, 100)
     elif isinstance(levels, Iterable):
         levels = np.array(levels)
     else:
@@ -436,8 +443,21 @@ def plotSlice(x, z, data_slc, axis, fig=None, ax=None,
             cbarticks = [x for x in cbarticks if abs(highlightValue-x) > 0.25*cx]
             cbarticks.append(highlightValue)
             cbarticks = sorted(cbarticks)
-            
-            
+
+    # Drop ticks outside the color scale. matplotlib does not discard
+    # them, it clamps them to the end of the bar, so a caller passing a
+    # tick list wider than the scale gets a stack of overlapping labels
+    # on the extension arrow rather than a missing tick.
+    tol = 1e-9 * max(1.0, abs(qnty_mx - qnty_mn))
+    inRange = [t for t in np.asarray(cbarticks, dtype=float)
+               if (t >= qnty_mn - tol) and (t <= qnty_mx + tol)]
+    if len(inRange) < len(np.asarray(cbarticks).ravel()):
+        dropped = len(np.asarray(cbarticks).ravel()) - len(inRange)
+        print("Warning, %d colorbar tick(s) fall outside the color scale "
+              "%0.4f to %0.4f and were dropped." % (dropped, qnty_mn, qnty_mx))
+    cbarticks = inRange
+
+
     if reverseXY:
         (x1 , z1, d1) = (z, x, data_slc[:, :])
         zrange = xmx-xmn #x.max()-x.min()

@@ -180,3 +180,72 @@ def test_renderSliceCsvs(case001_zip, outdir):
     frame = pd.read_csv(os.path.join(outdir, written[0]), index_col=0)
     # Rows are the second in-plane coordinate, columns the first.
     assert frame.shape == data['datas'].shape[:2][::-1]
+
+
+def test_plotSlice_colorbar_spans_the_requested_range(case001_zip):
+    """The color scale must be the one asked for, not the data range.
+
+    plotSlice defaulted `levels` to the integer 100, which tells
+    contourf to choose that many levels spanning the data. qnty_mn and
+    qnty_mx were then ignored for the level placement, so the colorbar
+    spanned the data instead of the requested range.
+    """
+
+    data, _ = fds.query2dAxisValue(
+        case001_zip, 'case001', 'TEMPERATURE', 1, 2.55, time=30, dt=60)
+    frame = data['datas'][:, :, -1]
+    requestedMax = float(np.nanmax(frame)) * 4.0
+
+    fig, ax = fds.plotSlice(
+        data['x'], data['z'], frame, 1,
+        qnty_mn=0, qnty_mx=requestedMax)
+
+    colorbarAxes = [a for a in fig.axes if a is not ax]
+    assert len(colorbarAxes) == 1
+    low, high = colorbarAxes[0].get_ylim()
+    assert np.isclose(low, 0.0)
+    assert np.isclose(high, requestedMax)
+    plt.close(fig)
+
+
+def test_plotSlice_default_levels_match_an_explicit_count(case001_zip):
+    """plotSlice(...) and plotSlice(..., levels=100) must agree.
+
+    100 is the documented default, but the two took different branches
+    and produced different color scales.
+    """
+
+    data, _ = fds.query2dAxisValue(
+        case001_zip, 'case001', 'TEMPERATURE', 1, 2.55, time=30, dt=60)
+    frame = data['datas'][:, :, -1]
+
+    limits = []
+    for kwargs in ({}, {'levels': 100}):
+        fig, ax = fds.plotSlice(data['x'], data['z'], frame, 1,
+                                qnty_mn=0, qnty_mx=1000, **kwargs)
+        cbarAx = [a for a in fig.axes if a is not ax][0]
+        limits.append(cbarAx.get_ylim())
+        plt.close(fig)
+
+    assert np.allclose(limits[0], limits[1])
+
+
+def test_plotSlice_drops_out_of_range_cbarticks(case001_zip, capsys):
+    """Ticks beyond the scale are clamped by matplotlib, not dropped.
+
+    That stacks their labels on the extension arrow, which is what made
+    the bundled boundary-data figure unreadable.
+    """
+
+    data, _ = fds.query2dAxisValue(
+        case001_zip, 'case001', 'TEMPERATURE', 1, 2.55, time=30, dt=60)
+
+    fig, ax = fds.plotSlice(
+        data['x'], data['z'], data['datas'][:, :, -1], 1,
+        qnty_mn=0, qnty_mx=500,
+        cbarticks=[0, 100, 200, 300, 400, 500, 600, 700, 800])
+
+    assert 'were dropped' in capsys.readouterr().out
+    cbarAx = [a for a in fig.axes if a is not ax][0]
+    assert float(np.max(cbarAx.get_yticks())) <= 500.0
+    plt.close(fig)

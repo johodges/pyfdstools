@@ -7,13 +7,69 @@ import os
 
 from .fdsFileOperations import fdsFileOperations
 from .utilities import getDatatypeByEndianness, getEndianness
-from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
+from .utilities import getFileListFromZip, getFileList
 from .smokeviewParser import parseSMVFile
 
 def round_if_needed(arr, tol):
     if tol is None or tol <= 0:
         return arr
     return np.round(arr / tol) * tol
+
+
+def detect_surface_plane_from_points(pts, tol=1e-10):
+    """Determines which axis a planar set of points is normal to
+
+    A slice surface read back from a VTKHDF file lies in a coordinate
+    plane, so exactly one of its three coordinates is constant. The axis
+    with the smallest spread is taken as the normal.
+
+    Parameters
+    ----------
+    pts : array(N, 3)
+        Array of point coordinates
+    tol : float, optional
+        Coordinates are rounded to this resolution before their spread
+        is measured, matching the rounding applied elsewhere in this
+        module (default 1e-10)
+
+    Returns
+    -------
+    int
+        Plane identifier, using the same convention as the rest of
+        pyfdstools: 1 for a y-z plane (x constant), 2 for an x-z plane
+        (y constant) and 3 for an x-y plane (z constant)
+    int
+        Index of the first in-plane axis
+    int
+        Index of the second in-plane axis
+    int
+        Index of the normal axis
+
+    Raises
+    ------
+    ValueError
+        If pts is empty or is not two-dimensional
+    """
+
+    pts = np.asarray(pts)
+    if pts.ndim != 2 or pts.shape[1] != 3:
+        raise ValueError(
+            "Expected an (N, 3) array of points; received shape %s"
+            % (pts.shape,))
+    if pts.shape[0] == 0:
+        raise ValueError("Cannot detect a plane from an empty point set.")
+
+    rounded = round_if_needed(pts, tol)
+    spans = rounded.max(axis=0) - rounded.min(axis=0)
+    normalAxis = int(np.argmin(spans))
+
+    # plane, first in-plane axis, second in-plane axis, normal axis
+    planeByNormal = {
+        0: (1, 1, 2, 0),
+        1: (2, 0, 2, 1),
+        2: (3, 0, 1, 2),
+    }
+    return planeByNormal[normalAxis]
 
 
 def get_point_array(part, array_name):

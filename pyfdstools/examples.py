@@ -337,7 +337,8 @@ def exampleAddGasPhaseHeatFluxSlice(resultDir=None, chid=None, outDir=None):
     devc_y0 = -0.75
     devc_dy = 0.0
     
-    quantities, slcfFiles, dimensions, meshes, centers = fds.readSLCFquantities(chid, resultDir)
+    quantities, slcfFiles, dimensions, meshes, centers, units = \
+        fds.readSLCFquantities(chid, resultDir)
     
     slcfFiles = [x for x,y in zip(slcfFiles, quantities) if ref_slcf_qty == y]
     

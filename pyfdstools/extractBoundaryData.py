@@ -18,9 +18,6 @@
 import os
 import numpy as np
 from collections import defaultdict
-import glob
-import cv2
-import pandas as pd
 from .utilities import zopen, in_hull, getFileList, pts2polygons, zreadlines
 from .fdsFileOperations import fdsFileOperations
 from .smokeviewParser import parseSMVFile
@@ -136,21 +133,25 @@ class fdspatch(object):
         """
 
         (NX, NY) = (self.data.shape[0]+1, self.data.shape[1]+1)
+        # indexing='ij' is required so that the varying coordinates come
+        # back with shape (NX, NY), matching the constant coordinate
+        # built alongside them. The default 'xy' indexing transposes
+        # them, which only goes unnoticed when NX happens to equal NY.
         if self.lims[0] == self.lims[1]:
             xGrid = np.zeros((NX, NY)) + self.lims[0]
             y = np.linspace(self.lims[2], self.lims[3], NX)
             z = np.linspace(self.lims[4], self.lims[5], NY)
-            yGrid, zGrid = np.meshgrid(y, z)
+            yGrid, zGrid = np.meshgrid(y, z, indexing='ij')
         elif self.lims[2] == self.lims[3]:
             yGrid = np.zeros((NX, NY)) + self.lims[2]
             x = np.linspace(self.lims[0], self.lims[1], NX)
             z = np.linspace(self.lims[4], self.lims[5], NY)
-            xGrid, zGrid = np.meshgrid(x, z)
+            xGrid, zGrid = np.meshgrid(x, z, indexing='ij')
         elif self.lims[4] == self.lims[5]:
             zGrid = np.zeros((NX, NY)) + self.lims[4]
             x = np.linspace(self.lims[0], self.lims[1], NX)
             y = np.linspace(self.lims[2], self.lims[3], NY)
-            xGrid, yGrid = np.meshgrid(x, y)
+            xGrid, yGrid = np.meshgrid(x, y, indexing='ij')
         (self.x, self.y, self.z) = (xGrid, yGrid, zGrid)
 
 
@@ -348,13 +349,6 @@ def buildAbsPatch(patches, xmin, xmax, ymin, ymax, zmin, zmax,
          number of first-coordinate points,
          number of time steps).
     """
-    # ------------------------------------------------------------------
-    # Validate the inputs.
-    # ------------------------------------------------------------------
-    """
-    Convert a list of local boundary-data patches into one assembled 2D patch.
-    """
-
     # ------------------------------------------------------------------
     # Validate inputs
     # ------------------------------------------------------------------
@@ -917,7 +911,7 @@ def selectBoundaryPatchIndices(
         if orientation != axis:
             continue
 
-        lims = getLimsFromGrid(
+        lims = getPatchLimsFromGrid(
             patchDs[patch_index][3:],
             grid,
         )
@@ -1008,7 +1002,7 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid, selectedIndices=None)
         else:
             shape = (pdx, pdy)
 
-        lims = getLimsFromGrid(patchDs[patch_index][3:], grid)
+        lims = getPatchLimsFromGrid(patchDs[patch_index][3:], grid)
 
         patches.append(
             fdspatch(
@@ -1054,20 +1048,29 @@ def buildPatches(patchPts, patchDs, patchIors, data, grid, selectedIndices=None)
     return times, patches
 
 
-def getLimsFromGrid(data, grid):
-    """Extracts limits from mesh grid and patch data
+def getPatchLimsFromGrid(data, grid):
+    """Converts patch cell indices to coordinates using the mesh grid
+
+    Named getLimsFromGrid before v0.0.24. It was renamed because
+    extractPlot3Ddata defines an unrelated getLimsFromGrid(grid), and
+    the package level star imports made only one of the two reachable.
 
     Parameters
     ----------
     data : list
-        List containing limits from patch
+        Six component list of patch bounds as cell indices
     grid : list
-        List of arrays containing the grid of the mesh
+        List of the three [index, coordinate] tables for the mesh
 
     Returns
     -------
-    float array(6)
-        Array containing limit extents
+    list
+        Six component list of patch bounds as coordinates
+
+    Raises
+    ------
+    ValueError
+        If a patch bound does not appear in the mesh grid
     """
 
     try:
@@ -1091,14 +1094,13 @@ def getLimsFromGrid(data, grid):
         #print(grid[1][:,0])
         #print(grid[2][:,0])
         #print(data)
-    except:
-        print(grid[0][:,0])
-        print(grid[1][:,0])
-        print(grid[2][:,0])
-        print(data)
-        print("Failed to make lims, returning null")
-        lims = [0,0,0,0,0,0]
-        assert False, "Stopped"
+    except IndexError as err:
+        raise ValueError(
+            "Patch bounds %s do not lie on the mesh grid.\n"
+            "  x indices: %s\n"
+            "  y indices: %s\n"
+            "  z indices: %s" % (list(data), grid[0][:, 0], grid[1][:, 0],
+                                 grid[2][:, 0])) from err
     return lims
 
 

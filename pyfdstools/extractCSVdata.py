@@ -64,7 +64,10 @@ def load_csv(modeldir, chid, suffix='_devc', labelRow=-1, skipcols=None):
     if 'zip' in modeldir:
         csv_files = getFileList(modeldir, chid, 'csv')
         suff_files = [x for x in csv_files if suffix in x]
-        print(modeldir, chid, suff_files)
+        if len(suff_files) == 0:
+            raise FileNotFoundError(
+                "No csv file matching '%s' for chid %s was found in %s."
+                % (suffix, chid, modeldir))
         f = zopen(suff_files[0])
     else:
         file = "%s%s%s%s.csv"%(modeldir, os.sep, chid, suffix)

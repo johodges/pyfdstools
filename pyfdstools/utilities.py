@@ -31,26 +31,106 @@ from collections import defaultdict
 from .colorSchemes import getVTcolors
 import warnings
 
+# numpy removed the np.trapz alias in numpy 2.0 in favour of
+# np.trapezoid. Bind whichever name the installed numpy provides so that
+# the package works on both numpy 1.x and numpy 2.x.
+_trapezoid = getattr(np, 'trapezoid', None)
+if _trapezoid is None:
+    _trapezoid = np.trapz
+
 def astFromGhf(ghf, h, e, Tgauge=20):
-    # h in kW/m2K
+    """Calculates adiabatic surface temperature from gauge heat flux
+
+    Solves the steady state energy balance at a heat flux gauge for the
+    adiabatic surface temperature (AST):
+
+        e*sigma*(AST^4 - Tgauge^4) + h*(AST - Tgauge) = ghf
+
+    The quartic is solved analytically, so ghf, h and e may be scalars
+    or arrays of matching shape.
+
+    Parameters
+    ----------
+    ghf : float or array
+        Gauge heat flux in kW/m2
+    h : float or array
+        Convective heat transfer coefficient in kW/m2-K
+    e : float or array
+        Emissivity of the gauge surface
+    Tgauge : float, optional
+        Gauge temperature in degrees Celsius (default 20)
+
+    Returns
+    -------
+    float or array
+        Adiabatic surface temperature in degrees Celsius
+
+    Notes
+    -----
+    Releases before v0.0.24 mixed Celsius and Kelvin in the energy
+    balance and returned the root without converting it back to
+    Celsius, so a zero gauge heat flux did not return the gauge
+    temperature. Values produced by this routine differ from those
+    releases.
+    """
+
+    # sigma is the Stefan-Boltzmann constant expressed in kW/m2-K4 so
+    # that it is consistent with h and ghf.
     sigma = 5.67e-11
-    if type(h) is float:
-        if (h > 1): print("Warning h > 1 kW/m2-K")
-    else:
-        if np.any(h>1): print("Warning h > 1 kW/m2-K")
+    if np.any(np.asarray(h) > 1):
+        print("Warning h > 1 kW/m2-K")
+
+    # The energy balance is solved entirely in Kelvin. Releases before
+    # v0.0.24 built the constant term from the gauge temperature in
+    # Celsius while raising it to the fourth power in Kelvin, and
+    # returned the Kelvin root without converting it back. The result
+    # was that a zero gauge heat flux did not return the gauge
+    # temperature: with h = 0.01 kW/m2-K and Tgauge = 20 C it returned
+    # 57.6 rather than 20.
+    Tgauge_K = Tgauge + 273.15
+
     a = e*sigma
     b = h
-    c = -e*sigma*(Tgauge+273.15)**4 - h*Tgauge - ghf
-    
-    alpha = ((3**0.5)*(27*(a**2)*(b**4)-256*(a**3)*(c**3))**0.5 + 9*a*(b**2))**(1/3)
+    c = -(a*Tgauge_K**4 + b*Tgauge_K + ghf)
+
+    # Real positive root of a*T^4 + b*T + c = 0 in Kelvin, via the
+    # resolvent of the depressed quartic.
+    alpha = ((3**0.5)*(27*(a**2)*(b**4) - 256*(a**3)*(c**3))**0.5
+             + 9*a*(b**2))**(1/3)
     beta = 4*((2/3)**(1/3))*c
     gamma = (18**(1/3))*a
     M = ((beta/alpha) + (alpha/gamma))**0.5
-    
-    Tast = (1/2)*(-M + ((2*b)/(a*M) - M**2)**0.5)
-    return Tast
+
+    Tast_K = (1/2)*(-M + ((2*b)/(a*M) - M**2)**0.5)
+    return Tast_K - 273.15
 
 def timeAverage2(data, times, window):
+    """Applies an exponentially weighted running average to a series
+
+    .. deprecated::
+        Use :func:`timeAverage`, which resamples onto a uniform time
+        base and applies a true boxcar average. This routine is retained
+        for backwards compatibility with existing scripts.
+
+    Parameters
+    ----------
+    data : array
+        Array whose last axis is time
+    times : array(NT)
+        Array of timestamps corresponding to the last axis of data
+    window : float
+        Averaging window in seconds
+
+    Returns
+    -------
+    array
+        Array of the same shape as data containing the averaged values
+    """
+
+    warnings.warn(
+        "timeAverage2 is deprecated and will be removed in a future "
+        "release; use timeAverage instead.",
+        DeprecationWarning, stacklevel=2)
     sz = data.shape
     dt = window/2
     tmax = len(times)
@@ -65,11 +145,6 @@ def timeAverage2(data, times, window):
     # Time average the array
     data3 = np.zeros_like(data2) #data2.copy()
     
-    if (times[-1]-times[0]) > window:
-        tind = np.where(times-window > 0)[0][0]
-    else:
-        tind = -1
-    #data3[:, 0] = np.nanmean(data2[:, :tind], axis=1)
     data3[:, 0] = data2[:, 0]
     tmax = min([tmax, data2.shape[-1], data3.shape[-1]])
     for i in range(1, tmax):
@@ -85,7 +160,42 @@ def timeAverage2(data, times, window):
     data4 = np.reshape(data3, sz)
     return data4
 
-def timeAverage(data, times, window, outdt=-1, smoothEnds=False, queryTime=-1):
+def timeAverage(data, times, window, outdt=-1, smoothEnds=False,
+                queryTime=-1):
+    """Boxcar time-averages a data array over a moving window
+
+    The data are first interpolated onto a uniform time base built from
+    the smallest positive timestep found in times, then convolved with a
+    rectangular window.
+
+    Parameters
+    ----------
+    data : array(NX, NY, NT)
+        Array whose last axis is time
+    times : array(NT)
+        Array of timestamps corresponding to the last axis of data
+    window : float
+        Averaging window in seconds
+    outdt : float, optional
+        Timestep of the returned series. A value <= 0 returns the series
+        on the internal uniform time base (default -1)
+    smoothEnds : bool, optional
+        If True the first and last half-windows are averaged over the
+        partial window available; if False they are copied from the
+        interpolated series unchanged (default False)
+    queryTime : float, optional
+        If > 0, average over a single window centred on this time and
+        return a single frame (default -1)
+
+    Returns
+    -------
+    array
+        Array containing the time-averaged data
+    array or float
+        Timestamps of the returned data, or queryTime when a single
+        frame was requested
+    """
+
     tmax = np.nanmax(times)
     tmin = np.nanmin(times)
     if window > (tmax-tmin):
@@ -144,9 +254,6 @@ def timeAverage(data, times, window, outdt=-1, smoothEnds=False, queryTime=-1):
         return data3, t2
     else:
         return data2, t1[:data2.shape[2]]
-        
-    
-    return data2, t1[:data2.shape[2]]
 
 def kalmanFilter(z, Q=1e-5, R=0.5**2):
     # This subroutine applies a kalman filter to an input set of data.
@@ -184,16 +291,46 @@ def kalmanFilter(z, Q=1e-5, R=0.5**2):
     
     return xhat
 
-def smvVisual(obstructions,surfaces,namespace,fs=16,fig=None,ax=None,
-              limits=[0,15,0,8,0,5]):
-    if fig is None: fig = plt.figure(figsize=(12,12))
-    if ax is None: ax = a3.Axes3D(fig)
-    
+def smvVisual(obstructions, surfaces, namespace, fs=16, fig=None, ax=None,
+              limits=[0, 15, 0, 8, 0, 5]):
+    """Renders smokeview obstructions as a 3-D figure
+
+    Parameters
+    ----------
+    obstructions : list
+        List of obstructions parsed from a smokeview file
+    surfaces : list
+        List of surfaces parsed from a smokeview file, used for colors
+    namespace : str
+        Prefix used to build the saved figure name
+    fs : int, optional
+        Font size for the axis labels and ticks (default 16)
+    fig : matplotlib.figure.Figure, optional
+        Figure to draw into. A new figure is created when omitted
+    ax : matplotlib.axes.Axes, optional
+        3-D axes to draw into. New axes are created when omitted
+    limits : list, optional
+        Six component list of axis limits
+        [xmin, xmax, ymin, ymax, zmin, zmax]
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure containing the rendered obstructions
+    matplotlib.axes.Axes
+        Axes containing the rendered obstructions
+    """
+
+    if fig is None:
+        fig = plt.figure(figsize=(12, 12))
+    if ax is None:
+        # Axes3D(fig) no longer attaches itself to the figure in
+        # matplotlib >= 3.4; add_subplot is the supported spelling.
+        ax = fig.add_subplot(projection='3d')
+
     for obst in obstructions:
-        pts, colors = getPtsFromObst(obst,surfaces)
-        print(pts)
-        print(colors)
-        for pt, color in zip(pts,colors):
+        pts, colors = getPtsFromObst(obst, surfaces)
+        for pt, color in zip(pts, colors):
             f = a3.art3d.Poly3DCollection(pt)
             f.set_color(color)
             f.set_edgecolor('k')
@@ -211,6 +348,24 @@ def smvVisual(obstructions,surfaces,namespace,fs=16,fig=None,ax=None,
     return fig, ax
 
 def buildSMVgeometry(file):
+    """Parses surfaces and obstructions from a smokeview file
+
+    Parameters
+    ----------
+    file : str
+        String containing the path to a smokeview file
+
+    Returns
+    -------
+    list
+        List of surfaces, each containing
+        [name, Tign, emissivity, type, texture width, texture height,
+         r, g, b, a]
+    list
+        List of obstructions, each a list of floats read from the
+        smokeview file
+    """
+
     with open(file,'r') as f:
         lines = f.readlines()
     inds = []
@@ -233,7 +388,26 @@ def buildSMVgeometry(file):
                 obstructions.append(obst)
     return surfaces, obstructions
 
-def getPtsFromObst(obst,surfaces):
+def getPtsFromObst(obst, surfaces):
+    """Builds corner points and face colors for a smokeview obstruction
+
+    Parameters
+    ----------
+    obst : list
+        Obstruction record parsed from a smokeview file. Entries 0-5 are
+        the bounding box and entries 7-12 are the surface indices of the
+        y-, y+, x-, x+, z- and z+ faces
+    surfaces : list
+        List of surfaces parsed from a smokeview file
+
+    Returns
+    -------
+    array(8, 3)
+        Array containing the corner coordinates of the obstruction
+    list
+        List of six (r, g, b, a) tuples, one per face
+    """
+
     pts = []
     colors = []
     pts = np.array([[obst[0],obst[2],obst[4]],
@@ -279,7 +453,26 @@ def getPtsFromObst(obst,surfaces):
     return pts, colors
 
 def maxValueCSV(times, mPts, names, namespace):
-    '''  mPts rows correlated to times, columns correlated to different groups. '''
+    """Writes a time series of per-group maximum values to a csv file
+
+    Parameters
+    ----------
+    times : array(NT)
+        Array of timestamps
+    mPts : array(NT, NG)
+        Array whose rows correspond to times and whose columns
+        correspond to different groups
+    names : list
+        List of NG group names used as column headers
+    namespace : str
+        Prefix used to build the output file name
+
+    Returns
+    -------
+    str
+        Name of the csv file which was written
+    """
+
     numberOfGroups = mPts.shape[1]
     header = 'Time,'
     for i in range(0,numberOfGroups):
@@ -294,7 +487,38 @@ def maxValueCSV(times, mPts, names, namespace):
 
 def maxValuePlot(times, mPts, names, figName, fs=16, lw=3, pcs=None, vName='',
                  yticks=None, xticks=None):
-    '''  mPts rows correlated to times, columns correlated to different groups. '''
+    """Plots a time series of per-group maximum values
+
+    Parameters
+    ----------
+    times : array(NT)
+        Array of timestamps
+    mPts : array(NT, NG)
+        Array whose rows correspond to times and whose columns
+        correspond to different groups
+    names : list
+        List of NG group names used in the legend
+    figName : str
+        Path the figure is saved to
+    fs : int, optional
+        Font size (default 16)
+    lw : int, optional
+        Line width (default 3)
+    pcs : list, optional
+        List of colors, one per group. Generated when omitted
+    vName : str, optional
+        Label for the y-axis
+    yticks : list, optional
+        Explicit y-axis tick locations
+    xticks : list, optional
+        Explicit x-axis tick locations
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure containing the plot
+    """
+
     numberOfGroups = mPts.shape[1]
     if pcs is None:
         pcs = getVTcolors()
@@ -314,9 +538,24 @@ def maxValuePlot(times, mPts, names, figName, fs=16, lw=3, pcs=None, vName='',
     return fig
 
 def getPlotColors(numberOfGroups):
+    """Builds a list of visually distinct random plot colors
+
+    Colors whose channel sum falls outside [0.3, 2.7] are rejected so
+    that neither very dark nor very light colors are produced.
+
+    Parameters
+    ----------
+    numberOfGroups : int
+        Number of colors to generate
+
+    Returns
+    -------
+    list
+        List of hex color strings
+    """
+
     pcs = []
-    print(numberOfGroups)
-    for i in range(0,numberOfGroups):
+    for i in range(0, numberOfGroups):
         v = np.random.rand(3)
         su = np.sum(v)
         while (su > 2.7) or (su < 0.3):
@@ -346,14 +585,45 @@ def pointsFromXB(XB,extend=[0,0,0]):
     return pts
 
 def in_hull(p, hull):
+    """Tests whether points fall inside a convex hull
+
+    Parameters
+    ----------
+    p : array(N, D)
+        Array of points to test
+    hull : array(M, D) or scipy.spatial.Delaunay
+        Points defining the hull, or a pre-computed triangulation
+
+    Returns
+    -------
+    array(N)
+        Boolean array which is True for points inside the hull
+    """
+
     if not isinstance(hull,scsp.Delaunay):
         hull = scsp.Delaunay(hull)
     return hull.find_simplex(p)>=0
 
 def pts2polygons(groups):
-    '''
-    Build polygons from series of points.
-    '''
+    """Builds convex hull polygons from groups of point sets
+
+    Point sets which cannot be triangulated (for example a degenerate
+    planar set) are reported and skipped.
+
+    Parameters
+    ----------
+    groups : list
+        List of groups, each of which is a list of point arrays
+
+    Returns
+    -------
+    list
+        List of groups, each containing a list of
+        scipy.spatial.ConvexHull objects
+    int
+        Number of groups
+    """
+
     polygons = []
     
     for group in groups:
@@ -369,6 +639,25 @@ def pts2polygons(groups):
     return polygons, len(polygons)
 
 def getFileList(resultDir, chid, extension):
+    """Lists the result files for a case with a given extension
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or the path to a zip
+        archive containing them
+    chid : str
+        FDS CHID of the case
+    extension : str
+        File extension to search for, without the leading period
+
+    Returns
+    -------
+    list
+        List of matching file paths. Files inside an archive are
+        returned as '<archive>.zip<os.sep><name inside the archive>'
+    """
+
     if '.zip' in resultDir:
         files = getFileListFromZip(resultDir, chid, extension)
     else:
@@ -377,6 +666,24 @@ def getFileList(resultDir, chid, extension):
     return files
 
 def getFileListFromZip(filename, chid, extension):
+    """Lists the files in a zip archive matching a chid and extension
+
+    Parameters
+    ----------
+    filename : str
+        Path to the zip archive
+    chid : str
+        FDS CHID of the case
+    extension : str
+        File extension to search for, without the leading period
+
+    Returns
+    -------
+    list
+        List of paths of the form
+        '<archive>.zip<os.sep><name inside the archive>'
+    """
+
     filelist = []
     with zipfile.ZipFile(filename, 'r') as zip:
         for info in zip.infolist():
@@ -386,14 +693,52 @@ def getFileListFromZip(filename, chid, extension):
     return filelist
 
 def zreadlines(file):
+    """Reads the lines of a text file which may live inside an archive
+
+    Parameters
+    ----------
+    file : str
+        Path to a text file, or to a file inside a zip archive using the
+        '<archive>.zip<os.sep><name inside the archive>' convention
+
+    Returns
+    -------
+    list
+        List of strings, one per line, with line endings removed
+    """
+
     f = zopen(file, readtype='r')
     lines = f.readlines()
-    if '.zip' in file:
-        lines = [line.decode("utf-8").replace('\r','').replace('\n','') for line in lines]
     f.close()
-    return lines
+    # Members of an archive come back as bytes. Strip the line endings
+    # for both sources so that a file read from a directory and the same
+    # file read from an archive produce identical lines.
+    cleaned = []
+    for line in lines:
+        if isinstance(line, bytes):
+            line = line.decode('utf-8', errors='replace')
+        cleaned.append(line.replace('\r', '').replace('\n', ''))
+    return cleaned
 
 def zopen(file, readtype='rb'):
+    """Opens a file which may live inside a zip archive
+
+    Parameters
+    ----------
+    file : str
+        Path to a file, or to a file inside a zip archive using the
+        '<archive>.zip<os.sep><name inside the archive>' convention
+    readtype : str, optional
+        Mode used when opening a file which is not inside an archive
+        (default 'rb'). Files inside an archive are always opened
+        in binary mode
+
+    Returns
+    -------
+    file
+        Open file object
+    """
+
     if '.zip' in file:
         zname = '%s.zip'%(file.split('.zip')[0])
         fname = file.split('.zip%s'%(os.sep))[1]
@@ -404,7 +749,60 @@ def zopen(file, readtype='rb'):
     return f
 
 
+def getSmvFile(resultDir, chid):
+    """Returns the smokeview file for a case
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+
+    Returns
+    -------
+    str
+        Path to the smokeview file
+
+    Raises
+    ------
+    FileNotFoundError
+        If no smokeview file for the case is present. Indexing the
+        result of getFileList directly raised a bare IndexError here,
+        which gave the caller nothing to act on.
+    """
+
+    smvFiles = getFileList(resultDir, chid, 'smv')
+    if len(smvFiles) == 0:
+        raise FileNotFoundError(
+            "No smokeview (.smv) file for chid %s was found in %s."
+            % (chid, resultDir))
+    return smvFiles[0]
+
+
 def getEndianness(resultDir, chid):
+    """Determines the byte order used to write a case's output files
+
+    FDS writes a .end file whose second record is the integer 1. The
+    byte order which decodes that record as 1 is the byte order of every
+    other binary output file for the case. Little-endian is assumed when
+    no .end file is present, which is correct for all mainstream
+    platforms FDS is built for.
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+
+    Returns
+    -------
+    str
+        '<' for little-endian or '>' for big-endian, in the notation
+        used by the struct and numpy modules
+    """
+
     endFiles = getFileList(resultDir, chid, 'end')
     if len(endFiles) == 0:
         #print('Unable to find endianness file, %s.'%(os.path.join(resultDir, chid+'.end')))
@@ -424,24 +822,78 @@ def getEndianness(resultDir, chid):
         return "<"
 
 def getDatatypeByEndianness(datatype1, endianness):
+    """Applies a byte order to a numpy datatype
+
+    Parameters
+    ----------
+    datatype1 : type or numpy.dtype
+        Base datatype, for example numpy.float32
+    endianness : str
+        '<' for little-endian or '>' for big-endian
+
+    Returns
+    -------
+    numpy.dtype
+        Datatype with the requested byte order applied
+
+    Raises
+    ------
+    ValueError
+        If endianness is neither '<' nor '>'
+    """
+
     if endianness == '>':
         datatype2 = np.dtype(datatype1).newbyteorder('>')
     elif endianness == '<':
         datatype2 = np.dtype(datatype1).newbyteorder('<')
     else:
-        print("Endianness unknown, could not determine datatype")
+        raise ValueError(
+            "Endianness must be '<' or '>'; received %s" % (endianness))
     return datatype2
 
 
 def getFileListFromResultDir(resultDir, chid, ext):
-    if '.zip' in resultDir:
-        fileList = getFileListFromZip(resultDir, chid, ext)
-    else:
-        fileList = glob.glob(os.path.join(resultDir, '%s*.%s'%(chid, ext)))
-    return fileList
+    """Lists the result files for a case with a given extension
+
+    This is a backwards-compatible alias for :func:`getFileList`, which
+    it now delegates to. New code should call getFileList directly.
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    ext : str
+        File extension to search for, without the leading period
+
+    Returns
+    -------
+    list
+        List of matching file paths
+    """
+
+    return getFileList(resultDir, chid, ext)
     
 
 def getGridsFromXyzFiles(xyzFiles, chid):
+    """Builds a dictionary of mesh grids from a list of xyz files
+
+    Parameters
+    ----------
+    xyzFiles : list
+        List of paths to xyz files written by FDS
+    chid : str
+        FDS CHID of the case, used to recover the mesh number from each
+        file name
+
+    Returns
+    -------
+    defaultdict
+        Dictionary keyed by mesh string, each value a dictionary with
+        'xGrid', 'yGrid' and 'zGrid' arrays of shape (NX, NY, NZ)
+    """
+
     grids = defaultdict(bool)
     for xyzFile in xyzFiles:
         grid, gridHeader = readXYZfile(xyzFile)
@@ -617,12 +1069,56 @@ def getAbsoluteGrid(grids, makeUniform=False, decimals=4):
 
 
 def getTwoZone(z, val, lowtohigh=True):
-    if lowtohigh:
+    """Reduces a vertical profile to an equivalent two-zone model
+
+    Applies the two-zone reduction of a continuous vertical profile
+    described in the FDS verification guide: the interface height is
+    chosen so that the integrals of the profile and of its reciprocal
+    are preserved, then the layer values are the averages above and
+    below that height.
+
+    Parameters
+    ----------
+    z : array(N)
+        Array of elevations
+    val : array(N)
+        Array of profile values at each elevation
+    lowtohigh : bool, optional
+        Retained for backwards compatibility and ignored. The ordering
+        of z is now detected from the data itself, so a profile given in
+        either direction produces the same result (default True)
+
+    Returns
+    -------
+    float
+        Average value of the lower layer
+    float
+        Average value of the upper layer
+    float
+        Elevation of the interface between the two layers
+
+    Notes
+    -----
+    Releases before v0.0.24 reversed an ascending profile when
+    lowtohigh was True, which broke the interpolation and returned an
+    upper layer value cooler than the lower layer. Values produced by
+    this routine differ from those releases when the input was
+    ascending.
+    """
+
+    z = np.asarray(z, dtype=float)
+    val = np.asarray(val, dtype=float)
+
+    # np.interp requires the sample points to increase, so normalise the
+    # profile to ascending elevation whichever way the caller supplied
+    # it. Reversing an already ascending profile, as releases before
+    # v0.0.24 did when lowtohigh was True, fed np.interp a descending
+    # x-array and produced an upper layer cooler than the lower one.
+    if z[0] > z[-1]:
         z = z[::-1]
         val = val[::-1]
-        val_low = val[-1]
-    else:
-        val_low = val[0]
+
+    val_low = val[0]
     H = z.max()
     H0 = z.min()
     tmpZ = np.linspace(0, H, 101)
@@ -631,18 +1127,18 @@ def getTwoZone(z, val, lowtohigh=True):
         zInt = H
         return val_low, val_low, zInt
     
-    I1 = np.trapz(tmpV, tmpZ)
-    I2 = np.trapz(1/tmpV, tmpZ)
+    I1 = _trapezoid(tmpV, tmpZ)
+    I2 = _trapezoid(1/tmpV, tmpZ)
     zInt = val_low*(I1*I2-H**2)/(I1+I2*val_low**2-2*val_low*H)
     
     zU = np.linspace(zInt, H, num=50)
     
     val_high_tmp = np.interp(zU, z, val)
-    val_high = np.trapz(val_high_tmp, zU)/(H-zInt)
+    val_high = _trapezoid(val_high_tmp, zU)/(H-zInt)
     
     zL = np.linspace(0, zInt, num=50)
     
     val_low_tmp = np.interp(zL, z, val)
-    val_low = np.trapz(val_low_tmp, zL)/(zInt-H0)
+    val_low = _trapezoid(val_low_tmp, zL)/(zInt-H0)
     
     return val_low, val_high, zInt

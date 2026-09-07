@@ -18,7 +18,8 @@
 import numpy as np
 import os, shutil
 from collections import defaultdict
-from .utilities import zopen, getFileList, zreadlines
+from .utilities import zopen, getFileList
+from .colorSchemes import buildSMVcolormap
 from .smokeviewParser import parseSMVFile
 
 def getBingeoms(resultDir, chid):

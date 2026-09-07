@@ -14,6 +14,10 @@
 # 
 # This script extracts boundary data from defined polygons.
 #
+# NOTE: this module is not exported from the pyfdstools package
+# namespace. Import it explicitly with
+# 'from pyfdstools import extractPolygon' if you need it.
+#
 #=======================================================================
 # # IMPORTS
 #=======================================================================
@@ -24,7 +28,7 @@ from collections import defaultdict
 
 from .fdsFileOperations import fdsFileOperations
 from .utilities import in_hull, zreadlines, getFileList, pts2polygons
-from .extractBoundaryData import linkBndfFileToMesh, loadBNDFdata_lessParams
+from .extractBoundaryData import linkBndfFileToMesh, loadBNDFdata
 from .smokeviewParser import parseSMVFile
 
 def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, chid, fdsQuantities,
@@ -48,7 +52,7 @@ def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, chid, fdsQuantitie
     datas = defaultdict(bool)
     for qty in fdsQuantities:
         datas[qty] = defaultdict(bool)
-        times, mPts, orients = loadBNDFdata_lessParams(tStart, tEnd, tInt, tBand, bndf_dic[qty], smvGrids, smvObsts, orientations, polygons)
+        times, mPts, orients = loadBNDFdata(tStart, tEnd, tInt, tBand, bndf_dic[qty], smvGrids, smvObsts, orientations, polygons)
         datas[qty]['TIMES'] = times
         datas[qty]['NAMES'] = names
         datas[qty]['DATA'] = mPts
@@ -168,15 +172,3 @@ def getCoordinateMasks(coords,polygons):
         for p in linkedpolygons:
             masks[np.where(in_hull(coords,p.points)),i] = 1
     return masks
-
-def getCoordinateMasks2(coords,polygons):
-    masks = np.zeros((coords.shape[0],len(polygons)))
-    for i in range(0,len(polygons)):
-        linkedpolygons = polygons[i]
-        for p in linkedpolygons:
-            for j in range(0,coords.shape[0]):
-                if ut.pnt_in_cvex_hull(p, coords[j,:]):
-                    masks[j,i] = 1
-    return masks
-
-

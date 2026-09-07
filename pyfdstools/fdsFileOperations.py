@@ -1589,7 +1589,12 @@ class fdsFileOperations(object):
                 txt = self.makeRAMP(keyD)
             else:
                 newline1 = newlines[field]
-                newline2 = keyD['newline']
+                # keyD is a defaultdict, so subscripting it for a key
+                # which is not present would insert a phantom 'newline'
+                # entry into the namelist collection. get() leaves the
+                # model unchanged, which matters because generating text
+                # should not mutate the model it is generating from.
+                newline2 = keyD.get('newline', False)
                 newline = (newline1 or newline2)
                 #print(field, keyT)
                 txt = self.makeLinesFromDict(keyD, keyT, keyN, precision, newline)
@@ -1601,29 +1606,47 @@ class fdsFileOperations(object):
         return text
     
     def sortDEVCs(self):
-        """ Sorts devcs as required by FDS.
-        Currently only moves aspiration devices to the end.
+        """Orders the devices as FDS requires them to appear
+
+        FDS requires an aspiration device to be declared after the
+        devices it samples, so aspiration devices are moved to the end.
+        The devices are written out through makeLinesFromDict, which
+        sorts on the dictionary key, so the ordering is imposed by
+        prefixing each key with a sequence number. The prefix is
+        internal: the ID written to the input file comes from the
+        device's own ID entry, not from this key.
+
+        Notes
+        -----
+        This is called from generateFDStext, so it has to be safe to
+        call repeatedly. Any existing sequence prefix is stripped before
+        a new one is applied; earlier releases appended a fresh prefix
+        every time, so the device keys grew on each call, and the
+        sequence number never advanced, so the requested ordering was
+        not actually produced.
         """
-        devc_keys = list(self.devcs.keys())
-        endDevcs = defaultdict(bool)
-        startDevcs = defaultdict(bool)
-        counter = 0
-        if 'unknownCounter' in devc_keys:
-            devc_keys.remove('unknownCounter')
-            endDevcs['unknownCounter'] = startDevcs['unknownCounter']
-        if 'newline' in devc_keys:
-            devc_keys.remove('newline')
-            endDevcs['newline'] = startDevcs['newline']
+
+        reserved = ('unknownCounter', 'newline')
+        devc_keys = [k for k in self.devcs.keys() if k not in reserved]
+
+        normal = []
+        aspiration = []
         for key in devc_keys:
             devc = defaultdict(bool, self.devcs[key])
+            baseKey = re.sub(r'^(DEVICE-\d{6}-)+', '', key)
             if devc['QUANTITY'] == 'ASPIRATION':
-                endDevcs[key] = devc
-                self.devcs.pop(key)
+                aspiration.append((baseKey, devc))
             else:
-                startDevcs['DEVICE-%06d-%s'%(counter, key)] = devc
-        self.devcs = startDevcs
-        for key in endDevcs.keys():
-            self.devcs[key] = endDevcs[key]
+                normal.append((baseKey, devc))
+
+        sortedDevcs = defaultdict(bool)
+        for counter, (baseKey, devc) in enumerate(normal + aspiration):
+            sortedDevcs['DEVICE-%06d-%s'%(counter, baseKey)] = devc
+
+        for key in reserved:
+            if key in self.devcs:
+                sortedDevcs[key] = self.devcs[key]
+        self.devcs = sortedDevcs
     
     def getDefaultFields(self):
         """Returns default field order

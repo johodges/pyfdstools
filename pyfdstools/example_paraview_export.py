@@ -240,7 +240,8 @@ def writeVtkPolyTimeSeries(namespace, series_data, times):
 
 def exportSl3dDataToVtk(chid, resultDr):
     # Slice data
-    quantities, slcfFiles, dimensions, meshes, centers = fds.readSLCFquantities(chid, resultDir)
+    quantities, slcfFiles, dimensions, meshes, centers, units = \
+        fds.readSLCFquantities(chid, resultDir)
     
     uniqueQuantities = list(set(quantities))
     series_data = dict()

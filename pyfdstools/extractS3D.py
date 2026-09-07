@@ -16,20 +16,10 @@
 # # IMPORTS
 #=======================================================================
 import numpy as np
-import matplotlib.pyplot as plt
-import glob
-import zipfile
 import os
 import struct
-import scipy.interpolate as scpi
-import pandas as pd
 from collections import defaultdict
-from .utilities import getDatatypeByEndianness, getEndianness
-from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
-from .utilities import getFileListFromResultDir
-from .utilities import getGridsFromXyzFiles, getAbsoluteGrid, rearrangeGrid
-from .utilities import readXYZfile
-from .colorSchemes import buildSMVcolormap
+from .utilities import getFileList, getSmvFile, zopen
 from .smokeviewParser import parseSMVFile
 from itertools import groupby
 
@@ -90,15 +80,13 @@ def readS3dFile(file):
 def extractS3dValues(resultDir, chid, decode=True):
     values = defaultdict(bool)
     s3dfiles = getFileList(resultDir, chid, 's3d')
-    smvFile = getFileList(resultDir, chid, 'smv')[0]
-    smvData = parseSMVFile(smvFile)
-    (grids, obsts) = (smvData['grids'], smvData['obsts'])
-    (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
-    (files, bndes) = (smvData['files'], smvData['bndes'])
-    
     if len(s3dfiles) == 0:
         print("Warning no s3d files found.")
         return None, None
+
+    smvData = parseSMVFile(getSmvFile(resultDir, chid))
+    grids = smvData['grids']
+    files = smvData['files']
     
     for s3dfile in s3dfiles:
         times, ordered_data = readS3dFile(s3dfile)

@@ -5,8 +5,7 @@ from .extractGeomData import getBndeQuantities, readGcfFile, readBeFile
 from .extractParticleData import importParticle
 from .extractPlot3Ddata import readSLCFquantities, readSingleSlcfFile
 from .fdsFileOperations import fdsFileOperations
-from .utilities import getDatatypeByEndianness, getEndianness
-from .utilities import getFileListFromZip, getFileList, zopen, zreadlines
+from .utilities import getFileList
 from .utilities import getFileListFromResultDir
 from .utilities import getGridsFromXyzFiles, getAbsoluteGrid, rearrangeGrid
 from .utilities import readXYZfile
@@ -15,7 +14,18 @@ import os
 import numpy as np
 import stl
 from collections import defaultdict
-import evtk
+
+# pyevtk installs both a 'pyevtk' package and a deprecated 'evtk' alias
+# which emits a DeprecationWarning on import. Prefer the current name
+# and fall back to the alias for older installations.
+try:
+    import pyevtk as evtk
+    import pyevtk.hl
+    import pyevtk.vtk
+except ImportError:
+    import evtk
+    import evtk.hl
+    import evtk.vtk
 
 def obstToStl(resultDir, chid, outDir=None):
     if outDir is None: outDir = resultDir
@@ -453,7 +463,8 @@ def writeVtkPolyTimeSeries(namespace, series_data, times, binary=True):
 
 def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True, dtype=None, ftype='ImageData'):
     if outDir is None: outDir = resultDir
-    quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
+    quantities, slcfFiles, dimensions, meshes, centers, units = \
+        readSLCFquantities(chid, resultDir)
     twoDslice = [True if (dim[0] == dim[1]) or (dim[2] == dim[3]) or (dim[4] == dim[5]) else False for dim in dimensions]
     slcfs = getFileList(resultDir, chid, 'sf')
     if len(slcfs) == 0:
@@ -594,7 +605,8 @@ def exportSl3dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True
 
 def exportSl2dDataToVtk(chid, resultDir, outtimes=None, outDir=None, binary=True, dtype=None, ftype='ImageData'):
     if outDir is None: outDir = resultDir
-    quantities, slcfFiles, dimensions, meshes, centers = readSLCFquantities(chid, resultDir)
+    quantities, slcfFiles, dimensions, meshes, centers, units = \
+        readSLCFquantities(chid, resultDir)
     twoDslice = [True if (dim[0] == dim[1]) or (dim[2] == dim[3]) or (dim[4] == dim[5]) else False for dim in dimensions]
     slcfs = getFileList(resultDir, chid, 'sf')
     if len(slcfs) == 0:

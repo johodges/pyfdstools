@@ -667,7 +667,7 @@ def getFileList(resultDir, chid, extension):
     Returns
     -------
     list
-        List of matching file paths. Files inside an archive are
+        Sorted list of matching file paths. Files inside an archive are
         returned as '<archive>.zip<os.sep><name inside the archive>'
     """
 
@@ -676,7 +676,15 @@ def getFileList(resultDir, chid, extension):
     else:
         path = os.path.join(resultDir, '%s*.%s'%(chid, extension))
         files = glob.glob(path)
-    return files
+    # Sorted so that the meshes of a case are always visited in the same
+    # order. glob returns directory order and a zip archive returns the
+    # order its members were added, and the two rarely agree. Where two
+    # meshes share a face, the mesh visited last decides the value on
+    # it, so an unsorted list made the assembled data depend on which
+    # form the results were read from and, for a directory, on the
+    # filesystem: reading case002 from its archive and from a directory
+    # differed by 9.8 C at the corner where its four meshes meet.
+    return sorted(files)
 
 def getFileListFromZip(filename, chid, extension):
     """Lists the files in a zip archive matching a chid and extension
@@ -693,7 +701,7 @@ def getFileListFromZip(filename, chid, extension):
     Returns
     -------
     list
-        List of paths of the form
+        Sorted list of paths of the form
         '<archive>.zip<os.sep><name inside the archive>'
     """
 
@@ -703,7 +711,9 @@ def getFileListFromZip(filename, chid, extension):
             if info.filename.split('.')[-1] == extension:
                 if chid in info.filename:
                     filelist.append("%s%s%s"%(filename, os.sep, info.filename))
-    return filelist
+    # Sorted for the same reason as in getFileList: the order decides
+    # which mesh wins on a shared face.
+    return sorted(filelist)
 
 def zreadlines(file):
     """Reads the lines of a text file which may live inside an archive

@@ -1,6 +1,7 @@
 """Tests for reading, editing and writing FDS input files."""
 
 import os
+import warnings
 
 import numpy as np
 import pytest
@@ -166,3 +167,87 @@ def test_sortDEVCs_puts_aspiration_devices_last():
                if k.startswith('DEVICE-')]
     quantities = [model.devcs[k]['QUANTITY'] for k in ordered]
     assert quantities.index('ASPIRATION') == len(quantities) - 1
+
+
+# ---------------------------------------------------------------------
+# Parameters newer than the fdsTypes tables
+# ---------------------------------------------------------------------
+
+def test_unknown_parameter_does_not_drop_the_namelist_line(outdir):
+    """An undeclared parameter must not take its whole line with it.
+
+    interpretKey returns False as the type, which made dictFromLine
+    raise TypeError on "'list' in False"; the bare except in parseLine
+    swallowed that and discarded the entire namelist line, leaving only
+    "WARNING: Unknown line in input file".
+    """
+
+    src = os.path.join(outdir, 'unknown.fds')
+    with open(src, 'w') as f:
+        f.write("&HEAD CHID='unknown' /\n")
+        f.write("&MESH ID='M1', IJK=10,10,10, XB=0.0,1.0,0.0,1.0,0.0,1.0 /\n")
+        f.write("&PRES CHECK_POISSON=.TRUE., NOT_YET_IN_FDSTYPES=.TRUE. /\n")
+        f.write("&TIME T_END=1.0 /\n")
+
+    model = fds.fdsFileOperations()
+    with pytest.warns(UserWarning, match='NOT_YET_IN_FDSTYPES'):
+        model.importFile(src)
+
+    # The declared parameter on the same line survives.
+    assert model.pres['ID']['CHECK_POISSON'] in (True, 'TRUE', '.TRUE.')
+
+
+@pytest.mark.parametrize('parameter,value', [
+    ('NEW_LOGICAL', '.TRUE.'),
+    ('NEW_FLOAT', '1.25'),
+    ('NEW_STRING', "'abc'"),
+])
+def test_unknown_parameter_round_trips_verbatim(parameter, value, outdir):
+    """Whatever was written is what comes back out."""
+    src = os.path.join(outdir, 'roundtrip.fds')
+    with open(src, 'w') as f:
+        f.write("&HEAD CHID='rt' /\n")
+        f.write("&MESH ID='M1', IJK=10,10,10, XB=0.0,1.0,0.0,1.0,0.0,1.0 /\n")
+        f.write("&SURF ID='S1', HRRPUA=500.0, %s=%s /\n" % (parameter, value))
+        f.write("&TIME T_END=1.0 /\n")
+
+    model = fds.fdsFileOperations()
+    with pytest.warns(UserWarning):
+        model.importFile(src)
+
+    out = os.path.join(outdir, 'out.fds')
+    model.saveModel(1, out)
+
+    surfLine = [l for l in open(out) if l.startswith('&SURF')]
+    assert len(surfLine) == 1
+    assert '%s=%s' % (parameter, value) in surfLine[0]
+    # The declared parameter on the same line is unaffected.
+    assert 'HRRPUA=500' in surfLine[0]
+
+
+def test_unknown_parameter_is_reported_once_per_namelist(outdir):
+    """One warning per parameter, not one per line that uses it."""
+    src = os.path.join(outdir, 'repeated.fds')
+    with open(src, 'w') as f:
+        f.write("&HEAD CHID='repeated' /\n")
+        f.write("&MESH ID='M1', IJK=10,10,10, XB=0.0,1.0,0.0,1.0,0.0,1.0 /\n")
+        for i in range(0, 5):
+            f.write("&SURF ID='S%d', FUTURE_PARAM=1.0 /\n" % (i))
+        f.write("&TIME T_END=1.0 /\n")
+
+    model = fds.fdsFileOperations()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        model.importFile(src)
+    matching = [w for w in caught if 'FUTURE_PARAM' in str(w.message)]
+    assert len(matching) == 1
+    assert ('SURF', 'FUTURE_PARAM') in model.unknownParameters
+
+
+def test_importFile_closes_the_file(case001_fds):
+    """importFile leaked a handle per model imported."""
+    model = fds.fdsFileOperations()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        model.importFile(case001_fds)
+    assert [w for w in caught if 'unclosed' in str(w.message)] == []

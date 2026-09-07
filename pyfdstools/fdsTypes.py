@@ -53,10 +53,13 @@ class fdsLineTypes(object):
 
     Notes
     -----
-    A parameter absent from these tables is still read, but is treated
-    as a string, so a numeric parameter which is missing here will be
-    written back out quoted. Add it to the relevant getXXXXtypes method
-    to correct that.
+    A parameter absent from these tables cannot be interpreted, so its
+    text is kept exactly as written and copied through unchanged on
+    output, and a UserWarning names it once. That keeps an input file
+    using a parameter newer than these tables intact through a round
+    trip, but the value stays a string rather than becoming a float,
+    list or bool. Add the parameter to the relevant getXXXXtypes method
+    to have it parsed properly.
     """
 
     def __init__(self, version="6.7.4"):
@@ -962,6 +965,7 @@ class fdsLineTypes(object):
         presTypes = defaultdict(bool)
         presTypes['CHECK_POISSON'] = 'bool'
         presTypes['FISHPAK_BC'] = 'listfloat'
+        presTypes['HYPRE_DEVICE_RUN'] = 'bool'
         presTypes['MAX_PRESSURE_ITERATIONS'] = 'int'
         presTypes['PRESSURE_RELAX_TIME'] = 'float'
         presTypes['PRESSURE_TOLERANCE'] = 'float'

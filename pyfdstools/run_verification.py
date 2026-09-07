@@ -5,9 +5,30 @@ Created on Mon Sep 15 08:11:18 2025
 @author: jhodges
 """
 
-import os, subprocess, platform, argparse, sys
+import os, subprocess, platform, argparse
 
 def executeModel(inputs,showTerminal=False,printOutput=False):
+    """Runs one FDS case through mpiexec and returns its console output
+
+    Parameters
+    ----------
+    inputs : list
+        Five component list
+        [input file name, working directory, path to the FDS executable,
+        PATH to set for the subprocess (or False to inherit it),
+        number of MPI processes]
+    showTerminal : bool, optional
+        Run the case in a visible terminal window and wait for it,
+        rather than streaming its output (default False)
+    printOutput : bool, optional
+        Echo each line of the solver output as it arrives
+        (default False)
+
+    Returns
+    -------
+    list
+        Lines of console output produced by the run
+    """
     filename = inputs[0]
     systemDir = inputs[1]
     executable = inputs[2]

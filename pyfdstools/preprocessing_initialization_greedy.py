@@ -1,3 +1,15 @@
+"""Standalone workflow for building FDS restart initialization fields.
+
+Reads the velocity, temperature and species fields from a completed
+case and resamples them onto the mesh of a new case, so that the new
+case can be started from a developed flow field rather than from rest.
+Run it as a script; ``check_csv_initialization.py`` alongside it plots
+the result for checking.
+
+This file is not imported by the pyfdstools package and its functions
+are not part of the public API.
+"""
+
 # -*- coding: utf-8 -*-
 """
 Created on Fri Mar  7 16:08:10 2025
@@ -8,7 +20,6 @@ Created on Fri Mar  7 16:08:10 2025
 import pyfdstools as fds
 import numpy as np
 import glob, os
-import matplotlib.pyplot as plt
 import scipy.spatial as scsp
 import scipy.interpolate as scip
 import pandas as pd

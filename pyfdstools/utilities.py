@@ -256,15 +256,28 @@ def timeAverage(data, times, window, outdt=-1, smoothEnds=False,
         return data2, t1[:data2.shape[2]]
 
 def kalmanFilter(z, Q=1e-5, R=0.5**2):
-    # This subroutine applies a kalman filter to an input set of data.
-    #
-    #Inputs:
-    #    z: series of data to be filtered
-    #    Q: process variance
-    #    R: measurement variance
-    #Outputs:
-    #    xhat: filtered series of data
-    
+    """Applies a scalar Kalman filter to a series of measurements
+
+    Useful for smoothing noisy device output, such as a thermocouple
+    trace, without the phase lag a boxcar average introduces.
+
+    Parameters
+    ----------
+    z : array(N)
+        Series of measurements to filter
+    Q : float, optional
+        Process variance. Larger values let the estimate follow the
+        measurements more closely (default 1e-5)
+    R : float, optional
+        Measurement variance. Larger values smooth more heavily
+        (default 0.25)
+
+    Returns
+    -------
+    array(N)
+        Filtered series
+    """
+
     # intial parameters
     sz = z.shape[0] # size of array
     

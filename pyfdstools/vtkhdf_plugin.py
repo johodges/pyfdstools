@@ -11,6 +11,26 @@ from .utilities import getFileListFromZip, getFileList
 from .smokeviewParser import parseSMVFile
 
 def round_if_needed(arr, tol):
+    """Rounds values to a resolution so that they compare exactly
+
+    Coordinates read back from a VTKHDF file carry floating point noise,
+    which would make otherwise identical grid lines compare as distinct.
+    Rounding them to a tolerance lets np.unique recover the grid.
+
+    Parameters
+    ----------
+    arr : array
+        Values to round
+    tol : float or None
+        Resolution to round to. The values are returned unchanged when
+        this is None or not positive
+
+    Returns
+    -------
+    array
+        Rounded values
+    """
+
     if tol is None or tol <= 0:
         return arr
     return np.round(arr / tol) * tol
@@ -73,6 +93,26 @@ def detect_surface_plane_from_points(pts, tol=1e-10):
 
 
 def get_point_array(part, array_name):
+    """Returns one point-data array from a VTK partition as numpy
+
+    Parameters
+    ----------
+    part : vtkDataSet
+        Partition to read from
+    array_name : str
+        Name of the point-data array
+
+    Returns
+    -------
+    array
+        Values of the array
+
+    Raises
+    ------
+    ValueError
+        If the partition has no array with that name
+    """
+
     arr = part.GetPointData().GetArray(array_name)
     if arr is None:
         raise ValueError(f"Point-data array '{array_name}' not found in partition.")
@@ -269,6 +309,19 @@ def cached_surface_to_structured_mesh(surface, array_name, tol=1e-10, plane=None
 
 
 def get_step_times(reader):
+    """Returns the timestamps of every step in a VTKHDF file
+
+    Parameters
+    ----------
+    reader : vtkHDFReader
+        Reader with the file already set
+
+    Returns
+    -------
+    array(NT)
+        Timestamps of each step
+    """
+
     info = reader.GetOutputInformation(0)
 
     key = vtk.vtkStreamingDemandDrivenPipeline.TIME_STEPS()
@@ -280,6 +333,38 @@ def get_step_times(reader):
     return None
 
 def query2dAxisValue_vtkhdf(workingDir, chid, quantity, axis, value, time=None, dt=None):
+    """Reads a 2-D slice from the VTKHDF output FDS can write
+
+    The VTKHDF equivalent of :func:`pyfdstools.query2dAxisValue`, for
+    cases run with a &DUMP namelist that writes VTKHDF rather than the
+    native slice files. It returns the same dictionary layout so that
+    the two are interchangeable downstream.
+
+    Parameters
+    ----------
+    workingDir : str
+        Directory containing the FDS results
+    chid : str
+        FDS CHID of the case
+    quantity : str
+        FDS quantity to read, for example 'TEMPERATURE'
+    axis : int
+        Axis normal to the queried slice (1 = x, 2 = y, 3 = z)
+    value : float
+        Coordinate of the queried slice along axis
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window centred on time
+
+    Returns
+    -------
+    defaultdict
+        Dictionary with the keys 'x', 'z', 'datas' and 'times'
+    str
+        Units of the quantity
+    """
+
     endianness = getEndianness(workingDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
     

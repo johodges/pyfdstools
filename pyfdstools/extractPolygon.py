@@ -22,7 +22,6 @@
 # # IMPORTS
 #=======================================================================
 import numpy as np
-import os
 from collections import defaultdict
 #from . import utilities as ut
 
@@ -33,6 +32,43 @@ from .smokeviewParser import parseSMVFile
 
 def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, chid, fdsQuantities,
                          tStart=0, tEnd=120, tInt=1, tBand=3, orientations=[0]):
+    """Returns the peak boundary value within each named polygon
+
+    Parameters
+    ----------
+    fdsFilePath : str
+        Path to the FDS input file, read for the obstruction names
+    smvFilePath : str
+        Path to the case's smokeview file
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    fdsQuantities : list
+        FDS quantities to extract
+    tStart : float, optional
+        Start of the time range to consider
+    tEnd : float, optional
+        End of the time range to consider
+    tInt : float, optional
+        Interval between the times considered
+    tBand : float, optional
+        Averaging window applied at each time
+    orientations : list, optional
+        Patch orientations to include, or [0] for all
+    names : list, optional
+        Obstruction names defining the polygons. Every named obstruction
+        in the input file is used when omitted
+
+    Returns
+    -------
+    array(NT)
+        Timestamps
+    dict
+        Peak value within each polygon at each time, keyed by quantity
+    list
+        Names of the polygons, in the column order of the arrays
+    """
     fdsFile = fdsFileOperations()
     fdsFile.importFile(fdsFilePath)
     meshes = list(fdsFile.meshes.keys())
@@ -59,6 +95,18 @@ def extractMaxBndfValues(fdsFilePath, smvFilePath, resultDir, chid, fdsQuantitie
     return datas
 
 def getPolygonNamesFromFdsFile(file):
+    """Lists the distinct obstruction names in an FDS input file
+
+    Parameters
+    ----------
+    file : fdsFileOperations
+        Model to read the obstruction names from
+
+    Returns
+    -------
+    list
+        Sorted list of the obstruction IDs found
+    """
     names = []
     obstList = list(file.obsts.keys())
     if 'unknownCounter' in obstList: obstList.remove('unknownCounter')
@@ -166,6 +214,22 @@ def parseFDSforVID(file,vName):
     return vID
 
 def getCoordinateMasks(coords,polygons):
+    """Builds a mask marking which points lie inside which polygons
+
+    Parameters
+    ----------
+    coords : array(N, 3)
+        Point coordinates to test
+    polygons : list
+        List of polygon groups, each a list of scipy.spatial.ConvexHull
+        objects
+
+    Returns
+    -------
+    array(N, NP)
+        Array which is 1 where a point falls inside the corresponding
+        polygon group and 0 elsewhere
+    """
     masks = np.zeros((coords.shape[0],len(polygons)))
     for i in range(0,len(polygons)):
         linkedpolygons = polygons[i]

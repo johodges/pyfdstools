@@ -1855,6 +1855,41 @@ def extractMaxBndfValues(fdsF, smvF, resultDir, chid, quantities,
 
 
 def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None):
+    """Time-averages every boundary file of a quantity across all meshes
+
+    Writes one averaged boundary file per input file, plus a smokeview
+    file which registers them, so that the averaged field can be opened
+    in smokeview alongside the original.
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    fdsQuantity : str
+        FDS quantity to average, for example 'WALL TEMPERATURE'
+    dt : float
+        Averaging window in seconds
+    outDir : str, optional
+        Directory the averaged files are written to. Written next to the
+        originals when omitted
+    outQty : str, optional
+        Quantity name to record in the output. Derived from the input
+        quantity and the window when omitted
+
+    Returns
+    -------
+    list
+        Paths of the averaged boundary files
+    str
+        Quantity name recorded in them
+    list
+        Paths of the boundary files which were averaged
+    str
+        Path of the smokeview file which registers the new files
+    """
+
     bndfFiles = getFileList(resultDir, chid, 'bf')
     filesWithQueriedQuantity = []
     for boundaryFile in bndfFiles:
@@ -1918,6 +1953,32 @@ def bndfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None)
 
 
 def buildBndfSmvLine(mesh, vnum, qty, file, shortName, units):
+    """Builds the BNDF record which registers a boundary file
+
+    Smokeview will not display a boundary file until a BNDF record in
+    the smokeview file names it.
+
+    Parameters
+    ----------
+    mesh : int
+        Mesh number the boundary file belongs to
+    vnum : int
+        Variable number of the quantity
+    qty : str
+        FDS quantity name
+    file : str
+        Name of the boundary file being registered
+    shortName : str
+        Short name of the quantity
+    units : str
+        Units of the quantity
+
+    Returns
+    -------
+    list
+        The five lines of the BNDF record, without line endings
+    """
+
     bndfLine = "BNDF" + str(mesh).rjust(6) + str(vnum).rjust(6) + "\n"
     bndfLine = bndfLine + " " + file + "\n"
     bndfLine = bndfLine + " " + qty + "\n"
@@ -1928,6 +1989,33 @@ def buildBndfSmvLine(mesh, vnum, qty, file, shortName, units):
 
 
 def bndfTimeAverage(boundaryFile, dt, outFile=None, outQty=None):
+    """Time-averages one boundary file and writes the result
+
+    Parameters
+    ----------
+    boundaryFile : str
+        Path to the boundary file to average
+    dt : float
+        Averaging window in seconds
+    outFile : str, optional
+        Path the averaged boundary file is written to. Derived from the
+        input name when omitted
+    outQty : str, optional
+        Quantity name to record in the output. Derived from the input
+        quantity and the window when omitted
+
+    Returns
+    -------
+    str
+        Path of the boundary file which was written
+    str
+        Quantity name recorded in it
+    str
+        Short name recorded in it
+    str
+        Units recorded in it
+    """
+
     f = zopen(boundaryFile)
     quantity, shortName, units, npatch = parseBndfHeader(f)
     patchInfo, data = parseBndfPatches(f, npatch)
@@ -1980,6 +2068,25 @@ def bndfTimeAverage(boundaryFile, dt, outFile=None, outQty=None):
 
 
 def writeBndfHeader(quantity, shortName, units, npatch):
+    """Builds the header of a boundary file
+
+    Parameters
+    ----------
+    quantity : str
+        FDS quantity name
+    shortName : str
+        Short name of the quantity
+    units : str
+        Units of the quantity
+    npatch : int
+        Number of patches the file contains
+
+    Returns
+    -------
+    bytes
+        Encoded header, ready to be written at the start of the file
+    """
+
 
     header = b'\x1e\x00\x00\x00'
     header = header + (quantity.ljust(30, ' ')).encode('utf-8')
@@ -2000,6 +2107,24 @@ def writeBndfHeader(quantity, shortName, units, npatch):
 
 
 def writeBndfPatchInfo(patchInfo):
+    """Builds the patch declaration block of a boundary file
+
+    The patch block follows the header and declares the extent,
+    orientation and mesh of every patch before any data are written.
+
+    Parameters
+    ----------
+    patchInfo : list
+        Patch information in the layout parseBndfPatches returns:
+        [patch points, extents, orientations, obstruction numbers,
+        mesh numbers]
+
+    Returns
+    -------
+    bytes
+        Encoded patch block
+    """
+
     patchDs = patchInfo[1]
     patchIors = patchInfo[2]
     patchNBs = patchInfo[3]

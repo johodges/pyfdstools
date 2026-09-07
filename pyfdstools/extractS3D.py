@@ -24,6 +24,31 @@ from .smokeviewParser import parseSMVFile
 from itertools import groupby
 
 def readS3dTime(data, time_ind, datashape, float32, int32):
+    """Decodes one timestep from a smoke3D file buffer
+
+    Parameters
+    ----------
+    data : bytes
+        Complete contents of the s3d file
+    time_ind : int
+        Byte offset of the timestep record
+    datashape : tuple
+        Shape (NX, NY, NZ) of one frame
+    float32 : numpy.dtype
+        Float datatype including byte order
+    int32 : numpy.dtype
+        Integer datatype including byte order
+
+    Returns
+    -------
+    float
+        Timestamp of the frame
+    array
+        Run-length encoded frame values
+    int
+        Byte offset of the next timestep record
+    """
+
     time = np.frombuffer(data[time_ind:time_ind+4], dtype=float32)[0]
     nchars_in = np.frombuffer(data[time_ind+12:time_ind+16], dtype=int32)[0]
     nchars_out = np.frombuffer(data[time_ind+16:time_ind+20], dtype=int32)[0]
@@ -48,6 +73,24 @@ def readS3dTime(data, time_ind, datashape, float32, int32):
     return time, decoded_data.reshape(datashape, order='F'), nchars_out
 
 def readS3dFile(file):
+    """Reads every timestep from a smoke3D file
+
+    FDS writes smoke3D data run-length encoded as single bytes. The
+    values are decoded to the FDS quantity range by extractS3dValues.
+
+    Parameters
+    ----------
+    file : str
+        Path to an s3d file, or to one inside a zip archive
+
+    Returns
+    -------
+    array(NT)
+        Timestamps of each frame
+    array(NT, NX, NY, NZ)
+        Decoded byte values for each frame
+    """
+
     f = zopen(file, 'rb')
     data = f.read()
     f.close()
@@ -78,6 +121,36 @@ def readS3dFile(file):
     return times, ordered_data
 
 def extractS3dValues(resultDir, chid, decode=True):
+    """Reads the smoke3D output for a case and converts it to quantities
+
+    Smoke3D data are stored as single bytes scaled to a fixed range per
+    quantity, so they must be scaled back to physical units. Soot
+    density additionally depends on the cell size, which is read from
+    the smokeview file.
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    decode : bool, optional
+        Convert the stored bytes back to physical units. When False the
+        raw byte values are returned (default True)
+
+    Returns
+    -------
+    defaultdict
+        Dictionary keyed by mesh number, each holding a dictionary keyed
+        by quantity name
+    array(NT)
+        Timestamps of each frame
+
+    Notes
+    -----
+    Returns ``(None, None)`` when the case wrote no smoke3D output.
+    """
+
     values = defaultdict(bool)
     s3dfiles = getFileList(resultDir, chid, 's3d')
     if len(s3dfiles) == 0:
@@ -121,9 +194,40 @@ def extractS3dValues(resultDir, chid, decode=True):
     return values, times
 
 def encode_list(s_list):
+    """Run-length encodes a sequence, as FDS stores smoke3D data
+
+    Parameters
+    ----------
+    s_list : array-like
+        Sequence of byte values
+
+    Returns
+    -------
+    list
+        List of (run length, value) pairs
+    """
+
     return [[len(list(group)), key] for key, group in groupby(s_list)]
 
 def encodeS3dData(data, quantity, dx):
+    """Scales physical values to the byte range FDS stores them in
+
+    Parameters
+    ----------
+    data : array
+        Values in physical units
+    quantity : str
+        FDS quantity, which sets the scaling: 'SOOT DENSITY', 'HRRPUV'
+        or 'TEMPERATURE'
+    dx : float
+        Representative cell size, used for the soot density scaling
+
+    Returns
+    -------
+    array
+        Values scaled to the range 0 to 254
+    """
+
     if quantity == 'SOOT DENSITY':
         MAX_SMV = 8700
         MASS_EXTINCTION_COEFFICIENT = MAX_SMV
@@ -141,6 +245,22 @@ def encodeS3dData(data, quantity, dx):
     return encoded_data
 
 def writeS3dFile(file, times, data_out, quantity, dx):
+    """Writes a smoke3D file which smokeview can read
+
+    Parameters
+    ----------
+    file : str
+        Path the s3d file is written to
+    times : array(NT)
+        Timestamps of each frame
+    data_out : array(NT, NX, NY, NZ)
+        Values in physical units
+    quantity : str
+        FDS quantity being written
+    dx : float
+        Representative cell size, used for the soot density scaling
+    """
+
     endianness = "<"
     float32 = np.dtype(np.float32).newbyteorder(endianness)
     int32 = np.dtype(np.int32).newbyteorder(endianness)
@@ -193,6 +313,28 @@ def writeS3dFile(file, times, data_out, quantity, dx):
     f.close()
     
 def writeS3dFile_debug(file, debug_file, times, data_out, quantity, dx):
+    """Writes a smoke3D file and compares it against a reference
+
+    Development aid for the smoke3D writer: each record it writes is
+    checked against the same record of an existing file so that a
+    format mismatch is reported where it occurs.
+
+    Parameters
+    ----------
+    file : str
+        Path the s3d file is written to
+    debug_file : str
+        Path to a reference s3d file to compare against
+    times : array(NT)
+        Timestamps of each frame
+    data_out : array(NT, NX, NY, NZ)
+        Values in physical units
+    quantity : str
+        FDS quantity being written
+    dx : float
+        Representative cell size
+    """
+
     endianness = "<"
     float32 = np.dtype(np.float32).newbyteorder(endianness)
     int32 = np.dtype(np.int32).newbyteorder(endianness)

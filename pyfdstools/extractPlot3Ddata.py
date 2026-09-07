@@ -635,6 +635,22 @@ def readPlot3Ddata(chid, resultDir, time, verbose=False):
 
 
 def extractResultDirAndChidFromSlcfName(slcfFile):
+    """Recovers the result directory and CHID from a slice file path
+
+    Parameters
+    ----------
+    slcfFile : str
+        Path to a slice file. FDS names these
+        '<chid>_<mesh>_<quantity index>.sf'
+
+    Returns
+    -------
+    str
+        Directory containing the slice file
+    str
+        FDS CHID of the case
+    """
+
     resultDir = os.sep.join(os.path.abspath(slcfFile).split(os.sep)[:-1])
     chid = '_'.join(os.path.abspath(slcfFile).split(os.sep)[-1].split('_')[:-2])
     return resultDir, chid
@@ -1446,6 +1462,24 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
 
 
 def extractPoint(point, grid, data):
+    """Returns the data at the grid point nearest a coordinate
+
+    Parameters
+    ----------
+    point : array-like
+        Three component [x, y, z] coordinate to query
+    grid : array(NX, NY, NZ, 3)
+        Absolute grid coordinates
+    data : array(NX, NY, NZ, N)
+        Data on the absolute grid
+
+    Returns
+    -------
+    array(N)
+        Data at the nearest grid point. A warning is printed when the
+        nearest point is more than 0.25 m away in total from the query
+    """
+
     ind = np.argmin(np.sum(abs(grid-point),axis=3).flatten())
     ind = np.unravel_index(ind, grid[:,:,:,0].shape)
     x = grid[ind[0],ind[1],ind[2],0]
@@ -1459,6 +1493,30 @@ def extractPoint(point, grid, data):
     return d
 
 def readNextTime(f, NX, NY, NZ, datatype):
+    """Reads one timestep record from an open slice file
+
+    Parameters
+    ----------
+    f : file
+        Binary file positioned at the start of a timestep record
+    NX : int
+        Number of cells along the x-axis of the slice
+    NY : int
+        Number of cells along the y-axis of the slice
+    NZ : int
+        Number of cells along the z-axis of the slice
+    datatype : numpy.dtype
+        Float datatype including byte order
+
+    Returns
+    -------
+    array(1)
+        Timestamp of the frame
+    array or bool
+        Flat array of the frame values, or False if the record could not
+        be read because the file ended early
+    """
+
     _ = np.frombuffer(f.read(8), dtype=datatype)
     time = np.frombuffer(f.read(4), dtype=datatype)
     _ = np.frombuffer(f.read(8), dtype=datatype)
@@ -1470,6 +1528,31 @@ def readNextTime(f, NX, NY, NZ, datatype):
     return time, data
 
 def readSLCFheader(f, endianness, byteSize=False):
+    """Reads the 142 byte header of a slice file
+
+    Parameters
+    ----------
+    f : file
+        Binary file positioned at the start of the file
+    endianness : str
+        Byte order of the file, '<' or '>'
+    byteSize : bool, optional
+        Return the extents as a single six component tuple rather than
+        as six separate values (default False)
+
+    Returns
+    -------
+    str
+        FDS quantity recorded in the file
+    str
+        Short name of the quantity
+    str
+        Units of the quantity
+    tuple or six ints
+        Slice extents [iX, eX, iY, eY, iZ, eZ] in cell indices, as one
+        tuple when byteSize is True and as six values otherwise
+    """
+
     data = f.read(142)
     header = data[:110]
     size = struct.unpack('%siiiiii'%(endianness), data[118:142])
@@ -1679,6 +1762,25 @@ def buildQTYstring(chid, resultDir, qty):
     return quantityStr
 
 def getLimsFromGrid(grid):
+    """Returns the bounding box of an absolute grid
+
+    Parameters
+    ----------
+    grid : array(NX, NY, NZ, 3)
+        Absolute grid coordinates
+
+    Returns
+    -------
+    list
+        Six component list [xmin, xmax, ymin, ymax, zmin, zmax]
+
+    See Also
+    --------
+    pyfdstools.extractBoundaryData.getPatchLimsFromGrid : the unrelated
+        routine which converts boundary patch cell indices to
+        coordinates, and which carried this same name before v0.0.24
+    """
+
     xGrid = grid[:, :, :, 0]
     yGrid = grid[:, :, :, 1]
     zGrid = grid[:, :, :, 2]
@@ -1691,6 +1793,36 @@ def getLimsFromGrid(grid):
 
 def visualizePlot3D(x, z, T, U, V, W, HRR,
                     qnty_mn=None, qnty_mx=None):
+    """Plots the temperature field of a plot3D slice
+
+    Parameters
+    ----------
+    x : array(N, M)
+        First in-plane coordinate of each point
+    z : array(N, M)
+        Second in-plane coordinate of each point
+    T : array(N, M)
+        Temperature values, which are the values plotted
+    U : array(N, M)
+        Velocity component along x, accepted for symmetry with
+        findSliceLocation and not currently plotted
+    V : array(N, M)
+        Velocity component along y
+    W : array(N, M)
+        Velocity component along z
+    HRR : array(N, M)
+        Heat release rate per unit volume
+    qnty_mn : float, optional
+        Lower limit of the color scale. Data minimum when omitted
+    qnty_mx : float, optional
+        Upper limit of the color scale. Data maximum when omitted
+
+    See Also
+    --------
+    plotSlice : the general purpose slice plotting routine, which offers
+        control over labels, limits, colormaps and output
+    """
+
     cmap = buildSMVcolormap()
     
     xrange = x.max()-x.min()
@@ -1711,6 +1843,45 @@ def visualizePlot3D(x, z, T, U, V, W, HRR,
 
 
 def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False, grid=None):
+    """Reads a single 2-D slice file and returns it with its coordinates
+
+    Parameters
+    ----------
+    slcfFile : str
+        Path to a slice file, or to one inside a zip archive
+    chid : str
+        FDS CHID of the case
+    time : float, optional
+        Query time. Every frame is returned when omitted
+    dt : float, optional
+        Averaging window. Combined with time it returns a single
+        averaged frame; on its own it applies a running average of this
+        width to every frame
+    cen : bool, optional
+        Shift the coordinates to cell centers, for a slice written with
+        CELL_CENTERED=.TRUE. (default False)
+    grid : dict, optional
+        Mesh grid with the keys 'xGrid', 'yGrid' and 'zGrid'. Read from
+        the mesh's xyz file when omitted
+
+    Returns
+    -------
+    array(N, M)
+        First in-plane coordinate of each point
+    array(N, M)
+        Second in-plane coordinate of each point
+    array(N, M, NT)
+        Slice values
+    list or array
+        Timestamps of the returned frames
+    list
+        Six component list of the slice bounds in coordinates
+
+    Notes
+    -----
+    Returns None if the file holds a 3-D rather than a 2-D slice.
+    """
+
     resultDir = os.sep.join(os.path.abspath(slcfFile).split(os.sep)[:-1])
     endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
@@ -1852,6 +2023,28 @@ def read2dSliceFile(slcfFile, chid, time=None, dt=None, cen=False, grid=None):
     return x, z, d, times, coords
 
 def getAxisAndValueFromXB(XB, grid, cen):
+    """Determines which plane a slice lies in from its cell extents
+
+    Parameters
+    ----------
+    XB : list
+        Six component slice extent [iX, eX, iY, eY, iZ, eZ] in cell
+        indices
+    grid : dict
+        Mesh grid with the keys 'xGrid', 'yGrid' and 'zGrid'
+    cen : bool
+        Whether the slice holds cell-centered data, in which case the
+        coordinate is shifted by half a cell
+
+    Returns
+    -------
+    int
+        Axis normal to the slice (1 = x, 2 = y, 3 = z), or -1 when the
+        extents describe a 3-D slice
+    float
+        Coordinate of the slice along that axis, or -1 for a 3-D slice
+    """
+
     NX = XB[1] - XB[0]
     NY = XB[3] - XB[2]
     NZ = XB[5] - XB[4]
@@ -2340,6 +2533,25 @@ def query2dAxisValueXYZ(resultDir, chid, quantity, axis, value, time=None,
     return data_abs_out, outUnits
 
 def renderSliceCsvs(data, chid, outdir):
+    """Writes each frame of a 2-D slice to its own csv file
+
+    Parameters
+    ----------
+    data : dict
+        Slice dictionary as returned by query2dAxisValue, with the keys
+        'x', 'z', 'datas' and 'times'
+    chid : str
+        FDS CHID of the case, used as the file name prefix
+    outdir : str
+        Directory the csv files are written to
+
+    Notes
+    -----
+    Each file is named '<chid>_<time>.csv' and is written with the
+    second in-plane coordinate as the row index and the first as the
+    column headers.
+    """
+
     times = data['times']
     xs = data['x'][:, 0]
     zs = data['z'][0, :]
@@ -2352,6 +2564,24 @@ def renderSliceCsvs(data, chid, outdir):
 
 
 def writeSLCFheader(f, quantity, shortName, units, size, endianness):
+    """Writes the 142 byte header of a slice file
+
+    Parameters
+    ----------
+    f : file
+        Binary file open for writing
+    quantity : str
+        FDS quantity name
+    shortName : str
+        Short name of the quantity
+    units : str
+        Units of the quantity
+    size : array(6)
+        Slice extents [iX, eX, iY, eY, iZ, eZ] in cell indices
+    endianness : str
+        Byte order to write, '<' or '>'
+    """
+
     sz = struct.pack('%s%0.0fi'%(endianness, len(size)), *size)
     qty = str.encode("{:<30}".format(quantity))
     sn = str.encode("{:<30}".format(shortName))
@@ -2367,6 +2597,20 @@ def writeSLCFheader(f, quantity, shortName, units, size, endianness):
     f.write(b'\x18\x00\x00\x00')
 
 def writeSLCFTime(f, time, data, endianness):
+    """Writes one timestep record to a slice file
+
+    Parameters
+    ----------
+    f : file
+        Binary file positioned at the end of the previous record
+    time : float
+        Timestamp of the frame
+    data : array
+        Flat array of the frame values, in Fortran order
+    endianness : str
+        Byte order to write, '<' or '>'
+    """
+
     f.write(b'\x04\x00\x00\x00')
     t = time.tobytes()
     f.write(t)
@@ -2381,6 +2625,45 @@ def writeSLCFTime(f, time, data, endianness):
 
 def writeSlice(outFile, resultDir, chid, data, times, axis, val,
                        outQty, sName, uts, meshnum, smvFile=None, endianness="<", suffix=None):
+    """Writes a derived 2-D slice as a slice file smokeview can read
+
+    Used to add a computed quantity to an existing case, for example a
+    radiative heat flux slice built from device output. Passing smvFile
+    also registers the new slice in that smokeview file, without which
+    smokeview will not display it.
+
+    Parameters
+    ----------
+    outFile : str
+        Name of the slice file to write, relative to resultDir
+    resultDir : str
+        Directory the slice file is written to
+    chid : str
+        FDS CHID of the case
+    data : list
+        List of NT frames, each an array(N, M) of values
+    times : array(NT)
+        Timestamps of each frame
+    axis : int
+        Axis normal to the slice (1 = x, 2 = y, 3 = z)
+    val : int
+        Cell index of the slice plane along axis
+    outQty : str
+        FDS quantity name to record
+    sName : str
+        Short name of the quantity
+    uts : str
+        Units of the quantity
+    meshnum : int
+        Mesh number the slice belongs to
+    smvFile : str, optional
+        Name of a smokeview file to append the slice record to
+    endianness : str, optional
+        Byte order to write, '<' or '>' (default '<')
+    suffix : str, optional
+        Suffix distinguishing this slice in the smokeview record
+    """
+
     outPath = os.path.join(resultDir, outFile)
     smvPath = os.path.join(resultDir, smvFile)
     
@@ -2410,6 +2693,29 @@ def writeSlice(outFile, resultDir, chid, data, times, axis, val,
         writeSliceToSmv(smvPath, meshnum, X, outQty, outPath, sName, uts, suffix=suffix)
 
 def writeSliceToSmv(file, meshNum, X, outQty, outFile, sName, uts, suffix):
+    """Appends a slice record to a smokeview file
+
+    Parameters
+    ----------
+    file : str
+        Path to the smokeview file to append to
+    meshNum : int
+        Mesh number the slice belongs to
+    X : list
+        Six component slice extent in cell indices
+    outQty : str
+        FDS quantity name
+    outFile : str
+        Path of the slice file being registered
+    sName : str
+        Short name of the quantity
+    uts : str
+        Units of the quantity
+    suffix : str
+        Suffix distinguishing this slice from others of the same
+        quantity
+    """
+
     if suffix is None: suffix = "1 \n"
     with open(file, 'a') as f:
         f.write('SLCF     %0.0f # STRUCTURED &     %0.0f    %0.0f     %0.0f    %0.0f     %0.0f    %0.0f !      %s'%(meshNum, X[0], X[1], X[2], X[3], X[4], X[5], suffix))
@@ -2419,6 +2725,24 @@ def writeSliceToSmv(file, meshNum, X, outQty, outFile, sName, uts, suffix):
         f.write(' %s\n\n'%(uts))
 
 def getAxisFromLims(lims):
+    """Determines which plane a slice lies in from its cell extents
+
+    Parameters
+    ----------
+    lims : list
+        Six component slice extent [iX, eX, iY, eY, iZ, eZ] in cell
+        indices
+
+    Returns
+    -------
+    int
+        Axis normal to the slice (1 = x, 2 = y, 3 = z), or -1 when the
+        extents describe a 3-D slice
+    int or None
+        Cell index of the slice plane along that axis, or None for a
+        3-D slice
+    """
+
     iX, eX, iY, eY, iZ, eZ = lims
     (NX, NY, NZ) = (eX - iX+1, eY - iY+1, eZ - iZ+1)
     if (NX == 1):
@@ -2436,6 +2760,31 @@ def getAxisFromLims(lims):
     return slcf_axis, val
 
 def slcfTimeAverage(slcfFile, dt, outFile=None, outQty=None, outdt=None):
+    """Time-averages one slice file and writes the result as a slice file
+
+    Parameters
+    ----------
+    slcfFile : str
+        Path to the slice file to average
+    dt : float
+        Averaging window in seconds
+    outFile : str, optional
+        Path the averaged slice file is written to. Derived from the
+        input name when omitted
+    outQty : str, optional
+        Quantity name to record in the output. Derived from the input
+        quantity and the window when omitted
+    outdt : float, optional
+        Output timestep. The input timestep is kept when omitted
+
+    Returns
+    -------
+    str
+        Path of the slice file which was written
+    str
+        Quantity name recorded in it
+    """
+
     
     # Read the data
     resultDir, chid = extractResultDirAndChidFromSlcfName(slcfFile)
@@ -2496,6 +2845,42 @@ def slcfTimeAverage(slcfFile, dt, outFile=None, outQty=None, outdt=None):
     
 
 def slcfsTimeAverage(resultDir, chid, fdsQuantity, dt, outDir=None, outQty=None, outdt=None):
+    """Time-averages every slice of a quantity across all meshes
+
+    Writes one averaged slice file per input slice, plus a smokeview
+    file which registers them, so that the averaged field can be opened
+    in smokeview alongside the original.
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    fdsQuantity : str
+        FDS quantity to average, for example 'TEMPERATURE'
+    dt : float
+        Averaging window in seconds
+    outDir : str, optional
+        Directory the averaged files are written to. Defaults to
+        resultDir
+    outQty : str, optional
+        Quantity name to record in the output
+    outdt : float, optional
+        Output timestep. The input timestep is kept when omitted
+
+    Returns
+    -------
+    list
+        Paths of the averaged slice files
+    str
+        Quantity name recorded in them
+    list
+        Paths of the slice files which were averaged
+    str
+        Path of the smokeview file which registers the new slices
+    """
+
     slcfFiles = getFileList(resultDir, chid, 'sf')
     filesWithQueriedQuantity = []
     endianness = getEndianness(resultDir, chid)

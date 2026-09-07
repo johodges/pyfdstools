@@ -107,6 +107,23 @@ def runExamples(scripts=None, raiseOnError=False):
 
 def exampleBndfTimeAverage(resultDir=None, outDir=None, chid=None,
                            quantity=None, dt=None):
+    """Time-averages a boundary quantity and writes new boundary files
+
+    Parameters
+    ----------
+    resultDir : str, optional
+        Directory containing the FDS results, or a zip archive. The
+        bundled case001 is used when this, chid and outDir are all
+        omitted
+    outDir : str, optional
+        Directory the averaged files are written to
+    chid : str, optional
+        FDS CHID of the case
+    quantity : str, optional
+        FDS quantity to average, for example 'WALL TEMPERATURE'
+    dt : float, optional
+        Averaging window in seconds
+    """
     if (resultDir is None) and (chid is None) and (outDir is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "case001"        
@@ -122,6 +139,11 @@ def exampleBndfTimeAverage(resultDir=None, outDir=None, chid=None,
     
 
 def exampleWriteToNetCDF4():
+    """Exports 3-D slice data from the bundled case to a netCDF4 file
+
+    Requires the optional netCDF4 package, which pyfdstools does not
+    depend on; install it separately to run this example.
+    """
     import netCDF4
     
     # Get case information from examples
@@ -156,6 +178,20 @@ def exampleWriteToNetCDF4():
     
 def stretchedMeshExample(resultDir=None, outDir=None, chid=None,
                            quantity="TEMPERATURE", dt=None, time=None):
+    """Reads 3-D slice data from a case whose meshes are stretched
+
+    Parameters
+    ----------
+    resultDir : str, optional
+        Directory containing the FDS results, or a zip archive. The
+        bundled stretched mesh case is used when omitted
+    outDir : str, optional
+        Directory the output is written to
+    chid : str, optional
+        FDS CHID of the case
+    quantity : str, optional
+        FDS quantity to read
+    """
     if (resultDir is None) and (chid is None) and (outDir is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "stretched_mesh_example"        
@@ -176,6 +212,18 @@ def stretchedMeshExample(resultDir=None, outDir=None, chid=None,
 
 
 def exampleAddOccupantFedDevices(indir,outdir):
+    """Adds fractional effective dose devices along occupant paths
+
+    Reads occupant positions from a csv, adds a &DEVC measuring FED at
+    each position to the input file, and writes the modified file out.
+
+    Parameters
+    ----------
+    indir : str
+        Directory containing the FDS input file and the occupant csv
+    outdir : str
+        Directory the modified input file is written to
+    """
     name = 3
     height_above_floor = 1.8
     occupants = pd.read_csv(os.path.join(indir,'fed_example_occupants.csv'), header=[0], skiprows=[1])
@@ -191,6 +239,16 @@ def exampleAddOccupantFedDevices(indir,outdir):
     
 
 def exampleParseS3dFiles(resultDir=None, chid=None):
+    """Reads the smoke3D output of a case and re-encodes it
+
+    Parameters
+    ----------
+    resultDir : str, optional
+        Directory containing the FDS results, or a zip archive. The
+        bundled case001 is used when omitted
+    chid : str, optional
+        FDS CHID of the case
+    """
     if (resultDir is None) and (chid is None):
         systemPath = os.path.dirname(os.path.abspath(__file__))
         chid = "case001"
@@ -281,6 +339,29 @@ def exampleParseS3dFiles(resultDir=None, chid=None):
     print("File %s, "%(s3dfile), data==data2)
 
 def examplePostProcessVisibility(resultDir=None, chid=None, outDir=None, oldC=3, newC=8):
+    """Rescales a visibility slice to a different mass extinction factor
+
+    FDS computes visibility from the soot density using a fixed
+    proportionality constant C. This example reads the slice back,
+    applies a different constant, and writes a new slice file so that
+    the adjusted field can be viewed in smokeview.
+
+    Parameters
+    ----------
+    resultDir : str, optional
+        Directory containing the FDS results, or a zip archive. The
+        bundled visibility case is used when omitted
+    chid : str, optional
+        FDS CHID of the case
+    outDir : str, optional
+        Directory the new slice file is written to
+    oldC : float, optional
+        Proportionality constant the case was run with (default 3, the
+        FDS default for light reflecting signs)
+    newC : float, optional
+        Proportionality constant to rescale to (default 8, the FDS
+        value for light emitting signs)
+    """
     if resultDir == None:
         resultDir = 'examples\\visibility_adjustment.zip'
     if chid == None:
@@ -338,6 +419,22 @@ def examplePostProcessVisibility(resultDir=None, chid=None, outDir=None, oldC=3,
                               qty+'C%d'%(newC), sName, uts, meshnum, smvFile=smvFileCustom)
 
 def exampleAddGasPhaseHeatFluxSlice(resultDir=None, chid=None, outDir=None):
+    """Builds a radiative heat flux slice from a grid of devices
+
+    Interpolates the output of a rectangular array of radiometer devices
+    onto the grid of an existing temperature slice, then writes it out
+    as a new slice file registered in a copy of the smokeview file.
+
+    Parameters
+    ----------
+    resultDir : str, optional
+        Directory containing the FDS results, or a zip archive. The
+        bundled heat flux gauge case is used when omitted
+    chid : str, optional
+        FDS CHID of the case
+    outDir : str, optional
+        Directory the new slice and smokeview files are written to
+    """
     import scipy.interpolate
     if resultDir == None:
         resultDir = 'examples\\hfg_slice.zip'

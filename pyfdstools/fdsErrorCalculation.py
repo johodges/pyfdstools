@@ -19,20 +19,85 @@ import matplotlib.pyplot as plt
 import scipy.stats as scst
 import numpy as np
 import pandas as pd
+import glob
 import os
 
 from .colorSchemes import getVTcolors
 
 def readErrorTable(fdsVersion='6.7.1'):
+    """Reads the model error table for an FDS version
+
+    The tables are the model bias and relative standard deviation
+    published for each validated quantity in the FDS Validation Guide.
+    They are shipped with pyfdstools in the fdsErrorTables directory.
+
+    Parameters
+    ----------
+    fdsVersion : str, optional
+        FDS version whose error table is read (default '6.7.1'). The
+        tables available are named after the versions they came from
+
+    Returns
+    -------
+    pandas.DataFrame
+        Table indexed by quantity, with the columns published in the
+        validation guide including 'Bias' and 'sigmaM'
+    list
+        List of the quantity names in the table
+
+    Raises
+    ------
+    FileNotFoundError
+        If no error table is shipped for the requested FDS version
+    """
+
     dir_path = os.path.dirname(os.path.realpath(__file__))
     file = os.path.abspath("%s%sfdsErrorTables%s%s.csv"%(dir_path, os.sep, os.sep, fdsVersion))
+    if not os.path.exists(file):
+        available = sorted(
+            os.path.basename(x).replace('.csv', '')
+            for x in glob.glob(os.path.join(
+                dir_path, 'fdsErrorTables', '*.csv')))
+        raise FileNotFoundError(
+            "No FDS error table for version %s. Available versions: %s"
+            % (fdsVersion, ', '.join(available)))
     data = pd.read_csv(file, index_col=0)
     keys = list(data.index.values)
     return data, keys
 
 def calculatePercentile(values, quantity, percentile, fdsVersion='6.7.1'):
+    """Applies the FDS model uncertainty to predicted values
+
+    Each predicted value is corrected for the model bias and treated as
+    the mean of a normal distribution whose standard deviation is the
+    published relative standard deviation. The value at the requested
+    percentile of that distribution is returned, which is the basis of
+    the probabilistic approach described in the FDS Validation Guide.
+
+    Parameters
+    ----------
+    values : array-like
+        Predicted values from the model
+    quantity : str
+        Quantity name as it appears in the error table
+    percentile : float
+        Percentile to evaluate, in the range 0 to 1
+    fdsVersion : str, optional
+        FDS version whose error table is used (default '6.7.1')
+
+    Returns
+    -------
+    array
+        Values at the requested percentile, one per input value
+
+    Raises
+    ------
+    ValueError
+        If the quantity is not in the error table for this version
+    """
+
     data, quantities = readErrorTable(fdsVersion=fdsVersion)
-    
+
     if (quantity in quantities):
         fdsBias = data.loc[quantity]['Bias']
         fdsSigma = data.loc[quantity]['sigmaM']
@@ -46,14 +111,41 @@ def calculatePercentile(values, quantity, percentile, fdsVersion='6.7.1'):
             ind = np.where(y_cdf > percentile)[0][0]
             errorValues[i] = x[ind]
         return errorValues
-        
-    else:
-        print("Quantity '%s' not known."%(quantity))
-        print("Known Quantities:")
-        for qty in quantities:
-            print("\t%s"%(qty))
-    
+
+    raise ValueError(
+        "Quantity '%s' is not in the FDS %s error table. Known "
+        "quantities: %s" % (quantity, fdsVersion, ', '.join(quantities)))
+
+
 def plotPercentile(value, quantity, fdsVersion='6.7.1', colors=None):
+    """Plots the model uncertainty distribution for a predicted value
+
+    Parameters
+    ----------
+    value : float
+        Predicted value from the model
+    quantity : str
+        Quantity name as it appears in the error table
+    fdsVersion : str, optional
+        FDS version whose error table is used (default '6.7.1')
+    colors : array-like, optional
+        Colors for the PDF and CDF curves. A default sequence is used
+        when omitted
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure containing the plot
+    matplotlib.axes.Axes
+        Axes carrying the probability density curve. The cumulative
+        curve is drawn on a twin axis
+
+    Raises
+    ------
+    ValueError
+        If the quantity is not in the error table for this version
+    """
+
     data, quantities = readErrorTable(fdsVersion=fdsVersion)
     if colors is None:
         colors = getVTcolors()
@@ -89,15 +181,33 @@ def plotPercentile(value, quantity, fdsVersion='6.7.1', colors=None):
         ax2.legend(lines+lines2, labels+labels2, fontsize=fs)
         plt.tight_layout()
         return fig, ax1
-        
-    else:
-        print("Quantity '%s' not known."%(quantity))
-        print("Known Quantities:")
-        for qty in quantities:
-            print("\t%s"%(qty))
-    
+
+    raise ValueError(
+        "Quantity '%s' is not in the FDS %s error table. Known "
+        "quantities: %s" % (quantity, fdsVersion, ', '.join(quantities)))
+
+
 def getQuantities(fdsVersion='6.7.1'):
-    data = pd.read_csv("fdsErrorTables//%s.csv"%(fdsVersion))
-    keys = list(data.keys())
+    """Lists the quantities in an FDS error table
+
+    Parameters
+    ----------
+    fdsVersion : str, optional
+        FDS version whose error table is read (default '6.7.1')
+
+    Returns
+    -------
+    list
+        List of the quantity names in the table
+
+    Notes
+    -----
+    Releases before v0.0.24 read the table through a path relative to
+    the working directory, so this only worked when called from inside
+    the installed package directory, and returned the table's column
+    names rather than its quantities.
+    """
+
+    data, keys = readErrorTable(fdsVersion=fdsVersion)
     return keys
     

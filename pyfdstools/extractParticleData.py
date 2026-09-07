@@ -20,6 +20,26 @@ from collections import defaultdict
 from .utilities import zopen, zreadlines, getFileList
 
 def importParticles(resultDir, chid):
+    """Reads the particle output from every mesh of a case
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+
+    Returns
+    -------
+    defaultdict
+        Dictionary with the keys 'tags' (per particle histories),
+        'classes' (per particle class metadata and counts) and 'times'
+        (every timestamp found across the meshes)
+    defaultdict
+        Dictionary keyed by timestamp, each holding the list of particle
+        tags present at that time
+    """
+
     partFiles = getFileList(resultDir, chid, 'prt5')
     particle_data = defaultdict(bool)
     particle_data['tags'] = defaultdict(bool)
@@ -62,6 +82,24 @@ def importParticles(resultDir, chid):
     return particle_data, times_data
 
 def importParticle_meta(file):
+    """Reads the particle class metadata from a particle file
+
+    Reads only the header and the per timestep particle counts, without
+    loading the particle coordinates, which makes it much cheaper than
+    importParticle when only the classes and quantities are needed.
+
+    Parameters
+    ----------
+    file : str
+        Path to a prt5 file, or to one inside a zip archive
+
+    Returns
+    -------
+    defaultdict
+        Dictionary of particle class information, keyed by class id,
+        holding the quantity names, quantity units and particle counts
+    """
+
     txt = zreadlines(file.replace('.prt5','.prt5.bnd'))
     times = [float(line.split()[0]) for line in txt if line[1] != ' ']
     f = zopen(file, 'rb')
@@ -184,6 +222,23 @@ def importParticle_meta(file):
     return particle_dict, times
 
 def importParticle(file):
+    """Reads the particle positions and quantities from a particle file
+
+    Parameters
+    ----------
+    file : str
+        Path to a prt5 file, or to one inside a zip archive
+
+    Returns
+    -------
+    defaultdict
+        Dictionary with the keys 'tags', holding each particle's
+        coordinates and quantities over time, and 'classes', holding the
+        per class metadata
+    array(NT)
+        Timestamps of each output frame
+    """
+
     f = zopen(file, 'rb')
     data = f.read()
     f.close()

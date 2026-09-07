@@ -1236,19 +1236,34 @@ class fdsFileOperations(object):
     
     
     def checkOverlappingMESH(self):
-        """Returns True if any meshes are overlapping else False
-        
+        """Returns True if any two meshes in the model overlap
+
+        Each mesh is shrunk slightly before the test so that meshes
+        which merely share a face are not reported. A mesh whose name
+        contains 'east', 'west', 'north' or 'south' is instead grown on
+        that side, so that a mesh which should abut its neighbour there
+        but does not is reported.
+
         Returns
         -------
         bool
-            True if any meshes are overlapping, else False
+            True if any two meshes overlap, else False
         """
         
-        def in_hull(p,hull):
-            if not isinstance(hull,scsp.Delaunay):
+        def in_hull(p, hull):
+            """Returns True if a point lies inside a Delaunay hull."""
+            if not isinstance(hull, scsp.Delaunay):
                 hull = scsp.Delaunay(hull)
-            return hull.find_simplex(p)>=0
-        def pointsFromXB(XB,extend=[0.05, -0.05, 0.05, -0.05, 0, 0]):
+            return hull.find_simplex(p) >= 0
+
+        def pointsFromXB(XB, extend=[0.05, -0.05, 0.05, -0.05, 0, 0]):
+            """Returns the eight corners of an XB, shrunk or grown.
+
+            Unlike utilities.pointsFromXB, which takes one offset per
+            axis, extend here holds a separate offset for each of the
+            six faces, so that a mesh can be shrunk on one side and
+            grown on another when testing for a shared boundary.
+            """
             pts = [[XB[0]+extend[0],XB[2]+extend[2],XB[4]+extend[4]],
                    [XB[0]+extend[0],XB[2]+extend[2],XB[5]+extend[5]],
                    [XB[0]+extend[0],XB[3]+extend[3],XB[4]+extend[4]],
@@ -1258,14 +1273,20 @@ class fdsFileOperations(object):
                    [XB[1]+extend[1],XB[3]+extend[3],XB[4]+extend[4]],
                    [XB[1]+extend[1],XB[3]+extend[3],XB[5]+extend[5]]]
             return pts
+
+        # self.meshes carries the bookkeeping entry 'unknownCounter'
+        # alongside the meshes themselves; subscripting that integer for
+        # an XB raised TypeError for every model.
+        meshKeys = [k for k in self.meshes.keys() if k != 'unknownCounter']
+
         meshHulls = defaultdict(bool)
-        for key in list(self.meshes.keys()):
+        for key in meshKeys:
             pts = pointsFromXB(self.meshes[key]['XB'])
             meshHull = scsp.Delaunay(pts)
             meshHulls[key] = meshHull
         overlap = False
-        for key1 in list(self.meshes.keys()):
-            for key2 in list(self.meshes.keys()):
+        for key1 in meshKeys:
+            for key2 in meshKeys:
                 if (key1 != key2):
                     extend = [0.05, -0.05, 0.05, -0.05, 0, 0]
                     if ('east' in key2): extend = [0.05, 0.1, 0.05, -0.05, 0, 0]

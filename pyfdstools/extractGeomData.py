@@ -23,6 +23,16 @@ from .colorSchemes import buildSMVcolormap
 from .smokeviewParser import parseSMVFile
 
 def getBingeoms(resultDir, chid):
+    """Reads the binary geometry (.bingeom) files written for a case
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    """
+
     bingeomFiles = getFileList(resultDir, chid, 'bingeom')
     for bingeomFile in bingeomFiles:
         f = zopen(bingeomFile, 'rb')
@@ -31,6 +41,26 @@ def getBingeoms(resultDir, chid):
         
 
 def getBndeQuantities(smvFile):
+    """Lists the boundary element files a case wrote and what is in them
+
+    Boundary element (.be) files hold boundary data on unstructured
+    &GEOM surfaces, as opposed to the .bf files used for rectangular
+    obstructions.
+
+    Parameters
+    ----------
+    smvFile : str
+        Path to the case's smokeview file, or to one inside a zip
+        archive
+
+    Returns
+    -------
+    defaultdict
+        Dictionary keyed by boundary element file name, each holding
+        'quantity', 'gridfile' (the geometry file the data map onto),
+        'datafile', 'mesh' and 'var'
+    """
+
     smvData = parseSMVFile(smvFile)
     (grid, obst) = (smvData['grids'], smvData['obsts'])
     (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
@@ -51,6 +81,26 @@ def getBndeQuantities(smvFile):
     return file_quantities
 
 def readGcfFile(gcffile):
+    """Reads a geometry connectivity (.gcf) file
+
+    The gcf file holds the vertices and faces of the &GEOM surfaces a
+    case defines, which the boundary element data are mapped onto.
+
+    Parameters
+    ----------
+    gcffile : str
+        Path to a gcf file, or to one inside a zip archive
+
+    Returns
+    -------
+    array(NV, 3)
+        Vertex coordinates
+    array(NF, 3)
+        One-based vertex indices of each triangular face
+    array(NF)
+        Surface index of each face
+    """
+
     f = zopen(gcffile, 'rb')
     data = f.read()
     f.close()
@@ -80,6 +130,24 @@ def readGcfFile(gcffile):
     return vertices, faces2, header
 
 def readBeFile(befile):
+    """Reads a boundary element (.be) file
+
+    Parameters
+    ----------
+    befile : str
+        Path to a be file, or to one inside a zip archive
+
+    Returns
+    -------
+    array(NT)
+        Timestamps of each frame
+    array(NV, NT)
+        Value at each geometry vertex for each frame
+    array
+        Raw integer header, which writeBeFile needs to write the file
+        back out
+    """
+
     f = zopen(befile, 'rb')
     data = f.read()
     f.close()
@@ -104,6 +172,23 @@ def readBeFile(befile):
     return times, vals, header
 
 def writeBeFile_old(out_file, header, out_data):
+    """Writes a boundary element file in the pre-time-series layout
+
+    .. deprecated::
+        Use :func:`writeBeFile`, which writes the timestamps alongside
+        the data. Kept for reading back files written by earlier
+        versions of this package.
+
+    Parameters
+    ----------
+    out_file : str
+        Path the be file is written to
+    header : array
+        Raw integer header, as returned by readBeFile
+    out_data : array(NV, NT)
+        Value at each geometry vertex for each frame
+    """
+
     outarray = header.tobytes()
     #outarray = outarray + np.array([np.min(out_data[:, 0]), np.max(out_data[:, 0])], dtype=np.float32).tobytes()
     #outarray = outarray + np.array([27, 27], dtype=np.float32).tobytes()
@@ -123,6 +208,25 @@ def writeBeFile_old(out_file, header, out_data):
 
 
 def writeBeFile(out_file, header, out_data, times):
+    """Writes a boundary element (.be) file smokeview can read
+
+    Round-trips the header returned by readBeFile, so the usual way to
+    build one is to read an existing be file, replace its values, and
+    write it back out under a new name.
+
+    Parameters
+    ----------
+    out_file : str
+        Path the be file is written to
+    header : array
+        Raw integer header, as returned by readBeFile
+    out_data : array(NV, NT)
+        Value at each geometry vertex for each frame
+    times : array(NT)
+        Timestamps of each frame, as float32 so that they can be written
+        directly into the record
+    """
+
     outarray = header.tobytes()
     #outarray = outarray + np.array([np.min(out_data[:, 0]), np.max(out_data[:, 0])], dtype=np.float32).tobytes()
     #outarray = outarray + np.array([27, 27], dtype=np.float32).tobytes()
@@ -145,6 +249,25 @@ def writeBeFile(out_file, header, out_data, times):
         f.write(outarray)
 
 def appendNewBeFileToSMV(bnde, smvFile):
+    """Registers a new boundary element file in a smokeview file
+
+    .. warning::
+        Not implemented. Writing a derived .be file is only half the
+        job: smokeview will not display it until a matching BNDE record
+        names it in the smokeview file. Until this is written, add that
+        record by hand, or follow the pattern in
+        extractBoundaryData.bndfsTimeAverage, which does the equivalent
+        for rectangular boundary files.
+
+    Parameters
+    ----------
+    bnde : list
+        Boundary element record to add, in the layout parseBNDE returns:
+        [mesh, data file, geometry file, quantity, variable number]
+    smvFile : str
+        Path to the smokeview file to add the record to
+    """
+
     pass
 
 if __name__ == "__main__":

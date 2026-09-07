@@ -17,7 +17,6 @@
 #=======================================================================
 import numpy as np
 import matplotlib.pyplot as plt
-import glob
 import warnings
 import zipfile
 import os
@@ -27,7 +26,7 @@ import pandas as pd
 from collections import defaultdict
 from .fdsFileOperations import fdsFileOperations
 from .utilities import getDatatypeByEndianness, getEndianness
-from .utilities import getFileListFromZip, getFileList, getSmvFile
+from .utilities import getFileList, getSmvFile
 from .utilities import zopen, zreadlines
 from .utilities import getFileListFromResultDir
 from .utilities import getGridsFromXyzFiles, getAbsoluteGrid, rearrangeGrid
@@ -35,6 +34,43 @@ from .utilities import readXYZfile
 from .colorSchemes import buildSMVcolormap
 from .smokeviewParser import parseSMVFile
 from collections.abc import Iterable
+
+def _listSliceFilesForMesh(resultDir, chid, meshPrefix):
+    """Lists the slice files belonging to one mesh
+
+    Parameters
+    ----------
+    resultDir : str
+        Directory containing the FDS results, or a zip archive
+    chid : str
+        FDS CHID of the case
+    meshPrefix : str
+        Prefix every one of this mesh's slice file names begins with,
+        for example 'case001_3_'. A prefix which does not end at a mesh
+        boundary would also match other meshes, so include the trailing
+        separator
+
+    Returns
+    -------
+    list
+        Paths of the slice files whose names begin with meshPrefix
+
+    Notes
+    -----
+    Releases before v0.0.24 selected these files twice, once for an
+    archive and once for a directory, and the two disagreed. The archive
+    branch tested whether the prefix appeared anywhere in the path, so
+    in a case with ten or more meshes the files of meshes 10 to 19 also
+    matched mesh 1: reading from an archive silently mapped another
+    mesh's data onto mesh 1's grid, while reading the same case from a
+    directory correctly found only mesh 1's own files and then raised
+    IndexError if that mesh had no slice of the requested quantity.
+    """
+
+    files = getFileList(resultDir, chid, 'sf')
+    return sorted(f for f in files
+                  if os.path.basename(f).startswith(meshPrefix))
+
 
 def _resolveResultDir(workingDir, chid):
     """Resolves the directory FDS actually wrote its output files to
@@ -117,66 +153,147 @@ def mesh2str(mesh):
     return meshStr
 
 
+# Byte offset at which the values start in a plot3D file. FDS writes
+# three Fortran unformatted records before them, each wrapped in a
+# four byte length marker:
+#
+#     offset  0   marker (12) + nx, ny, nz + marker (12)   -> 20 bytes
+#     offset 20   marker (16) + four reals + marker (16)   -> 24 bytes
+#     offset 44   marker (nx*ny*nz*5*4)                    ->  4 bytes
+#     offset 48   the values themselves
+#
+_P3D_DATA_OFFSET = 48
+
+
 def readP3Dfile(file):
     """Reads data from plot3D file
-    
-    This subroutine reads data from a plot3D file.
-    TODO: Update this subroutine to use zopen
-    
+
     Parameters
     ----------
     file : str
-        String containing the path to a plot3D file
-    
+        String containing the path to a plot3D file, or to one inside a
+        zip archive
+
     Returns
     -------
-    array(NX, NY, NZ, NT)
-        Array containing float data in local coordinates for each time
-    array()
-        Array containing header information from plot3D file
+    array(NX*NY*NZ, 5)
+        Array of the five plot3D quantities at each grid point, in the
+        order temperature, u, v, w, HRRPUV
+    array(3)
+        Array containing nx, ny and nz from the file header
+
+    Raises
+    ------
+    ValueError
+        If the file's data record does not hold the number of values
+        its grid header implies, which means the file is truncated or is
+        not a plot3D file
+
+    Notes
+    -----
+    Releases before v0.0.24 read the values from the start of the file
+    rather than from the end of the header, so the first twelve values
+    returned were header bytes reinterpreted as floats and every value
+    after them was shifted by twelve positions. Because the array is
+    unpacked in Fortran order, that shift also carried the tail of each
+    quantity into the start of the next one: on the bundled case001 it
+    turned a 75 C temperature into a 75 m/s velocity.
     """
-    
+
     f = zopen(file)
     data1 = f.read()
     f.close()
     header = np.frombuffer(data1, dtype=np.int32, count=5)
-    _ = np.frombuffer(data1, dtype=np.float32, count=7)
     (nx, ny, nz) = (header[1], header[2], header[3])
-    data = np.frombuffer(data1, dtype=np.float32, count=nx*ny*nz*5)
-    data = np.reshape(data, (int(data.shape[0]/5),5), order='F')
+    count = int(nx)*int(ny)*int(nz)*5
+
+    # The marker immediately before the values states how many bytes
+    # they occupy. Checking it against the grid header catches a
+    # truncated file, and a file that is not plot3D at all, here rather
+    # than as a confusing shape error later.
+    if len(data1) < _P3D_DATA_OFFSET:
+        raise ValueError(
+            "%s is too short to be a plot3D file: %d bytes, but the "
+            "header alone is %d." % (file, len(data1), _P3D_DATA_OFFSET))
+
+    declaredBytes = int(np.frombuffer(
+        data1, dtype=np.int32, count=1,
+        offset=_P3D_DATA_OFFSET - 4)[0])
+    if declaredBytes != count*4:
+        raise ValueError(
+            "%s does not look like a plot3D file: its data record "
+            "declares %d bytes but its grid header (%d x %d x %d, five "
+            "quantities) implies %d."
+            % (file, declaredBytes, nx, ny, nz, count*4))
+
+    available = len(data1) - _P3D_DATA_OFFSET
+    if available < count*4:
+        raise ValueError(
+            "%s is truncated: its header describes a %d x %d x %d grid "
+            "needing %d bytes of data, but only %d bytes follow the "
+            "header." % (file, nx, ny, nz, count*4, available))
+
+    data = np.frombuffer(data1, dtype=np.float32, count=count,
+                         offset=_P3D_DATA_OFFSET)
+    data = np.reshape(data, (int(data.shape[0]/5), 5), order='F')
     return data, header[1:-1]
 
-def writeP3Dfile(file, data):
-    """Writes data to plot3D file
-    
-    This subroutine writes data to a plot3D file.
-    
+def writeP3Dfile(file, data, quantities=(0.0, 0.0, 0.0, 0.0)):
+    """Writes data to a plot3D file
+
+    The file is written with the Fortran unformatted record markers FDS
+    uses, so it can be read back by readP3Dfile and displayed by
+    smokeview alongside the case's own plot3D output.
+
     Parameters
     ----------
     file : str
-        String containing the path to a plot3D file
-    
-    Returns
-    -------
-    array(NX, NY, NZ, NT)
-        Array containing float data in local coordinates for each time
-    array()
-        Array containing header information from plot3D file
+        Path the plot3D file is written to
+    data : array(NX, NY, NZ, 5)
+        Array of the five plot3D quantities at each grid point, in the
+        order temperature, u, v, w, HRRPUV
+    quantities : tuple, optional
+        The four reals of the plot3D header, which FDS writes as zeros
+        and smokeview ignores (default all zeros)
+
+    Raises
+    ------
+    ValueError
+        If data does not have five quantities on its last axis
+
+    Notes
+    -----
+    Releases before v0.0.24 wrote seven arbitrary float32 values where
+    the second record's markers belong and omitted the closing marker of
+    the data record, so the file was four bytes short and its markers
+    did not describe its contents.
     """
-    
-    with open(file,'wb') as f:
-        f.write(b'\x0c\x00\x00\x00')
-        nx, ny, nz, v = data.shape
-        (nx, ny, nz, v) = (int(nx), int(ny), int(nz), int(v))
-        f.write(nx.to_bytes(4, 'little'))
-        f.write(ny.to_bytes(4, 'little'))
-        f.write(nz.to_bytes(4, 'little'))
-        f.write(b'\x0c\x00\x00\x00')
-        empty = np.array([0, 1, 2, 3, 4, 5, 6], dtype=np.float32)
-        empty.tofile(f)
-        d1 = data.flatten(order='F')
-        d = d1.tobytes()
-        f.write(d)
+
+    data = np.asarray(data, dtype=np.float32)
+    if (data.ndim != 4) or (data.shape[3] != 5):
+        raise ValueError(
+            "plot3D data must have shape (NX, NY, NZ, 5); received %s"
+            % (data.shape,))
+
+    nx, ny, nz = [int(n) for n in data.shape[:3]]
+    values = np.ascontiguousarray(data.flatten(order='F'), dtype=np.float32)
+
+    def marker(nbytes):
+        return struct.pack('<i', nbytes)
+
+    with open(file, 'wb') as f:
+        # Record 1: the grid dimensions.
+        f.write(marker(12))
+        f.write(struct.pack('<iii', nx, ny, nz))
+        f.write(marker(12))
+        # Record 2: four reals which FDS writes as zeros.
+        f.write(marker(16))
+        f.write(struct.pack('<ffff', *[float(q) for q in quantities]))
+        f.write(marker(16))
+        # Record 3: the values themselves.
+        f.write(marker(values.nbytes))
+        f.write(values.tobytes())
+        f.write(marker(values.nbytes))
 
 
 def buildDataFile(meshStr, time):
@@ -892,13 +1009,7 @@ def readSLCF3Ddata(chid, workingDir, quantityToExport,
         zGrid = np.swapaxes(zGrid, 0, 1)
         
         meshStr = "%s"%(chid) if len(smv_grids) == 1 else "%s_%d_"%(chid, i+1)
-        #print(i, meshStr)
-        if '.zip' in resultDir:
-            slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
-            slcfFiles = [x for x in slcfFiles if '%s'%(meshStr) in x]
-        else:
-            slcfFiles = glob.glob("%s%s%s*.sf"%(resultDir, os.sep, meshStr))
-        #print(i, "%s%s%s*.sf"%(resultDir, os.sep, meshStr), slcfFiles)
+        slcfFiles = _listSliceFilesForMesh(resultDir, chid, meshStr)
         grids[meshStr] = defaultdict(bool)
         grids[meshStr]['xGrid'] = xGrid
         grids[meshStr]['yGrid'] = yGrid
@@ -956,9 +1067,18 @@ def readSLCF3Ddata(chid, workingDir, quantityToExport,
         tinds.append(datas3D[0].shape[3])
     
     if not foundSomething:
+        available, _, dims, _, _, _ = readSLCFquantities(
+            chid, workingDir, printInfo=False)
+        threeD = sorted(set(
+            q for q, d in zip(available, dims)
+            if (d[1]-d[0] > 0) and (d[3]-d[2] > 0) and (d[5]-d[4] > 0)))
         print("No 3D slice data found for qty %s"%(quantityToExport))
-        print("Quantities available in this case:")
-        readSLCFquantities(chid, workingDir, printInfo=True)
+        if len(threeD) > 0:
+            print("3-D slices available in this case: %s"
+                  % (', '.join(threeD)))
+        else:
+            print("This case contains no 3-D slices. Quantities written "
+                  "as 2-D slices: %s" % (', '.join(sorted(set(available)))))
         return False, False, False, False
 
     grid_abs = getAbsoluteGrid(grids)
@@ -1094,11 +1214,7 @@ def readSLCF3DdataXYZ(chid, resultDir, quantityToExport,
         DeprecationWarning, stacklevel=2)
     endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
-    if '.zip' in resultDir:
-        xyzFiles = getFileListFromZip(resultDir, chid, 'xyz')
-    else:
-        xyzFiles = glob.glob("%s%s%s*.xyz"%(resultDir,os.sep, chid))
-    #print(xyzFiles)
+    xyzFiles = getFileList(resultDir, chid, 'xyz')
     grids = defaultdict(bool)
     for xyzFile in xyzFiles:
         grid, gridHeader = readXYZfile(xyzFile)
@@ -1106,11 +1222,7 @@ def readSLCF3DdataXYZ(chid, resultDir, quantityToExport,
         
         mesh = xyzFile.split(chid)[-1].split('.xyz')[0].replace('_','')
         meshStr = "%s"%(chid) if mesh == '' else "%s_%s_"%(chid, mesh)
-        if '.zip' in resultDir:
-            slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
-            slcfFiles = [x for x in slcfFiles if '%s'%(meshStr) in x]
-        else:
-            slcfFiles = glob.glob("%s%s%s*.sf"%(resultDir, os.sep, meshStr))
+        slcfFiles = _listSliceFilesForMesh(resultDir, chid, meshStr)
         
         grids[meshStr] = defaultdict(bool)
         grids[meshStr]['xGrid'] = xGrid
@@ -1377,10 +1489,7 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
         "release; use query2dAxisValue instead.",
         DeprecationWarning, stacklevel=2)
     slcfDir = _resolveResultDir(resultDir, chid)
-    if '.zip' in resultDir:
-        xyzFiles = getFileListFromZip(slcfDir, chid, 'xyz')
-    else:
-        xyzFiles = glob.glob("%s%s%s*.xyz"%(slcfDir, os.sep, chid))
+    xyzFiles = getFileList(slcfDir, chid, 'xyz')
     grids = defaultdict(bool)
     endianness = getEndianness(resultDir, chid)
     datatype = getDatatypeByEndianness(np.float32, endianness)
@@ -1390,12 +1499,8 @@ def readSLCF2Ddata(chid, resultDir, quantityToExport,
         xGrid, yGrid, zGrid = rearrangeGrid(grid)
         
         mesh = xyzFile.split(chid)[-1].split('.xyz')[0].replace('_','')
-        meshStr = "%s"%(chid) if mesh == '' else "%s_%s"%(chid, mesh)
-        if '.zip' in slcfDir:
-            slcfFiles = getFileListFromZip(slcfDir, chid, 'sf')
-            slcfFiles = [x for x in slcfFiles if '%s'%(meshStr) in x]
-        else:
-            slcfFiles = glob.glob("%s%s%s_*.sf"%(slcfDir, os.sep, meshStr))
+        meshStr = "%s"%(chid) if mesh == '' else "%s_%s_"%(chid, mesh)
+        slcfFiles = _listSliceFilesForMesh(slcfDir, chid, meshStr)
         
         grids[meshStr] = defaultdict(bool)
         grids[meshStr]['xGrid'] = xGrid
@@ -1706,11 +1811,13 @@ def readSLCFquantities(chid, workingDir, printInfo=False):
     (bndfs, surfs) = (smvData['bndfs'], smvData['surfs'])
     (files, bndes) = (smvData['files'], smvData['bndes'])
     
+    # getFileList joins the directory and the pattern with os.path.join.
+    # This used to interpolate them with no separator between them, so a
+    # directory path which did not already end in one matched nothing at
+    # all and the case appeared to contain no slices.
+    slcfFiles = getFileList(resultDir, chid, 'sf')
     if '.zip' in resultDir:
-        slcfFiles = getFileListFromZip(resultDir, chid, 'sf')
         zip = zipfile.ZipFile(resultDir, 'r')
-    else:
-        slcfFiles = glob.glob("%s%s_*.sf"%(resultDir, chid))
     endianness = getEndianness(resultDir, chid)
     quantities = []
     dimensions = []

@@ -7,17 +7,29 @@ changes they describe.
 
 ## Publishing
 
-The GitHub wiki is a separate git repository. To push these pages to it:
+The GitHub wiki is a separate git repository, so the pages have to be
+pushed across to it. From the root of this repository:
+
+```bash
+./wiki/publish.sh
+```
+
+That clones the wiki, copies these pages over, commits and pushes. It is
+idempotent — running it with nothing changed reports that the wiki is
+already up to date and pushes nothing. Set `WIKI_REMOTE` to point it
+somewhere else, for example at a fork.
+
+Doing it by hand is four commands:
 
 ```bash
 git clone https://github.com/johodges/pyfdstools.wiki.git /tmp/pyfdstools.wiki
 cp wiki/*.md /tmp/pyfdstools.wiki/
-rm /tmp/pyfdstools.wiki/README.md          # this file is not a wiki page
-cd /tmp/pyfdstools.wiki
-git add -A
-git commit -m "Update wiki from the main repository"
-git push
+rm /tmp/pyfdstools.wiki/README.md /tmp/pyfdstools.wiki/publish.sh
+cd /tmp/pyfdstools.wiki && git add -A && git commit -m "Update wiki" && git push
 ```
+
+Note that `README.md` and `publish.sh` belong to this repository, not to
+the wiki; `publish.sh` removes them for you.
 
 The file name becomes the page name, so `Quick-Start.md` is reachable at
 `.../wiki/Quick-Start`. `Home.md` is the landing page and `_Sidebar.md`

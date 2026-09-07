@@ -3,6 +3,10 @@ A Python Package to Assist in Developing and Post-Processing Data Produced Throu
 
 This software is part of a python library to assist in developing and analyzing simulation results from Fire Dynamics Simulator (FDS). FDS is an open source computational fluid dynamics (CFD) software package developed by NIST. The sourcecode is available at: https://github.com/firemodels/fds
 
+**Documentation:** task-oriented guides for every output type, plus a
+quick start and an API reference, are in the
+[wiki](https://github.com/johodges/pyfdstools/wiki).
+
 # Installation
 
 This module was developed for use in a virtual environment. 
@@ -20,6 +24,15 @@ The package can be installed through pip or source.
   - Install
     ```
     python -m pip install pyfdstools
+    ```
+  - Optional extras. The core install needs only numpy, scipy, matplotlib
+    and pandas, which is enough to read every FDS output format. The
+    ParaView export and VTKHDF reader wrap larger libraries and are
+    installed separately:
+    ```
+    python -m pip install "pyfdstools[paraview]"   # pyevtk, numpy-stl
+    python -m pip install "pyfdstools[vtk]"        # vtk
+    python -m pip install "pyfdstools[all]"        # both
     ```
   - Run the example cases
     ```
@@ -163,13 +176,29 @@ import pyfdstools as fds
 fds.runExamples()
 ```
 
-The outputs from these examples will be located in the pyfdstools/generated directory.
+The outputs from these examples will be located in the pyfdstools/examples/generated directory.
 
 The examples can also be run individually by running the individual files in the examples directory. The examples can be modified to work with different FDS results by editing the scripts, or by setting some of the parameters with command line arguments. The example below changes the dump_2d_slice_to_csv example to work with case002 instead of case001.
 
 ```python
 python dump_2d_slice_to_csv.py --chid case002 --quantity TEMPERATURE --axis 3 --value 7.2 --time 30 --dt -1 --working_dir data/case002.zip
 ```
+
+# Running the tests
+
+The test suite runs against the FDS cases bundled with the package, so
+it needs no FDS installation and no network access.
+
+```
+git clone https://github.com/johodges/pyfdstools
+python -m pip install -e "pyfdstools[test]"
+cd pyfdstools
+python -m pytest tests -m "not slow"
+```
+
+Drop the marker to also run each bundled example end to end. See the
+[Contributing](https://github.com/johodges/pyfdstools/wiki/Contributing)
+wiki page for the repository layout and what the CI checks.
 
 # Citation
 

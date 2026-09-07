@@ -88,12 +88,21 @@ def calculatePercentile(values, quantity, percentile, fdsVersion='6.7.1'):
     Returns
     -------
     array
-        Values at the requested percentile, one per input value
+        Values at the requested percentile, one per input value. A zero
+        prediction has zero spread under this multiplicative model and
+        is returned bias-corrected as it is
 
     Raises
     ------
     ValueError
         If the quantity is not in the error table for this version
+
+    Notes
+    -----
+    Releases before v0.0.24 evaluated the distribution on a 101 point
+    grid rather than inverting it, so results were about 0.4% high, and
+    raised IndexError for a zero value or for a percentile beyond about
+    0.9987.
     """
 
     data, quantities = readErrorTable(fdsVersion=fdsVersion)
@@ -101,15 +110,24 @@ def calculatePercentile(values, quantity, percentile, fdsVersion='6.7.1'):
     if (quantity in quantities):
         fdsBias = data.loc[quantity]['Bias']
         fdsSigma = data.loc[quantity]['sigmaM']
-        values = np.array(values)
-        errorValues = np.zeros_like(values)
-        for i in range(0, values.shape[0]):
-            mu = values[i]/fdsBias
-            sigma = values[i]/fdsBias*fdsSigma
-            x = np.linspace(mu-3*sigma,mu+3*sigma, 101)
-            y_cdf = scst.norm.cdf(x, mu, sigma)
-            ind = np.where(y_cdf > percentile)[0][0]
-            errorValues[i] = x[ind]
+
+        values = np.asarray(values, dtype=float)
+        mu = values/fdsBias
+        sigma = np.abs(mu)*fdsSigma
+
+        # scipy's percent point function inverts the normal CDF
+        # directly. Earlier releases evaluated the CDF on 101 points
+        # spanning mu +/- 3 sigma and took the first above the
+        # percentile, which was 0.4% high, raised IndexError for any
+        # percentile beyond about 0.9987 (where the answer lies outside
+        # three standard deviations), and raised IndexError again for a
+        # zero value, where sigma is zero and the CDF is undefined.
+        errorValues = np.array(mu, dtype=float)
+        spread = sigma > 0
+        errorValues[spread] = scst.norm.ppf(
+            percentile, mu[spread], sigma[spread])
+        # A zero prediction has zero spread under this multiplicative
+        # uncertainty model, so it is returned bias-corrected as it is.
         return errorValues
 
     raise ValueError(

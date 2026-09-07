@@ -220,3 +220,74 @@ def test_getPlotColors():
     colors = fds.getPlotColors(5)
     assert len(colors) == 5
     assert all(c.startswith('#') for c in colors)
+
+
+# ---------------------------------------------------------------------
+# Model uncertainty
+# ---------------------------------------------------------------------
+
+QUANTITY = 'HGL Temperature, Natural Ventilation'
+
+
+def test_readErrorTable_lists_available_versions():
+    with pytest.raises(FileNotFoundError, match='Available versions'):
+        fds.readErrorTable(fdsVersion='9.9.9')
+
+
+def test_getQuantities_works_from_any_directory(tmp_path, monkeypatch):
+    """The error tables ship with the package, not with the caller.
+
+    getQuantities used to read them through a path relative to the
+    working directory.
+    """
+
+    monkeypatch.chdir(tmp_path)
+    quantities = fds.getQuantities()
+    assert len(quantities) > 0
+    assert QUANTITY in quantities
+
+
+def test_calculatePercentile_is_monotonic():
+    values = [100.0, 250.0, 400.0]
+    p50 = fds.calculatePercentile(values, QUANTITY, 0.50)
+    p95 = fds.calculatePercentile(values, QUANTITY, 0.95)
+    assert np.all(p95 > p50)
+    assert np.all(np.diff(p95) > 0)
+
+
+def test_calculatePercentile_handles_zero():
+    """A zero prediction has zero spread; it must not raise.
+
+    The distribution has zero standard deviation there, which made the
+    old grid-based implementation index an empty array.
+    """
+
+    result = fds.calculatePercentile([0.0, 100.0], QUANTITY, 0.95)
+    assert result[0] == 0.0
+    assert result[1] > 100.0
+
+
+def test_calculatePercentile_handles_extreme_percentile():
+    """The answer may lie beyond three standard deviations."""
+    result = fds.calculatePercentile([100.0], QUANTITY, 0.999)
+    assert np.isfinite(result[0])
+    assert result[0] > fds.calculatePercentile([100.0], QUANTITY, 0.95)[0]
+
+
+def test_calculatePercentile_matches_the_normal_distribution():
+    import scipy.stats as scst
+
+    table, _ = fds.readErrorTable()
+    bias = table.loc[QUANTITY]['Bias']
+    sigmaM = table.loc[QUANTITY]['sigmaM']
+
+    value = 250.0
+    mu = value/bias
+    expected = scst.norm.ppf(0.95, mu, mu*sigmaM)
+    assert np.isclose(
+        fds.calculatePercentile([value], QUANTITY, 0.95)[0], expected)
+
+
+def test_calculatePercentile_unknown_quantity():
+    with pytest.raises(ValueError, match='not in the FDS'):
+        fds.calculatePercentile([1.0], 'NOT A QUANTITY', 0.95)

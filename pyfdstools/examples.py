@@ -20,56 +20,89 @@ import os, subprocess, sys
 import numpy as np
 import pandas as pd
 
-def runExamples():
-    systemPath = os.path.dirname(os.path.abspath(__file__))
-    examples_directory = os.path.join(systemPath, 'examples')
-    
-    files = ["read_and_write_input_files.py",
-             "error_calculation.py",
-             "dump_2d_slice_to_csv.py",
-             "dump_3d_slice_to_csv.py",
-             "extract_2d_slice_from_3d_slice.py",
-             "extract_boundary_data.py",
-             "extract_boundary_max.py"]
-    
-    for i in range(0, len(files)):
-        cmd = [sys.executable, files[i]]
-        print("Starting example %d/%d"%(i+1, len(files)))
-        p = subprocess.run(cmd, cwd=examples_directory, capture_output=True, env=os.environ, text=True)
+EXAMPLE_SCRIPTS = [
+    "read_and_write_input_files.py",
+    "error_calculation.py",
+    "dump_2d_slice_to_csv.py",
+    "dump_3d_slice_to_csv.py",
+    "extract_2d_slice_from_3d_slice.py",
+    "extract_2d_slice_from_pl3d.py",
+    "extract_boundary_data.py",
+    "extract_boundary_max.py",
+    "make_slice_from_devc.py",
+]
+
+
+def getExamplesDirectory():
+    """Returns the directory holding the bundled example scripts
+
+    Returns
+    -------
+    str
+        Path to the pyfdstools/examples directory
+    """
+
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        'examples')
+
+
+def runExamples(scripts=None, raiseOnError=False):
+    """Runs the example scripts bundled with pyfdstools
+
+    Each example is run in its own interpreter with the examples
+    directory as the working directory, so that the relative paths the
+    scripts use to reach the bundled cases resolve. Output is written to
+    pyfdstools/examples/generated.
+
+    Parameters
+    ----------
+    scripts : list, optional
+        Names of the example scripts to run. Every bundled example is
+        run when omitted
+    raiseOnError : bool, optional
+        Raise a RuntimeError listing the examples which failed rather
+        than only printing their output (default False)
+
+    Returns
+    -------
+    list
+        List of (script name, returncode, stdout, stderr) tuples, one
+        per example
+
+    Raises
+    ------
+    RuntimeError
+        If raiseOnError is True and any example exited non-zero
+    """
+
+    examples_directory = getExamplesDirectory()
+    if scripts is None:
+        scripts = EXAMPLE_SCRIPTS
+
+    # The examples plot; force a non-interactive backend so that they
+    # run without a display.
+    env = os.environ.copy()
+    env.setdefault('MPLBACKEND', 'Agg')
+
+    results = []
+    failures = []
+    for i, script in enumerate(scripts):
+        print("Starting example %d/%d: %s" % (i+1, len(scripts), script))
+        p = subprocess.run([sys.executable, script],
+                           cwd=examples_directory, capture_output=True,
+                           env=env, text=True)
         print(p.stdout, p.stderr)
-    
-    
-    '''
-    systemPath = os.path.dirname(os.path.abspath(__file__))
-    exampleInputFdsFile = os.path.join(systemPath, "examples", "case001.fds")
-    exampleOutputDir = os.path.join(systemPath, "generated")
-    chid = "case001"
-    resultDir = os.path.join(systemPath, "examples", "%s.zip"%(chid))
-    
-    
-    
-    print("Time-averaging a boundary file example.", flush=True)
-    exampleBndfTimeAverage(dt=30, quantity='WALL TEMPERATURE')
-    
-    #print("Read SL3D with stretched mesh example", flush=True)
-    #stretchedMeshExample()
-    
-    print("Add Occupant FED calculation example", flush=True)
-    exampleAddOccupantFedDevices(os.path.join(systemPath, "examples"),
-                                 os.path.join(systemPath, "generated"))
-    
-    print("Example Post Process Visibility to Change C Factor")
-    examplePostProcessVisibility()
-    
-    #print("Example to parse Smoke 3D files")
-    #exampleParseS3dFiles()
-    
-    print("Example add heat flux slice")
-    exampleAddGasPhaseHeatFluxSlice()
-    '''
+        results.append((script, p.returncode, p.stdout, p.stderr))
+        if p.returncode != 0:
+            failures.append(script)
 
+    if len(failures) > 0:
+        message = "The following examples failed: %s" % (', '.join(failures))
+        if raiseOnError:
+            raise RuntimeError(message)
+        print(message)
 
-
+    return results
 
 
 def exampleBndfTimeAverage(resultDir=None, outDir=None, chid=None,

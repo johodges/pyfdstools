@@ -1,0 +1,153 @@
+name: tests
+
+# Runs the unit tests on every supported Python version and on all three
+# operating systems FDS users run on. The example scripts are exercised
+# separately in examples.yml because they are slower.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: py${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        exclude:
+          # Keep the matrix to a reasonable size: the other operating
+          # systems only run the oldest and newest supported versions,
+          # since the package is pure Python and platform differences
+          # show up in path and byte order handling rather than in the
+          # interpreter version.
+          - os: windows-latest
+            python-version: '3.10'
+          - os: windows-latest
+            python-version: '3.11'
+          - os: windows-latest
+            python-version: '3.12'
+          - os: macos-latest
+            python-version: '3.10'
+          - os: macos-latest
+            python-version: '3.11'
+          - os: macos-latest
+            python-version: '3.12'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install the package and its test requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Show the resolved environment
+        run: |
+          python -c "import numpy, scipy, matplotlib, pandas, sys; print(sys.version); print('numpy', numpy.__version__); print('scipy', scipy.__version__); print('matplotlib', matplotlib.__version__); print('pandas', pandas.__version__)"
+
+      - name: Run the unit tests
+        env:
+          MPLBACKEND: Agg
+        run: python -m pytest tests -m "not slow" -v --durations=10
+
+  # The core package must import with only numpy, scipy, matplotlib and
+  # pandas installed. A stray unconditional import of vtk, pyevtk or
+  # OpenCV in a submodule would break every user who installed only the
+  # core requirements, and the full matrix above would not catch it
+  # because those extras are absent there too only by accident.
+  minimal-install:
+    name: import with core dependencies only
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install without any extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+
+      - name: Confirm no optional dependency was pulled in
+        run: |
+          python - <<'PY'
+          import importlib.util
+          import sys
+
+          forbidden = ['vtk', 'evtk', 'pyevtk', 'stl', 'cv2']
+          present = [name for name in forbidden
+                     if importlib.util.find_spec(name) is not None]
+          if present:
+              sys.exit("A core install pulled in optional packages: %s"
+                       % (', '.join(present)))
+          print("Core install is free of optional dependencies.")
+          PY
+
+      - name: Import the package and call a core routine
+        working-directory: ${{ runner.temp }}
+        run: |
+          python - <<'PY'
+          import os
+          import pyfdstools as fds
+
+          print("pyfdstools", fds.__version__)
+          data = os.path.join(os.path.dirname(fds.__file__),
+                              'examples', 'data', 'case001.zip')
+          smv = fds.parseSMVFile(fds.getSmvFile(data, 'case001'))
+          assert len(smv['grids']) == 1
+          print("Parsed the bundled case with core dependencies only.")
+          PY
+
+  # Guard against numpy 2 regressions such as the removal of np.trapz,
+  # and against the oldest dependency versions setup.py claims to
+  # support drifting out of use.
+  dependency-bounds:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: oldest supported numpy
+            python-version: '3.9'
+            pins: 'numpy==1.24.4 scipy==1.10.1 matplotlib==3.7.5 pandas==2.0.3'
+          - label: latest numpy 2
+            python-version: '3.12'
+            pins: 'numpy>=2 scipy matplotlib pandas'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ${{ matrix.pins }}
+          python -m pip install --no-deps -e .
+          python -m pip install pytest
+
+      - name: Run the unit tests
+        env:
+          MPLBACKEND: Agg
+        run: python -m pytest tests -m "not slow" -q

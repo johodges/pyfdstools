@@ -1,0 +1,117 @@
+name: lint
+
+# Static checks which do not need the package's dependencies installed:
+# undefined names, unused imports, and the packaging metadata.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pyflakes:
+    name: pyflakes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: python -m pip install --upgrade pip pyflakes
+
+      # Undefined names are real defects: they raise NameError the first
+      # time the branch containing them runs. These are treated as
+      # errors. Unused imports and unused locals are reported for
+      # information only, since the package still carries a number of
+      # them in its example and helper scripts.
+      - name: Fail on undefined names
+        run: |
+          set -o pipefail
+          python -m pyflakes pyfdstools tests \
+            | grep -E "undefined name '" \
+            | tee /tmp/undefined.txt || true
+          if [ -s /tmp/undefined.txt ]; then
+            echo "::error::pyflakes reported undefined names"
+            exit 1
+          fi
+          echo "No undefined names."
+
+      - name: Report other pyflakes findings
+        if: always()
+        run: python -m pyflakes pyfdstools tests || true
+
+  syntax:
+    name: byte-compile every module
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Catches syntax which is valid on one supported Python version
+      # but not another, in modules the test suite does not import.
+      - run: python -m compileall -q pyfdstools tests
+
+  packaging:
+    name: build and check the distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: python -m pip install --upgrade pip build twine
+
+      - name: Build the sdist and wheel
+        run: python -m build
+
+      - name: Check the distribution metadata
+        run: python -m twine check dist/*
+
+      # The example cases are what the README's quick start and the test
+      # suite both read, so they have to be inside the distribution.
+      - name: Confirm the example data is packaged
+        run: |
+          python - <<'PY'
+          import glob
+          import sys
+          import tarfile
+
+          sdists = glob.glob('dist/*.tar.gz')
+          if not sdists:
+              sys.exit("No sdist was built.")
+          with tarfile.open(sdists[0]) as tar:
+              names = tar.getnames()
+
+          required = ['examples/data/case001.zip',
+                      'examples/data/case001.fds',
+                      'fdsErrorTables/6.7.4.csv']
+          missing = [r for r in required
+                     if not any(n.endswith(r) for n in names)]
+          if missing:
+              sys.exit("Missing from the sdist: %s" % (', '.join(missing)))
+          print("The sdist carries the example cases and error tables.")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distribution
+          path: dist/
+          retention-days: 7
